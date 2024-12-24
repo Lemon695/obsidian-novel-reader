@@ -1,15 +1,31 @@
-import {App, Plugin, PluginSettingTab, Setting, Notice, FileSystemAdapter} from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice, FileSystemAdapter } from 'obsidian';
 import * as path from 'path';
 import * as fs from 'fs';
 
 interface NovelSplitterSettings {
 	chapterPattern: string;
 	outputFolder: string;
+	readmeTemplate: string;
 }
 
 const DEFAULT_SETTINGS: NovelSplitterSettings = {
 	chapterPattern: '第(\\d+)章',
-	outputFolder: '小说章节'
+	outputFolder: '小说章节',
+	readmeTemplate: `# 《{novelName}》阅读目录
+
+## 章节列表
+
+{chapterLinks}
+
+## 阅读说明
+
+使用本文档可以快速导航到各个章节。点击下方链接即可阅读对应章节。
+
+## 关于本书
+
+- **书名**：{novelName}
+- **总章节数**：{totalChapters}
+`
 }
 
 export default class NovelSplitterPlugin extends Plugin {
@@ -20,7 +36,7 @@ export default class NovelSplitterPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'split-novel',
-			name: '拆分小说文件',
+			name: '拆分小说并创建阅读索引',
 			callback: () => this.splitNovelFile()
 		});
 
@@ -36,52 +52,71 @@ export default class NovelSplitterPlugin extends Plugin {
 	}
 
 	async splitNovelFile() {
-		// 使用文件系统适配器选择文件
 		const adapter = this.app.vault.adapter;
 		if (!(adapter instanceof FileSystemAdapter)) {
 			new Notice('仅支持桌面版Obsidian');
 			return;
 		}
 
-		// 使用Node.js的文件对话框
-		const {dialog} = require('electron').remote;
+		const { dialog } = require('electron').remote;
 		const filePaths = dialog.showOpenDialogSync({
 			properties: ['openFile'],
-			filters: [{name: 'Text Files', extensions: ['txt']}]
+			filters: [{ name: 'Text Files', extensions: ['txt'] }]
 		});
 
 		if (!filePaths || filePaths.length === 0) return;
 
 		try {
-			// 读取文件内容
 			const filePath = filePaths[0];
 			const content = fs.readFileSync(filePath, 'utf-8');
-
-			// 获取小说文件名（不包含扩展名）
 			const novelName = path.basename(filePath, '.txt');
 
 			// 使用正则表达式匹配章节
 			const chapterRegex = new RegExp(this.settings.chapterPattern, 'g');
 			const chapters = this.parseChapters(content, chapterRegex);
 
-			// 创建输出文件夹（包括小说名称子文件夹）
-			const outputPath = path.join(
+			// 创建输出文件夹
+			const basePath = path.join(
 				adapter.getBasePath(),
 				this.app.vault.getName(),
 				this.settings.outputFolder,
 				novelName
 			);
 
-			if (!fs.existsSync(outputPath)) {
-				fs.mkdirSync(outputPath, {recursive: true});
+			if (!fs.existsSync(basePath)) {
+				fs.mkdirSync(basePath, { recursive: true });
 			}
 
-			// 保存每个章节
+			// 保存原始TXT文件
+			const originalTxtPath = path.join(basePath, `${novelName}.txt`);
+			fs.writeFileSync(originalTxtPath, content);
+
+			// 保存章节TXT文件
+			const chapterLinks: string[] = [];
 			chapters.forEach((chapter, index) => {
-				const fileName = `第${index + 1}章.md`;
-				const fullPath = path.join(outputPath, fileName);
-				fs.writeFileSync(fullPath, chapter.content);
+				const chapterNumber = index + 1;
+				const chapterFileName = `第${chapterNumber.toString().padStart(3, '0')}章.txt`;
+				const chapterPath = path.join(basePath, chapterFileName);
+				fs.writeFileSync(chapterPath, chapter.content);
+
+				// 创建对应的阅读MD文件
+				const readMdFileName = `第${chapterNumber.toString().padStart(3, '0')}章-阅读.md`;
+				const readMdPath = path.join(basePath, readMdFileName);
+				const mdContent = this.generateChapterMdContent(chapter.content);
+				fs.writeFileSync(readMdPath, mdContent);
+
+				// 记录章节链接
+				chapterLinks.push(`- [第${chapterNumber}章](/小说章节/${novelName}/${readMdFileName})`);
 			});
+
+			// 创建小说阅读索引文件
+			const readmeContent = this.settings.readmeTemplate
+				.replace('{novelName}', novelName)
+				.replace('{totalChapters}', chapters.length.toString())
+				.replace('{chapterLinks}', chapterLinks.join('\n'));
+
+			const readmePath = path.join(basePath, `${novelName}-阅读.md`);
+			fs.writeFileSync(readmePath, readmeContent);
 
 			new Notice(`成功拆分 ${chapters.length} 个章节到 ${novelName} 文件夹`);
 		} catch (error) {
@@ -90,18 +125,43 @@ export default class NovelSplitterPlugin extends Plugin {
 		}
 	}
 
+	generateChapterMdContent(chapterContent: string): string {
+		return `
+## 章节内容
+
+<div class="novel-reader">
+${chapterContent.split('\n').map(line => `<p>${line}</p>`).join('\n')}
+</div>
+
+<style>
+.novel-reader {
+    max-width: 700px;
+    margin: 0 auto;
+    padding: 20px;
+    line-height: 1.8;
+    font-family: 'Georgia', serif;
+    background-color: #f9f5f0;
+    color: #333;
+}
+
+.novel-reader p {
+    text-indent: 2em;
+    margin-bottom: 1em;
+}
+</style>
+        `.trim();
+	}
+
 	parseChapters(content: string, regex: RegExp) {
-		const chapters: Array<{ title: string, content: string, startIndex: number }> = [];
+		const chapters: Array<{title: string, content: string, startIndex: number}> = [];
 		let match;
 
 		while ((match = regex.exec(content)) !== null) {
-			// 如果不是第一章，更新前一章的内容
 			if (chapters.length > 0) {
 				const previousChapter = chapters[chapters.length - 1];
 				previousChapter.content = content.slice(previousChapter.startIndex, match.index).trim();
 			}
 
-			// 添加新章节
 			chapters.push({
 				title: match[0],
 				content: '',
@@ -109,7 +169,6 @@ export default class NovelSplitterPlugin extends Plugin {
 			});
 		}
 
-		// 处理最后一章
 		if (chapters.length > 0) {
 			const lastChapter = chapters[chapters.length - 1];
 			lastChapter.content = content.slice(lastChapter.startIndex).trim();
