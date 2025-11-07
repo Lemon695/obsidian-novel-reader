@@ -38,7 +38,6 @@
 		grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 		gap: var(--novel-spacing-lg);
 		padding: 0 var(--novel-spacing-md) var(--novel-spacing-md);
-		overflow-y: auto;
 		margin: 0 auto;
 		justify-content: center;
 		width: 100%;
