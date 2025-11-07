@@ -33,6 +33,9 @@
 	let pendingRender = false;
 	let containerInitialized = false;
 
+	// hover模式相关状态
+	let isMenuVisible = false;
+
 	$: currentPage = showingCoverPage ? 1 : currentPage;
 
 	let pageState = {
@@ -368,6 +371,19 @@
 		isActive = false;
 	}
 
+	// hover模式事件处理
+	function handleMouseEnter() {
+		if (displayMode === 'hover') {
+			isMenuVisible = true;
+		}
+	}
+
+	function handleMouseLeave() {
+		if (displayMode === 'hover') {
+			isMenuVisible = false;
+		}
+	}
+
 	// 获取当前页面所在的章节
 	function getCurrentChapter(page: number): number {
 		for (let i = 0; i < chapters.length; i++) {
@@ -412,6 +428,49 @@
 <div class="pdf-reader"
 	 on:mouseenter={handleFocus}
 	 on:mouseleave={handleBlur}>
+
+	<!-- 悬浮章节模式 -->
+	{#if displayMode === 'hover'}
+		<div class="chapter-trigger"
+			 on:mouseenter={handleMouseEnter}
+			 on:mouseleave={handleMouseLeave}>
+			<div class="chapters-panel"
+				 class:visible={isMenuVisible}>
+				<div class="chapters-header">
+					<h3>目录</h3>
+				</div>
+				<div class="chapters-scroll">
+					{#each chapters as chapter, index}
+						<button
+							class="chapter-item"
+							class:active={chapterActiveStates[index]}
+							on:click={() => handleOutlineClick(chapter.startPage)}
+						>
+							<span class="chapter-title">{chapter.title}</span>
+							<span class="page-number">{chapter.startPage}</span>
+						</button>
+
+						{#if chapter.subChapters && chapter.subChapters.length > 0}
+							<div class="sub-chapters">
+								{#each chapter.subChapters as subChapter}
+									{@const isSubActive = currentPage >= subChapter.startPage &&
+									currentPage <= (subChapter.endPage || numPages)}
+									<button
+										class="sub-chapter-item"
+										class:active={isSubActive}
+										on:click={() => handleOutlineClick(subChapter.startPage)}
+									>
+										{subChapter.title} ({subChapter.startPage})
+									</button>
+								{/each}
+							</div>
+						{/if}
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
+
 	<!-- 大纲面板 -->
 	{#if displayMode === 'outline' || displayMode === 'sidebar'}
 		<div class="outline-panel" transition:fade>
@@ -527,6 +586,54 @@
 		overflow: hidden;
 	}
 
+	/* 悬浮模式样式 */
+	.chapter-trigger {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 40px;
+		z-index: 100;
+	}
+
+	.chapters-panel {
+		position: absolute;
+		left: -240px;
+		top: 0;
+		bottom: 0;
+		width: 240px;
+		background: var(--background-primary);
+		border-right: 1px solid var(--background-modifier-border);
+		transition: transform 0.3s ease-in-out;
+		display: flex;
+		flex-direction: column;
+		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+		z-index: 101;
+	}
+
+	.chapters-panel.visible {
+		transform: translateX(240px);
+	}
+
+	.chapters-header {
+		padding: 16px;
+		border-bottom: 1px solid var(--background-modifier-border);
+	}
+
+	.chapters-header h3 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 500;
+	}
+
+	.chapters-scroll {
+		flex: 1;
+		overflow-y: auto;
+		padding: 8px;
+		scroll-behavior: smooth;
+	}
+
+	/* 大纲和侧边栏模式样式 */
 	.outline-panel {
 		width: 240px;
 		min-width: 240px;

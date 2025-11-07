@@ -43,7 +43,9 @@
 
 	let hoverChaptersContainer: HTMLElement;
 	let outlineChaptersContainer: HTMLElement;
+	let sidebarChaptersContainer: HTMLElement;
 	let chapterElements: Map<number, HTMLElement> = new Map();
+	let isSidebarCollapsed = false; // sidebar折叠状态
 
 	let notes: Note[] = [];
 	let noteViewerPosition = {x: 0, y: 0};
@@ -101,6 +103,8 @@
 				scrollToActiveChapter(hoverChaptersContainer);
 			} else if (displayMode === 'outline' && outlineChaptersContainer) {
 				scrollToActiveChapter(outlineChaptersContainer);
+			} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
+				scrollToActiveChapter(sidebarChaptersContainer);
 			}
 		}
 
@@ -214,6 +218,8 @@
 			scrollToActiveChapter(hoverChaptersContainer);
 		} else if (displayMode === 'outline' && outlineChaptersContainer) {
 			scrollToActiveChapter(outlineChaptersContainer);
+		} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
+			scrollToActiveChapter(sidebarChaptersContainer);
 		}
 
 		processedContent = renderChapterContent(currentChapter);
@@ -241,6 +247,11 @@
 		if (displayMode === 'hover') {
 			isMenuVisible = false;
 		}
+	}
+
+	// sidebar切换函数
+	function toggleSidebar() {
+		isSidebarCollapsed = !isSidebarCollapsed;
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
@@ -333,6 +344,8 @@
 			scrollToActiveChapter(hoverChaptersContainer);
 		} else if (displayMode === 'outline' && outlineChaptersContainer) {
 			scrollToActiveChapter(outlineChaptersContainer);
+		} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
+			scrollToActiveChapter(sidebarChaptersContainer);
 		}
 	}
 
@@ -620,7 +633,7 @@
 
 </script>
 
-<div class="novel-reader" class:outline-mode={displayMode === 'outline'}
+<div class="novel-reader" class:outline-mode={displayMode === 'outline' || displayMode === 'sidebar'}
 	 on:mouseenter={() => isActive = true}
 	 on:mouseleave={() => isActive = false}
 	 on:focus={() => isActive = true}
@@ -674,6 +687,33 @@
 					</button>
 				{/each}
 			</div>
+		</div>
+	{/if}
+
+	<!-- 侧边栏模式（可折叠） -->
+	{#if displayMode === 'sidebar'}
+		<div class="sidebar-panel" class:collapsed={isSidebarCollapsed}>
+			<div class="sidebar-header">
+				<h3>目录</h3>
+				<button class="toggle-button" on:click={toggleSidebar} title={isSidebarCollapsed ? '展开' : '折叠'}>
+					{isSidebarCollapsed ? '▶' : '◀'}
+				</button>
+			</div>
+			{#if !isSidebarCollapsed}
+				<div class="sidebar-scroll"
+					 bind:this={sidebarChaptersContainer}>
+					{#each chapters as chapter}
+						<button
+							class="chapter-item"
+							class:active={currentChapter?.id === chapter.id}
+							use:setChapterElement={chapter.id}
+							on:click={() => selectChapter(chapter)}
+						>
+							{chapter.title}
+						</button>
+					{/each}
+				</div>
+			{/if}
 		</div>
 	{/if}
 
@@ -851,6 +891,60 @@
 		overflow-y: auto;
 		padding: 8px;
 		scroll-behavior: smooth; /* 添加平滑滚动效果 */
+	}
+
+	/* 侧边栏模式样式（可折叠） */
+	.sidebar-panel {
+		width: 240px;
+		min-width: 240px;
+		flex-shrink: 0;
+		border-right: 1px solid var(--background-modifier-border);
+		display: flex;
+		flex-direction: column;
+		background: var(--background-primary);
+		transition: width 0.3s ease-in-out, min-width 0.3s ease-in-out;
+	}
+
+	.sidebar-panel.collapsed {
+		width: 40px;
+		min-width: 40px;
+	}
+
+	.sidebar-header {
+		padding: 16px;
+		border-bottom: 1px solid var(--background-modifier-border);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.sidebar-header h3 {
+		margin: 0;
+	}
+
+	.sidebar-panel.collapsed .sidebar-header h3 {
+		display: none;
+	}
+
+	.toggle-button {
+		background: none;
+		border: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		padding: 4px;
+		font-size: 14px;
+		transition: color 0.2s;
+	}
+
+	.toggle-button:hover {
+		color: var(--text-normal);
+	}
+
+	.sidebar-scroll {
+		flex: 1;
+		overflow-y: auto;
+		padding: 8px;
+		scroll-behavior: smooth;
 	}
 
 	/* 共享样式 */

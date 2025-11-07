@@ -55,6 +55,9 @@
 
 	let keydownHandler: (event: KeyboardEvent) => void;
 
+	// hover模式相关状态
+	let isMenuVisible = false;
+
 	//添加笔记、右键菜单
 	let selectedText = '';
 	let currentCfi = '';
@@ -807,6 +810,19 @@
 		}
 	}
 
+	// hover模式事件处理
+	function handleMouseEnter() {
+		if (displayMode === 'hover') {
+			isMenuVisible = true;
+		}
+	}
+
+	function handleMouseLeave() {
+		if (displayMode === 'hover') {
+			isMenuVisible = false;
+		}
+	}
+
 </script>
 
 <div
@@ -830,6 +846,45 @@
   	}}
 	tabindex="0"
 >
+
+	<!-- 悬浮章节模式 -->
+	{#if displayMode === 'hover'}
+		<div class="chapter-trigger"
+			 on:mouseenter={handleMouseEnter}
+			 on:mouseleave={handleMouseLeave}>
+			<div class="chapters-panel"
+				 class:visible={isMenuVisible}>
+				<div class="chapters-header">
+					<h3>目录</h3>
+				</div>
+				<div class="chapters-scroll">
+					{#each chapters as chapter}
+						<button
+							class="chapter-item"
+							class:active={currentChapter?.href === chapter.href}
+							class:level-0={chapter.level === 0}
+							class:level-1={chapter.level === 1}
+							style="margin-left: {chapter.level === 1 ? '20px' : '0'}"
+							on:click={async () => {
+								const success = await displayChapter(chapter);
+								if (success) {
+									currentChapter = chapter;
+									saveProgress();
+								}
+							}}
+						>
+							<span class="chapter-indent">
+								{#if chapter.level === 1}
+									<span class="chapter-bullet">•</span>
+								{/if}
+								{chapter.title}
+							</span>
+						</button>
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	{#if displayMode === 'outline' || displayMode === 'sidebar'}
 		<div class="outline-panel" transition:fade>
@@ -936,6 +991,52 @@
 		flex-direction: row;
 	}
 
+	/* 悬浮模式样式 */
+	.chapter-trigger {
+		position: absolute;
+		left: 0;
+		top: 0;
+		bottom: 0;
+		width: 40px;
+		z-index: 100;
+	}
+
+	.chapters-panel {
+		position: absolute;
+		left: -240px;
+		top: 0;
+		bottom: 0;
+		width: 240px;
+		background: var(--background-primary);
+		border-right: 1px solid var(--background-modifier-border);
+		transition: transform 0.3s ease-in-out;
+		display: flex;
+		flex-direction: column;
+		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+		z-index: 101;
+	}
+
+	.chapters-panel.visible {
+		transform: translateX(240px);
+	}
+
+	.chapters-header {
+		padding: 16px;
+		border-bottom: 1px solid var(--background-modifier-border);
+	}
+
+	.chapters-header h3 {
+		margin: 0;
+	}
+
+	.chapters-scroll {
+		flex: 1;
+		overflow-y: auto;
+		padding: 8px;
+		scroll-behavior: smooth;
+	}
+
+	/* 大纲和侧边栏模式样式 */
 	.outline-panel {
 		width: 240px;
 		flex-shrink: 0; /* 防止收缩 */
