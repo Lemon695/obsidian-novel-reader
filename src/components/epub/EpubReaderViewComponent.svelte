@@ -592,7 +592,7 @@
 	}
 
 	// 处理章节切换
-	function handleSwitchChapter(direction: 'prev' | 'next') {
+	async function handleSwitchChapter(direction: 'prev' | 'next') {
 		console.log('handleSwitchChapter-1--', direction, currentChapter, chapters)
 		if (!currentChapter || !chapters.length) return;
 
