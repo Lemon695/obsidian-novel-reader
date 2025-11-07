@@ -1,8 +1,25 @@
-/*
+.suggestion-item {
+	padding: 8px;
+}
 
-This CSS file will be included with your plugin, and
-available in the app when your plugin is enabled.
+/* 添加图书，搜索 */
+.suggestion-content {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
 
-If your plugin does not need CSS, delete this file.
+.suggestion-title {
+	font-size: 14px;
+	font-weight: 500;
+}
 
-*/
+.suggestion-note {
+	font-size: 12px;
+	color: var(--text-muted);
+}
+
+/* 移除TXT阅读页面视图内部标题 */
+.workspace-leaf-content[data-type='novel-reader.txt-novel-reader'] .view-header {
+	display: none;
+}

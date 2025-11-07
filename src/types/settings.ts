@@ -1,0 +1,127 @@
+import type {ViewMode, ReadingMode, Theme} from './index';
+
+export interface NovelSettings {
+	// 库设置
+	libraryPath: string;
+	coverPath: string;
+	statsPath: string;
+	defaultViewMode: ViewMode;
+	showHiddenBooks: boolean;
+	customMetadataFields: string[];
+	notePath: string; // 添加小说笔记路径设置
+
+	// 屏蔽设置
+	blockConfig: {
+		patterns: string[];    // 正则表达式列表
+		specificPaths: string[]; // 具体路径列表
+	};
+
+	// 阅读设置
+	defaultTheme: string;
+	defaultFontSize: number;
+	defaultLineHeight: number;
+	readingMode: ReadingMode;
+	showProgress: boolean;
+	showChapterTitle: boolean;
+	enablePageAnimation: boolean;
+	scrollSmoothness: number;
+	chapterDisplayMode: 'hover' | 'outline' | 'sidebar';
+
+	// 章节设置
+	chapterPatterns: Array<{
+		pattern: string;
+		enabled: boolean;
+		description: string;
+	}>;
+	autoDetectChapters: boolean;
+
+	// 备份设置
+	autoBackup: boolean;
+	backupInterval: number;
+	backupPath: string;
+	maxBackupCount: number;
+
+	// 同步设置
+	enableSync: boolean;
+	syncMethod: 'local' | 'obsidian' | 'custom';
+	syncInterval: number;
+
+	// 界面设置
+	showToolbar: boolean;
+	showStatusBar: boolean;
+	toolbarButtons: string[];
+	customCss: string;
+
+	// 快捷键
+	keyBindings: {
+		nextChapter: string;
+		prevChapter: string;
+		toggleNightMode: string;
+		toggleBookmarks: string;
+		addBookmark: string;
+		addNote: string;
+	};
+}
+
+// 默认设置
+export const DEFAULT_SETTINGS: NovelSettings = {
+	libraryPath: '.obsidian/plugins/novel-reader/library',
+	coverPath: 'NovelNotes/covers',
+	statsPath: '.obsidian/plugins/novel-reader/stats',
+	defaultViewMode: 'grid',
+	showHiddenBooks: false,
+	customMetadataFields: [],
+	notePath: 'NovelNotes',
+
+	blockConfig: {
+		patterns: [],
+		specificPaths: []
+	},
+
+	defaultTheme: 'light',
+	defaultFontSize: 18,
+	defaultLineHeight: 1.6,
+	readingMode: 'scroll',
+	showProgress: true,
+	showChapterTitle: true,
+	enablePageAnimation: true,
+	scrollSmoothness: 0.1,
+	chapterDisplayMode: 'hover',
+
+	chapterPatterns: [
+		{
+			pattern: "^第[0-9零一二三四五六七八九十百千]+章\\s*.*$",
+			enabled: true,
+			description: "标准章节"
+		},
+		{
+			pattern: "^Chapter\\s*[0-9]+.*$",
+			enabled: true,
+			description: "英文章节"
+		}
+	],
+	autoDetectChapters: true,
+
+	autoBackup: true,
+	backupInterval: 24 * 60 * 60 * 1000, // 24小时
+	backupPath: '.obsidian/plugins/novel-reader/backups',
+	maxBackupCount: 5,
+
+	enableSync: false,
+	syncMethod: 'local',
+	syncInterval: 30 * 60 * 1000, // 30分钟
+
+	showToolbar: true,
+	showStatusBar: true,
+	toolbarButtons: ['theme', 'font', 'toc', 'bookmark', 'note'],
+	customCss: '',
+
+	keyBindings: {
+		nextChapter: 'ArrowRight',
+		prevChapter: 'ArrowLeft',
+		toggleNightMode: 'Mod+N',
+		toggleBookmarks: 'Mod+B',
+		addBookmark: 'Mod+D',
+		addNote: 'Mod+M'
+	}
+};
