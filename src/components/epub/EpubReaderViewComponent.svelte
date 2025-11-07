@@ -191,6 +191,61 @@
 		};
 	});
 
+	// 辅助函数：查找章节对应的spine索引
+	function findSpineIndex(chapter: EpubChapter): number | null {
+		if (!book || !chapter.href) return null;
+
+		// 清理href
+		const cleanHref = chapter.href.split('#')[0].split('?')[0];
+
+		// 在spine中查找匹配的项
+		for (let i = 0; i < book.spine.items.length; i++) {
+			const spineItem = book.spine.items[i];
+			const spineHref = spineItem.href.split('#')[0].split('?')[0];
+
+			// 比较清理后的href，支持相对路径和绝对路径
+			if (spineHref === cleanHref || spineHref.endsWith('/' + cleanHref) || cleanHref.endsWith('/' + spineHref)) {
+				return i;
+			}
+		}
+
+		return null;
+	}
+
+	// 辅助函数：显示章节内容（带回退机制）
+	async function displayChapter(chapter: EpubChapter): Promise<boolean> {
+		if (!rendition || !book) return false;
+
+		try {
+			// 方法1：尝试使用清理后的href
+			const cleanHref = chapter.href.split('#')[0].split('?')[0];
+			await rendition.display(cleanHref);
+			return true;
+		} catch (error) {
+			console.warn('Failed to display by href, trying spine index:', error);
+
+			try {
+				// 方法2：尝试使用spine索引
+				const spineIndex = findSpineIndex(chapter);
+				if (spineIndex !== null) {
+					await rendition.display(spineIndex);
+					return true;
+				}
+			} catch (spineError) {
+				console.error('Failed to display by spine index:', spineError);
+			}
+
+			// 方法3：尝试使用原始href（最后的尝试）
+			try {
+				await rendition.display(chapter.href);
+				return true;
+			} catch (originalError) {
+				console.error('Failed to display chapter by any method:', originalError);
+				return false;
+			}
+		}
+	}
+
 	async function initializeReader() {
 		if (!readerContainer) {
 			console.error('Reader container still not available');
@@ -612,13 +667,8 @@
 			currentChapter = nextChapter;
 			currentChapterId = nextChapter.id;
 
-			// 使用清理后的href显示章节，避免"No Section Found"错误
-			try {
-				const cleanHref = nextChapter.href.split('#')[0].split('?')[0];
-				await rendition.display(cleanHref);
-			} catch (error) {
-				console.error('Failed to display next chapter:', error);
-			}
+			// 使用辅助函数显示章节
+			await displayChapter(nextChapter);
 
 			// 触发章节更改事件
 			dispatch('chapterChanged', {
@@ -705,13 +755,8 @@
 			currentChapter = chapter;
 			currentChapterId = chapter.id;
 
-			// 显示新章节，使用清理后的href避免"No Section Found"错误
-			try {
-				const cleanHref = chapter.href.split('#')[0].split('?')[0];
-				await rendition.display(cleanHref);
-			} catch (error) {
-				console.error('Failed to jump to chapter:', error);
-			}
+			// 使用辅助函数显示章节
+			await displayChapter(chapter);
 
 			// 触发章节切换事件
 			dispatch('chapterChanged', {
@@ -800,25 +845,11 @@
 						class:level-1={chapter.level === 1}
 						style="margin-left: {chapter.level === 1 ? '20px' : '0'}"
 						on:click={async () => {
-							try {
-								// 使用href显示章节，移除锚点部分以避免"No Section Found"错误
-								const cleanHref = chapter.href.split('#')[0].split('?')[0];
-								await rendition.display(cleanHref);
+							// 使用辅助函数显示章节
+							const success = await displayChapter(chapter);
+							if (success) {
 								currentChapter = chapter;
 								saveProgress();
-							} catch (error) {
-								console.error('Failed to display chapter:', error);
-								// 如果href失败，尝试使用book.spine查找
-								try {
-									const spineItem = book?.spine.get(chapter.href);
-									if (spineItem) {
-										await rendition.display(spineItem.index);
-										currentChapter = chapter;
-										saveProgress();
-									}
-								} catch (retryError) {
-									console.error('Failed to display chapter using spine:', retryError);
-								}
 							}
     					}}
 					>
