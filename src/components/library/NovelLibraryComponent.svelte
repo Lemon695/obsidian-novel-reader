@@ -31,6 +31,8 @@
 	let sortField: 'lastRead' | 'addTime' | 'title' = 'lastRead';
 	let sortOrder: 'asc' | 'desc' = 'desc';
 	let searchQuery = '';
+	let debouncedSearchQuery = ''; // 防抖后的搜索查询
+	let searchDebounceTimer: NodeJS.Timeout | null = null;
 	let currentView = 'library'; // 当前视图：library, favorites, notes, shelf:id
 	let isComposing = false;
 	let actualSearchQuery = '';
@@ -51,6 +53,16 @@
 
 	$: novelsList = novels || [];
 
+	// 防抖搜索查询 - 300ms延迟
+	$: {
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer);
+		}
+		searchDebounceTimer = setTimeout(() => {
+			debouncedSearchQuery = searchQuery;
+		}, 300);
+	}
+
 	$: filteredNovels = novels
 		.filter(novel => {
 			// 基础视图筛选
@@ -65,8 +77,8 @@
 			}
 			if (!isInView) return false;
 
-			// 搜索过滤
-			const matchesSearch = novel.title.toLowerCase().includes(searchQuery.toLowerCase());
+			// 搜索过滤 - 使用防抖后的搜索查询
+			const matchesSearch = novel.title.toLowerCase().includes(debouncedSearchQuery.toLowerCase());
 
 			// 书架过滤
 			const matchesShelf = currentShelf === 'all' || novel.shelfId === currentShelf;
@@ -108,6 +120,10 @@
 		document.addEventListener('click', handleClickOutside);
 		return () => {
 			document.removeEventListener('click', handleClickOutside);
+			// 清理防抖计时器
+			if (searchDebounceTimer) {
+				clearTimeout(searchDebounceTimer);
+			}
 		};
 	});
 

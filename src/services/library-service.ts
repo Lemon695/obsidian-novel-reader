@@ -20,6 +20,15 @@ export class LibraryService {
 	private pathsService!: PathsService;
 	private lockPromise: Promise<void> = Promise.resolve();
 
+	// 封面缓存
+	private coverCache: Map<string, string> = new Map();
+	private coverCacheTime = 0;
+	private readonly COVER_CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+
+	// 保存防抖
+	private saveDebounceTimer: NodeJS.Timeout | null = null;
+	private readonly SAVE_DEBOUNCE_DURATION = 1000; // 1秒防抖
+
 	constructor(private app: App, private plugin: NovelReaderPlugin) {
 		this.pathsService = this.plugin.pathsService;
 
@@ -75,16 +84,50 @@ export class LibraryService {
 	}
 
 	/**
-	 * 获取所有小说
+	 * 获取所有小说（带封面缓存优化）
 	 */
 	async getAllNovels(): Promise<Novel[]> {
 		await this.loadLibrary();
 		await this.ensureInitialized();
 
-		//加载封面路径
-		this.novels = await Promise.all(this.novels.map(novel => this.plugin.bookCoverManagerService.loadNovelWithCover(novel)));
+		const now = Date.now();
+		const isCacheValid = now - this.coverCacheTime < this.COVER_CACHE_DURATION;
 
+		// 如果缓存有效且已加载封面，直接返回
+		if (isCacheValid && this.coverCache.size > 0) {
+			// 使用缓存的封面数据
+			const novelsWithCachedCovers = this.novels.map(novel => {
+				const cachedCover = this.coverCache.get(novel.id);
+				if (cachedCover) {
+					return { ...novel, cover: cachedCover };
+				}
+				return novel;
+			});
+			return [...novelsWithCachedCovers];
+		}
+
+		// 缓存失效或首次加载，重新加载封面
+		this.novels = await Promise.all(
+			this.novels.map(async novel => {
+				const novelWithCover = await this.plugin.bookCoverManagerService.loadNovelWithCover(novel);
+				// 更新缓存
+				if (novelWithCover.cover) {
+					this.coverCache.set(novel.id, novelWithCover.cover);
+				}
+				return novelWithCover;
+			})
+		);
+
+		this.coverCacheTime = now;
 		return [...this.novels]; // 返回副本以防止外部修改
+	}
+
+	/**
+	 * 清除封面缓存（在添加/删除小说时调用）
+	 */
+	clearCoverCache(): void {
+		this.coverCache.clear();
+		this.coverCacheTime = 0;
 	}
 
 	/**
@@ -135,9 +178,9 @@ export class LibraryService {
 					return file instanceof TFile;
 				});
 
-				// 如果有任何更改，保存更新后的数据
+				// 如果有任何更改，保存更新后的数据（初始化时立即保存）
 				if (needsSave) {
-					await this.saveLibrary("loadLibrary");
+					await this.saveLibraryImmediate("loadLibrary");
 				}
 			} catch (error) {
 				console.error('Error loading library:', error);
@@ -148,9 +191,32 @@ export class LibraryService {
 	}
 
 	/**
-	 * 保存图书库数据
+	 * 保存图书库数据（带防抖）
 	 */
 	private async saveLibrary(logType: string) {
+		// 清除之前的计时器
+		if (this.saveDebounceTimer) {
+			clearTimeout(this.saveDebounceTimer);
+		}
+
+		// 设置新的防抖计时器
+		return new Promise<void>((resolve) => {
+			this.saveDebounceTimer = setTimeout(async () => {
+				try {
+					await this.saveLibraryImmediate(logType);
+					resolve();
+				} catch (error) {
+					console.error('Error in debounced save:', error);
+					throw error;
+				}
+			}, this.SAVE_DEBOUNCE_DURATION);
+		});
+	}
+
+	/**
+	 * 立即保存图书库数据（内部实现）
+	 */
+	private async saveLibraryImmediate(logType: string) {
 		console.log('saveLibrary--->', logType)
 		try {
 			// 添加调试日志
@@ -273,6 +339,9 @@ export class LibraryService {
 		this.novels.push(novel);
 		await this.saveLibrary("addNovel");
 
+		// 清除封面缓存，确保下次加载时重新获取
+		this.clearCoverCache();
+
 		new Notice(`已添加《${novel.title}》到图书库\n点击图书信息可添加笔记`);
 		return novel;
 	}
@@ -289,9 +358,12 @@ export class LibraryService {
 		// 删除相关进度记录
 		this.progress = this.progress.filter(p => p.novelId !== novel.id);
 
-		// 删除小说记录
+		// 删除小说记录（立即保存以防数据丢失）
 		this.novels.splice(index, 1);
-		await this.saveLibrary("deleteNovel");
+		await this.saveLibraryImmediate("deleteNovel");
+
+		// 清除封面缓存
+		this.clearCoverCache();
 
 		return true;
 	}

@@ -302,19 +302,26 @@ export default class NovelReaderPlugin extends Plugin {
 		);
 	}
 
-	async activateLibraryView() {
+	/**
+	 * 通用视图激活方法（避免代码重复）
+	 */
+	private async activateView(viewType: string): Promise<void> {
 		const {workspace} = this.app;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_LIBRARY)[0];
+		let leaf = workspace.getLeavesOfType(viewType)[0];
 
 		if (!leaf) {
 			leaf = workspace.getLeaf('tab');
 			await leaf.setViewState({
-				type: VIEW_TYPE_LIBRARY,
+				type: viewType,
 				active: true,
 			});
 		}
 
 		await workspace.revealLeaf(leaf);
+	}
+
+	async activateLibraryView() {
+		return this.activateView(VIEW_TYPE_LIBRARY);
 	}
 
 	async onunload() {
@@ -379,66 +386,22 @@ export default class NovelReaderPlugin extends Plugin {
 
 	// 激活已读完视图
 	async activateCompletedView() {
-		const {workspace} = this.app;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_COMPLETED)[0];
-
-		if (!leaf) {
-			leaf = workspace.getLeaf('tab');
-			await leaf.setViewState({
-				type: VIEW_TYPE_COMPLETED,
-				active: true
-			});
-		}
-
-		await workspace.revealLeaf(leaf);
+		return this.activateView(VIEW_TYPE_COMPLETED);
 	}
 
 	// 激活藏书管理视图
 	async activateCollectionView() {
-		const {workspace} = this.app;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_COLLECTION)[0];
-
-		if (!leaf) {
-			leaf = workspace.getLeaf('tab');
-			await leaf.setViewState({
-				type: VIEW_TYPE_COLLECTION,
-				active: true
-			});
-		}
-
-		await workspace.revealLeaf(leaf);
+		return this.activateView(VIEW_TYPE_COLLECTION);
 	}
 
 	// 添加激活统计视图的方法
 	async activateGlobalStatsView() {
-		const {workspace} = this.app;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_GLOBAL_STATS)[0];
-
-		if (!leaf) {
-			leaf = workspace.getLeaf('tab');
-			await leaf.setViewState({
-				type: VIEW_TYPE_GLOBAL_STATS,
-				active: true
-			});
-		}
-
-		await workspace.revealLeaf(leaf);
+		return this.activateView(VIEW_TYPE_GLOBAL_STATS);
 	}
 
 	// 添加激活笔记视图的方法
 	async activateGlobalNotesView() {
-		const {workspace} = this.app;
-		let leaf = workspace.getLeavesOfType(VIEW_TYPE_GLOBAL_NOTES)[0];
-
-		if (!leaf) {
-			leaf = workspace.getLeaf('tab');
-			await leaf.setViewState({
-				type: VIEW_TYPE_GLOBAL_NOTES,
-				active: true
-			});
-		}
-
-		await workspace.revealLeaf(leaf);
+		return this.activateView(VIEW_TYPE_GLOBAL_NOTES);
 	}
 
 	private async handleFileModification(file: TFile) {
