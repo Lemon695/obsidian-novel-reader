@@ -7,6 +7,7 @@ import {PDFCoverManagerService} from "./pdf/pdf-cover-manager-service";
 import {BookCoverManagerService} from "./book-cover-service";
 import {EpubCoverManager} from "./epub/epub-cover-manager-serivce";
 import {PathsService} from "./utils/paths-service";
+import * as pdfjs from 'pdfjs-dist';
 
 export class LibraryService {
 	private novels: Novel[] = [];
