@@ -18,7 +18,7 @@ export class LibraryService {
 	private epubCoverManager: EpubCoverManager;
 	private pdfCoverManagerService: PDFCoverManagerService;
 	private pathsService!: PathsService;
-	private dataLock = false;
+	private lockPromise: Promise<void> = Promise.resolve();
 
 	constructor(private app: App, private plugin: NovelReaderPlugin) {
 		this.pathsService = this.plugin.pathsService;
@@ -52,16 +52,25 @@ export class LibraryService {
 		}
 	}
 
-	//数据锁、同步
+	//数据锁、同步（使用Promise链避免忙等待和竞态条件）
 	private async withDataLock<T>(operation: () => Promise<T>): Promise<T> {
-		while (this.dataLock) {
-			await new Promise(resolve => setTimeout(resolve, 100));
-		}
-		this.dataLock = true;
+		// 创建一个新的Promise链
+		const currentLock = this.lockPromise;
+		let releaseLock: () => void;
+
+		// 创建新的锁Promise
+		this.lockPromise = new Promise<void>(resolve => {
+			releaseLock = resolve;
+		});
+
 		try {
+			// 等待前一个操作完成
+			await currentLock;
+			// 执行当前操作
 			return await operation();
 		} finally {
-			this.dataLock = false;
+			// 释放锁，允许下一个操作继续
+			releaseLock!();
 		}
 	}
 

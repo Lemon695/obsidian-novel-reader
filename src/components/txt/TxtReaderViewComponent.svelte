@@ -62,7 +62,14 @@
 	let selectedTextChapterId = 0;
 	let showNoteList = false;
 
-	onMount(() => {
+	// 合并所有 onMount 逻辑，避免重复的事件监听器
+	onMount(async () => {
+		// 1. 初始化笔记服务
+		notesService = new NotesService(plugin.app, plugin);
+		notes = await notesService.loadNotes(novel.id);
+		await loadReadingStats();
+
+		// 2. 解析章节和恢复阅读进度
 		if (content) {
 			parseAndSetChapters();
 			contentLoaded = true;
@@ -97,7 +104,10 @@
 			}
 		}
 
-		// 添加笔记图标点击事件监听
+		// 3. 初始化阅读会话
+		initializeReadingSession();
+
+		// 4. 添加笔记图标点击事件监听
 		const handleNoteIconClick = (event: CustomEvent) => {
 			const noteId = event.detail.noteId;
 			const note = notes.find(n => n.id === noteId);
@@ -115,69 +125,57 @@
 			}
 		};
 
-		// 添加事件监听
+		// 5. 页面可见性变化处理
+		const handleVisibilityHandler = () => {
+			isActive = !document.hidden;
+			handleVisibilityChange();
+		};
+
+		// 6. 用户活动处理（使用节流，避免高频触发）
+		let activityTimeout: ReturnType<typeof setTimeout> | null = null;
+		const throttledUpdateActivity = () => {
+			if (activityTimeout) return;
+			activityTimeout = setTimeout(() => {
+				updateActivity();
+				activityTimeout = null;
+			}, 1000); // 节流1秒
+		};
+
+		// 7. 添加所有事件监听器（确保每个事件只监听一次）
 		window.addEventListener('keydown', handleKeyDown);
 		window.addEventListener('noteIconClick', handleNoteIconClick as EventListener);
+		document.addEventListener('visibilitychange', handleVisibilityHandler);
 
-		const visibilityHandler = () => {
-			isActive = !document.hidden;
-		};
-		// 监听页面焦点
-		document.addEventListener('visibilitychange', visibilityHandler);
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
-		// 返回清理函数，移除所有事件监听器
-		return () => {
-			window.removeEventListener('keydown', handleKeyDown);
-			window.removeEventListener('noteIconClick', handleNoteIconClick as EventListener);
-
-			document.removeEventListener('visibilitychange', visibilityHandler);
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
-		};
-	});
-
-	// 在组件挂载时初始化
-	onMount(() => {
-		initializeReadingSession();
-
-		// 监听用户活动
-		const activityEvents = ['mousemove', 'keydown', 'scroll', 'click'];
+		// 用户活动监听（移除 mousemove 以提高性能，使用节流）
+		const activityEvents = ['keydown', 'scroll', 'click'];
 		activityEvents.forEach(event => {
-			window.addEventListener(event, updateActivity);
+			window.addEventListener(event, throttledUpdateActivity);
 		});
 
-		// 添加页面可见性监听
-		document.addEventListener('visibilitychange', handleVisibilityChange);
-
+		// 8. 返回清理函数，移除所有事件监听器
 		return () => {
-			// 清理
+			// 清理定时器
 			if (readingSessionInterval) {
 				clearInterval(readingSessionInterval);
 			}
-			activityEvents.forEach(event => {
-				window.removeEventListener(event, updateActivity);
-			});
-			document.removeEventListener('visibilitychange', handleVisibilityChange);
+			if (activityTimeout) {
+				clearTimeout(activityTimeout);
+			}
+
+			// 结束当前会话
 			if (isReadingActive) {
 				endCurrentSession();
 			}
+
+			// 移除所有事件监听器
+			window.removeEventListener('keydown', handleKeyDown);
+			window.removeEventListener('noteIconClick', handleNoteIconClick as EventListener);
+			document.removeEventListener('visibilitychange', handleVisibilityHandler);
+
+			activityEvents.forEach(event => {
+				window.removeEventListener(event, throttledUpdateActivity);
+			});
 		};
-	});
-
-	onMount(async () =>{
-		notesService = new NotesService(plugin.app, plugin);
-
-		notes = await notesService.loadNotes(novel.id);
-
-		$: if (novel?.id) {
-			await loadNotesForNovel();
-		}
-
-		$: if (currentChapter) {
-			await loadNotesForNovel();
-		}
-
-		await loadReadingStats();
 	})
 
 	$: if (content && !contentLoaded) {
@@ -271,11 +269,6 @@
 	function handleBlur() {
 		isActive = false;
 	}
-
-	onDestroy(() => {
-		// 移除事件监听
-		window.removeEventListener('keydown', handleKeyDown);
-	});
 
 	function smoothScrollToTop(element: HTMLElement | Window, duration: number) {
 		const start = element === window ? window.scrollY : (element as HTMLElement).scrollTop;
@@ -1185,7 +1178,7 @@
 	}
 
 	:global(.note-highlight) {
-		background-color: #FFE4B5; /* 设置为温暖的橙黄色 */
+		background-color: var(--novel-color-note-highlight);
 		border-radius: 3px;
 		display: inline;
 		position: relative;

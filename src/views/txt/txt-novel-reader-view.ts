@@ -105,7 +105,7 @@ export class TxtNovelReaderView extends ItemView {
 		let txtChapterProgress = parseChapters(this.content, this.novel);
 
 		//获取阅读章节
-		let selectChapterId = this.readingProgressService.getReadingChapterId(this.novel,txtChapterProgress, initialChapterId, this.currentSessionId);
+		let selectChapterId = await this.readingProgressService.getReadingChapterId(this.novel,txtChapterProgress, initialChapterId, this.currentSessionId);
 
 		this.component = new (TxtReaderViewComponent as ComponentType)({
 			target: container,

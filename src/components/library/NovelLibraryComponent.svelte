@@ -299,17 +299,17 @@
 		dispatch('refresh');
 	}
 
-	// 获取书架颜色
+	// 获取书架颜色（使用CSS变量）
 	function getShelfColor(shelfId: string): string {
 		switch (shelfId) {
 			case 'reading':
-				return '#4caf50';
+				return 'var(--novel-color-shelf-reading)';
 			case 'toread':
-				return '#2196f3';
+				return 'var(--novel-color-shelf-toread)';
 			case 'finished':
-				return '#9c27b0';
+				return 'var(--novel-color-shelf-finished)';
 			default:
-				return '#757575';
+				return 'var(--novel-color-shelf-archived)';
 		}
 	}
 
@@ -319,10 +319,10 @@
 		return shelf?.name || '未分类';
 	}
 
-	// 获取标签颜色
+	// 获取标签颜色（使用CSS变量作为默认值）
 	function getTagColor(tagId: string): string {
 		const tag = tags.find(t => t.id === tagId);
-		return tag?.color || '#757575';
+		return tag?.color || 'var(--novel-color-shelf-archived)';
 	}
 
 	// 获取标签名称

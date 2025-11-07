@@ -1,21 +1,87 @@
+/* ================================
+   Obsidian Novel Reader 全局样式系统
+   ================================ */
+
+/* ================================
+   设计令牌 - Design Tokens
+   ================================ */
+:root {
+	/* 颜色系统 - Color System */
+	/* 书架颜色 */
+	--novel-color-shelf-reading: #4caf50;
+	--novel-color-shelf-toread: #2196f3;
+	--novel-color-shelf-finished: #9c27b0;
+	--novel-color-shelf-archived: #757575;
+
+	/* 功能颜色 */
+	--novel-color-note-highlight: #FFE4B5;
+	--novel-color-new-badge: #ff4444;
+	--novel-color-progress-bar: var(--interactive-accent);
+
+	/* 间距系统 - Spacing System (8px基础) */
+	--novel-spacing-xs: 4px;
+	--novel-spacing-sm: 8px;
+	--novel-spacing-md: 16px;
+	--novel-spacing-lg: 24px;
+	--novel-spacing-xl: 32px;
+	--novel-spacing-2xl: 48px;
+
+	/* 字体大小系统 - Typography System */
+	--novel-font-size-xs: 11px;
+	--novel-font-size-sm: 12px;
+	--novel-font-size-base: 14px;
+	--novel-font-size-md: 16px;
+	--novel-font-size-lg: 18px;
+	--novel-font-size-xl: 20px;
+	--novel-font-size-2xl: 24px;
+	--novel-font-size-3xl: 36px;
+
+	/* 行高系统 - Line Height System */
+	--novel-line-height-tight: 1.4;
+	--novel-line-height-normal: 1.5;
+	--novel-line-height-relaxed: 1.6;
+	--novel-line-height-loose: 1.8;
+
+	/* 圆角系统 - Border Radius System */
+	--novel-radius-sm: 4px;
+	--novel-radius-md: 8px;
+	--novel-radius-lg: 12px;
+	--novel-radius-xl: 16px;
+	--novel-radius-full: 9999px;
+
+	/* 阴影系统 - Shadow System */
+	--novel-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.1);
+	--novel-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.15);
+	--novel-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.2);
+
+	/* 过渡动画 - Transitions */
+	--novel-transition-fast: 150ms ease;
+	--novel-transition-base: 200ms ease;
+	--novel-transition-slow: 300ms ease;
+}
+
+/* ================================
+   原有样式（保持兼容）
+   ================================ */
+
 .suggestion-item {
-	padding: 8px;
+	padding: var(--novel-spacing-sm);
 }
 
 /* 添加图书，搜索 */
 .suggestion-content {
 	display: flex;
 	flex-direction: column;
-	gap: 4px;
+	gap: var(--novel-spacing-xs);
 }
 
 .suggestion-title {
-	font-size: 14px;
+	font-size: var(--novel-font-size-base);
 	font-weight: 500;
 }
 
 .suggestion-note {
-	font-size: 12px;
+	font-size: var(--novel-font-size-sm);
 	color: var(--text-muted);
 }
 

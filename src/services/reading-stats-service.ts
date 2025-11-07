@@ -9,26 +9,37 @@ export class ReadingStatsService {
 	// 获取小说的阅读统计
 	async getNovelStats(novelId: string): Promise<ReadingStats> {
 		// 从数据库服务获取原始数据
-		const rawStats = await this.plugin.dbService?.getNovelStats(novelId);
+		if (!this.plugin.dbService) {
+			console.warn('Database service is not available');
+			return this.getEmptyStats();
+		}
+
+		const rawStats = await this.plugin.dbService.getNovelStats(novelId);
+
+		// 如果没有统计数据，返回空统计
+		if (!rawStats || !rawStats.stats) {
+			console.warn(`No stats found for novel: ${novelId}`);
+			return this.getEmptyStats();
+		}
 
 		// 处理今日阅读时间
 		const todayKey = new Date().toISOString().split('T')[0];
-		const todayTime = rawStats?.stats.dailyStats[todayKey]?.totalDuration || 0;
+		const todayTime = rawStats.stats.dailyStats?.[todayKey]?.totalDuration || 0;
 
 		// 计算总阅读时间
-		const totalTime = rawStats?.stats.totalReadingTime || 0;
+		const totalTime = rawStats.stats.totalReadingTime || 0;
 
 		// 计算平均速度
-		const averageSpeed = rawStats?.stats.averageSessionTime || 0;
+		const averageSpeed = rawStats.stats.averageSessionTime || 0;
 
 		// 获取阅读天数
-		const readingDays = Object.keys(rawStats?.stats.dailyStats || {}).length;
+		const readingDays = Object.keys(rawStats.stats.dailyStats || {}).length;
 
 		// 处理每日统计数据
-		const dailyStats = this.processDailyStats(rawStats?.stats.dailyStats || {});
+		const dailyStats = this.processDailyStats(rawStats.stats.dailyStats || {});
 
 		// 处理速度统计数据
-		const speedStats = this.processSpeedStats(rawStats?.stats.chapterStats || {});
+		const speedStats = this.processSpeedStats(rawStats.stats.chapterStats || {});
 
 		// 计算完成率
 		const completionRate = await this.calculateCompletionRate(novelId);
@@ -37,10 +48,10 @@ export class ReadingStatsService {
 		const lastChapter = await this.getLastChapter(novelId);
 
 		// 计算连续阅读天数
-		const readingStreak = this.calculateReadingStreak(rawStats?.stats.dailyStats || {});
+		const readingStreak = this.calculateReadingStreak(rawStats.stats.dailyStats || {});
 
 		// 获取首次阅读时间
-		const firstReadTime = rawStats?.stats.firstReadTime
+		const firstReadTime = rawStats.stats.firstReadTime
 			? this.formatFirstReadTime(rawStats.stats.firstReadTime)
 			: '未开始阅读';
 
@@ -55,6 +66,22 @@ export class ReadingStatsService {
 			lastChapter,
 			readingStreak,
 			firstReadTime      // 添加首次阅读时间到返回对象
+		};
+	}
+
+	// 返回空的统计数据
+	private getEmptyStats(): ReadingStats {
+		return {
+			todayTime: 0,
+			totalTime: 0,
+			averageSpeed: 0,
+			readingDays: 0,
+			dailyStats: [],
+			speedStats: [],
+			completionRate: 0,
+			lastChapter: '',
+			readingStreak: 0,
+			firstReadTime: '未开始阅读'
 		};
 	}
 

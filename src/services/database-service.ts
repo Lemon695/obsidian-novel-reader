@@ -310,9 +310,9 @@ export class DatabaseService {
 		await this.saveDatabase();
 	}
 
-	public checkHealth(): boolean {
+	public async checkHealth(): Promise<boolean> {
 		try {
-			this.ensureInitialized();
+			await this.ensureInitialized();
 			return true;
 		} catch (error) {
 			console.error('Database health check failed:', error);
