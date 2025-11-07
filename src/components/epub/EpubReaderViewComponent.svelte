@@ -611,7 +611,14 @@
 			// 更新当前章节并显示
 			currentChapter = nextChapter;
 			currentChapterId = nextChapter.id;
-			rendition.display(nextChapter.href);
+
+			// 使用清理后的href显示章节，避免"No Section Found"错误
+			try {
+				const cleanHref = nextChapter.href.split('#')[0].split('?')[0];
+				await rendition.display(cleanHref);
+			} catch (error) {
+				console.error('Failed to display next chapter:', error);
+			}
 
 			// 触发章节更改事件
 			dispatch('chapterChanged', {
@@ -698,8 +705,13 @@
 			currentChapter = chapter;
 			currentChapterId = chapter.id;
 
-			// 显示新章节
-			await rendition.display(chapter.href);
+			// 显示新章节，使用清理后的href避免"No Section Found"错误
+			try {
+				const cleanHref = chapter.href.split('#')[0].split('?')[0];
+				await rendition.display(cleanHref);
+			} catch (error) {
+				console.error('Failed to jump to chapter:', error);
+			}
 
 			// 触发章节切换事件
 			dispatch('chapterChanged', {
@@ -787,10 +799,27 @@
 						class:level-0={chapter.level === 0}
 						class:level-1={chapter.level === 1}
 						style="margin-left: {chapter.level === 1 ? '20px' : '0'}"
-						on:click={() => {
-        					rendition.display(chapter.href);
-        					currentChapter = chapter;
-        					saveProgress();
+						on:click={async () => {
+							try {
+								// 使用href显示章节，移除锚点部分以避免"No Section Found"错误
+								const cleanHref = chapter.href.split('#')[0].split('?')[0];
+								await rendition.display(cleanHref);
+								currentChapter = chapter;
+								saveProgress();
+							} catch (error) {
+								console.error('Failed to display chapter:', error);
+								// 如果href失败，尝试使用book.spine查找
+								try {
+									const spineItem = book?.spine.get(chapter.href);
+									if (spineItem) {
+										await rendition.display(spineItem.index);
+										currentChapter = chapter;
+										saveProgress();
+									}
+								} catch (retryError) {
+									console.error('Failed to display chapter using spine:', retryError);
+								}
+							}
     					}}
 					>
     					<span class="chapter-indent">
