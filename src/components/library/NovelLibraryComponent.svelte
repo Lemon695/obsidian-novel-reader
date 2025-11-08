@@ -601,7 +601,6 @@
 				<button type="button" on:click={() => onAddNovel()} class="add-button">
 					添加图书
 				</button>
-				<!-- 添加刷新按钮 -->
 				<button type="button" on:click={handleRefresh} class="refresh-button">
 					<span class="refresh-icon">{@html icons.refresh}</span>
 					刷新
@@ -826,7 +825,7 @@
 									/>
 								{:else}
 									<div class="book-cover placeholder">
-										<span>📚</span>
+										<span class="book-icon">{@html icons.book32}</span>
 									</div>
 								{/if}
 							</div>
