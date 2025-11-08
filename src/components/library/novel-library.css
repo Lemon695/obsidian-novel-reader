@@ -358,6 +358,37 @@
 		opacity: 0.8;
 	}
 
+	/* SVG图标通用样式 */
+	.refresh-icon svg,
+	.filter-icon svg,
+	.icon svg,
+	.sidebar-toggle svg {
+		display: inline-block;
+		vertical-align: middle;
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+		fill: none;
+		transition: all 0.2s;
+	}
+
+	/* 侧边栏图标稍大一些 */
+	.sidebar-item .icon svg {
+		width: 18px;
+		height: 18px;
+	}
+
+	/* 侧边栏切换按钮图标 */
+	.sidebar-toggle svg {
+		width: 18px;
+		height: 18px;
+	}
+
+	/* 刷新按钮旋转动画优化 */
+	.refresh-button:active .refresh-icon svg {
+		animation: spin 0.5s ease-in-out;
+	}
+
 	.toolbar-right {
 		display: flex;
 		align-items: center;

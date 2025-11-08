@@ -9,6 +9,7 @@
 	import type NovelReaderPlugin from "../../main";
 	import {slide} from 'svelte/transition';
 	import TagManagerModal from "../TagManagerModal.svelte";
+	import {icons} from './icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -594,7 +595,7 @@
 					on:click={toggleSidebar}
 					title={showSidebar ? '隐藏侧边栏' : '显示侧边栏'}
 				>
-					≡
+					{@html icons.menu}
 				</button>
 
 				<button type="button" on:click={() => onAddNovel()} class="add-button">
@@ -602,7 +603,7 @@
 				</button>
 				<!-- 添加刷新按钮 -->
 				<button type="button" on:click={handleRefresh} class="refresh-button">
-					<span class="refresh-icon">🔄</span>
+					<span class="refresh-icon">{@html icons.refresh}</span>
 					刷新
 				</button>
 				<button
@@ -611,7 +612,7 @@
 					class="advanced-filter-button"
 					class:active={showAdvancedFilter}
 				>
-					<span class="filter-icon">🔍</span>
+					<span class="filter-icon">{@html icons.filter}</span>
 					高级筛选
 				</button>
 			</div>
@@ -737,7 +738,7 @@
 							class:active={currentView === 'library'}
 							on:click={switchToAllBooks}
 						>
-							<span class="icon">📚</span>
+							<span class="icon">{@html icons.library}</span>
 							全部图书
 						</button>
 
@@ -746,7 +747,7 @@
 							class:active={currentView === 'favorites'}
 							on:click={() => switchView('favorites')}
 						>
-							<span class="icon">❤️</span>
+							<span class="icon">{@html currentView === 'favorites' ? icons.heartFilled : icons.heart}</span>
 							我的喜爱
 						</button>
 					</div>
@@ -797,7 +798,7 @@
 								class:active={currentView === `shelf:${shelf.id}`}
 								on:click={() => selectShelf(shelf.id)}
 							>
-								<span class="icon">📚</span>
+								<span class="icon">{@html icons.shelf}</span>
 								{shelf.name}
 								<span class="count">({shelf.novels.length})</span>
 							</button>
