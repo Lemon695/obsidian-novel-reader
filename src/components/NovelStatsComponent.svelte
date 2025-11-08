@@ -166,60 +166,105 @@
 
 <style>
 	.stats-container {
-		padding: 1rem;
+		padding: var(--novel-spacing-md);
+		height: 100%;
+		overflow-y: auto;
 	}
 
 	.title {
-		margin-bottom: 2rem;
+		margin-bottom: var(--novel-spacing-lg);
+		font-size: var(--novel-font-size-xl);
+		font-weight: 600;
+		color: var(--text-normal);
 	}
 
 	.stats-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 1rem;
-		margin-bottom: 2rem;
+		gap: var(--novel-spacing-md);
+		margin-bottom: var(--novel-spacing-lg);
 	}
 
 	.stat-card {
-		padding: 1rem;
+		padding: var(--novel-spacing-md);
 		background-color: var(--background-secondary);
-		border-radius: 8px;
+		border-radius: var(--novel-radius-md);
 		text-align: center;
+		transition: all 0.2s;
+		border: 1px solid transparent;
+	}
+
+	.stat-card:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+		border-color: var(--background-modifier-border);
+	}
+
+	.stat-card h3 {
+		font-size: var(--novel-font-size-base);
+		color: var(--text-muted);
+		margin-bottom: var(--novel-spacing-xs);
+		font-weight: 500;
+	}
+
+	.stat-card p {
+		font-size: var(--novel-font-size-lg);
+		color: var(--interactive-accent);
+		font-weight: 600;
+		margin: 0;
 	}
 
 	.chart-container {
-		margin-bottom: 2rem;
+		margin-bottom: var(--novel-spacing-lg);
+	}
+
+	.chart-container h3 {
+		font-size: var(--novel-font-size-md);
+		margin-bottom: var(--novel-spacing-sm);
+		color: var(--text-normal);
 	}
 
 	.chart {
 		background-color: var(--background-secondary);
-		padding: 1rem;
-		border-radius: 8px;
+		padding: var(--novel-spacing-md);
+		border-radius: var(--novel-radius-md);
 		height: 350px;
 		position: relative;
 	}
 
 	.chapters-container {
 		background-color: var(--background-secondary);
-		padding: 1rem;
-		border-radius: 8px;
+		padding: var(--novel-spacing-md);
+		border-radius: var(--novel-radius-md);
+	}
+
+	.chapters-container h3 {
+		font-size: var(--novel-font-size-md);
+		margin-bottom: var(--novel-spacing-sm);
+		color: var(--text-normal);
 	}
 
 	.chapters-list {
 		display: grid;
-		gap: 0.5rem;
+		gap: var(--novel-spacing-xs);
 	}
 
 	.chapter-stat {
 		display: grid;
 		grid-template-columns: 1fr auto auto;
-		gap: 1rem;
-		padding: 0.5rem;
+		gap: var(--novel-spacing-md);
+		padding: var(--novel-spacing-sm);
 		background-color: var(--background-primary);
-		border-radius: 4px;
+		border-radius: var(--novel-radius-sm);
+		transition: all 0.2s;
+	}
+
+	.chapter-stat:hover {
+		background-color: var(--background-modifier-hover);
 	}
 
 	.chapter-time, .read-count {
 		color: var(--text-muted);
+		font-size: var(--novel-font-size-sm);
 	}
 </style>
