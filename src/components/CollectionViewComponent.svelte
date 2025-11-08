@@ -2,6 +2,7 @@
 	import {onMount} from 'svelte';
 	import type {Novel} from '../types';
 	import type {Shelf, Category} from '../types/shelf';
+	import {icons} from './library/icons';
 
 	export let novels: Novel[] = [];
 	export let shelves: Shelf[] = [];
@@ -57,13 +58,14 @@
 		<h2>藏书管理</h2>
 		<div class="actions">
 			<button class="refresh-button" on:click={onRefresh}>
-				<span class="refresh-icon">🔄</span>
+				<span class="refresh-icon">{@html icons.refresh}</span>
 				刷新
 			</button>
 			<button
 				class="add-shelf-button"
 				on:click={() => showNewShelfForm = !showNewShelfForm}
 			>
+				<span class="icon">{@html icons.plus}</span>
 				新建书架
 			</button>
 		</div>
@@ -154,7 +156,7 @@
 
 <style>
 	.collection-view {
-		padding: 20px;
+		padding: var(--novel-spacing-md);
 		height: 100%;
 		overflow-y: auto;
 	}
@@ -163,53 +165,82 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 24px;
+		margin-bottom: var(--novel-spacing-lg);
+	}
+
+	.header h2 {
+		font-size: var(--novel-font-size-xl);
+		font-weight: 600;
+		color: var(--text-normal);
+		margin: 0;
 	}
 
 	.actions {
 		display: flex;
-		gap: 12px;
+		gap: var(--novel-spacing-sm);
 	}
 
 	.refresh-button,
 	.add-shelf-button {
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		padding: 8px 12px;
+		gap: var(--novel-spacing-xs);
+		padding: var(--novel-spacing-sm) var(--novel-spacing-md);
 		border-radius: 20px;
 		border: 1px solid var(--background-modifier-border);
 		background: var(--background-primary);
 		cursor: pointer;
+		font-size: var(--novel-font-size-base);
 		transition: all 0.2s;
 	}
 
 	.refresh-button:hover,
 	.add-shelf-button:hover {
 		background: var(--background-modifier-hover);
+		border-color: var(--interactive-accent);
+	}
+
+	.refresh-button:active .refresh-icon svg {
+		animation: spin 0.5s ease-in-out;
+	}
+
+	@keyframes spin {
+		from { transform: rotate(0deg); }
+		to { transform: rotate(360deg); }
 	}
 
 	.new-shelf-form {
 		display: flex;
-		gap: 8px;
-		margin-bottom: 20px;
-		padding: 16px;
+		gap: var(--novel-spacing-xs);
+		margin-bottom: var(--novel-spacing-md);
+		padding: var(--novel-spacing-md);
 		background: var(--background-secondary);
-		border-radius: 8px;
+		border-radius: var(--novel-radius-md);
 	}
 
 	.new-shelf-form input {
 		flex: 1;
-		padding: 8px;
-		border-radius: 4px;
+		padding: var(--novel-spacing-sm);
+		border-radius: var(--novel-radius-sm);
 		border: 1px solid var(--background-modifier-border);
+		background: var(--background-primary);
+		font-size: var(--novel-font-size-base);
+		transition: all 0.2s;
+	}
+
+	.new-shelf-form input:focus {
+		outline: none;
+		border-color: var(--interactive-accent);
+		box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.1);
 	}
 
 	.new-shelf-form button {
-		padding: 8px 16px;
-		border-radius: 4px;
+		padding: var(--novel-spacing-sm) var(--novel-spacing-md);
+		border-radius: var(--novel-radius-sm);
 		border: none;
 		cursor: pointer;
+		font-size: var(--novel-font-size-base);
+		transition: all 0.2s;
 	}
 
 	.new-shelf-form button:not(.cancel-button) {
@@ -217,9 +248,17 @@
 		color: var(--text-on-accent);
 	}
 
+	.new-shelf-form button:not(.cancel-button):hover {
+		background: var(--interactive-accent-hover);
+	}
+
 	.new-shelf-form .cancel-button {
 		background: var(--background-modifier-error);
 		color: white;
+	}
+
+	.new-shelf-form .cancel-button:hover {
+		opacity: 0.9;
 	}
 
 	.new-shelf-form button:disabled {
@@ -230,38 +269,50 @@
 	.shelves-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-		gap: 20px;
+		gap: var(--novel-spacing-md);
 	}
 
 	.shelf-card {
 		background: var(--background-secondary);
-		border-radius: 8px;
-		padding: 16px;
+		border-radius: var(--novel-radius-md);
+		padding: var(--novel-spacing-md);
 		min-height: 200px;
 		display: flex;
 		flex-direction: column;
+		transition: all 0.2s;
+		border: 1px solid transparent;
+	}
+
+	.shelf-card:hover {
+		border-color: var(--background-modifier-border);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	}
 
 	.shelf-header {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 16px;
+		margin-bottom: var(--novel-spacing-md);
 	}
 
 	.shelf-header h3 {
 		margin: 0;
+		font-size: var(--novel-font-size-md);
+		font-weight: 500;
 	}
 
 	.shelf-actions {
 		display: flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--novel-spacing-xs);
 	}
 
 	.book-count {
-		font-size: 12px;
+		font-size: var(--novel-font-size-sm);
 		color: var(--text-muted);
+		background: var(--background-primary);
+		padding: 2px var(--novel-spacing-xs);
+		border-radius: var(--novel-radius-sm);
 	}
 
 	.delete-button {
@@ -269,65 +320,72 @@
 		border: none;
 		color: var(--text-muted);
 		cursor: pointer;
-		padding: 4px;
-		font-size: 16px;
+		padding: var(--novel-spacing-xs);
+		font-size: 18px;
+		line-height: 1;
+		transition: all 0.2s;
+		border-radius: var(--novel-radius-sm);
 	}
 
 	.delete-button:hover {
 		color: var(--text-error);
+		background: var(--background-modifier-hover);
 	}
 
 	.books-list {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
+		gap: var(--novel-spacing-xs);
 		flex: 1;
 	}
 
 	.book-item {
-		padding: 8px;
+		padding: var(--novel-spacing-sm);
 		background: var(--background-primary);
-		border-radius: 4px;
+		border-radius: var(--novel-radius-sm);
 		cursor: move;
 		transition: all 0.2s ease;
+		border: 1px solid transparent;
 	}
 
 	.book-item:hover {
 		background: var(--background-modifier-hover);
 		transform: translateY(-2px);
 		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+		border-color: var(--background-modifier-border);
 	}
 
 	.book-info {
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 4px;
+		margin-bottom: var(--novel-spacing-xs);
 	}
 
 	.book-title {
 		flex: 1;
 		font-weight: 500;
+		font-size: var(--novel-font-size-base);
+		color: var(--text-normal);
 	}
 
 	.book-progress {
-		font-size: 12px;
-		color: var(--text-muted);
-		padding: 2px 6px;
-		background: var(--background-modifier-success);
-		border-radius: 10px;
+		font-size: var(--novel-font-size-sm);
 		color: white;
+		padding: 2px var(--novel-spacing-xs);
+		background: var(--interactive-accent);
+		border-radius: 10px;
 	}
 
 	.book-tags {
 		display: flex;
-		gap: 4px;
+		gap: var(--novel-spacing-xs);
 		flex-wrap: wrap;
 	}
 
 	.tag {
-		font-size: 11px;
-		padding: 2px 6px;
+		font-size: var(--novel-font-size-sm);
+		padding: 2px var(--novel-spacing-xs);
 		background: var(--background-modifier-success);
 		color: var(--text-on-accent);
 		border-radius: 10px;
@@ -339,10 +397,21 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 20px;
+		padding: var(--novel-spacing-lg);
 		border: 2px dashed var(--background-modifier-border);
-		border-radius: 4px;
+		border-radius: var(--novel-radius-sm);
 		color: var(--text-muted);
-		font-size: 14px;
+		font-size: var(--novel-font-size-base);
+	}
+
+	/* SVG图标样式 */
+	.refresh-icon svg,
+	.icon svg {
+		display: inline-block;
+		vertical-align: middle;
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+		fill: none;
 	}
 </style>

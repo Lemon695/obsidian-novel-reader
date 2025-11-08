@@ -6,6 +6,7 @@
 	import NoteDialog from "../NoteDialog.svelte";
 	import {NotesService} from "../../services/note/notes-service";
 	import {PathsService} from "../../services/utils/paths-service";
+	import {icons} from '../library/icons';
 
 	export let plugin: NovelReaderPlugin;
 
@@ -217,6 +218,7 @@
 					class="filter-input search-button"
 					on:click={handleSearch}
 				>
+					<span class="icon">{@html icons.search}</span>
 					搜索
 				</button>
 			</div>
@@ -257,12 +259,14 @@
 								class="edit-button"
 								on:click={() => handleEditNote(note, novelNotes)}
 							>
+								<span class="icon">{@html icons.edit}</span>
 								编辑
 							</button>
 							<button
 								class="delete-button"
 								on:click={() => handleDeleteNote(note, novelNotes)}
 							>
+								<span class="icon">{@html icons.trash}</span>
 								删除
 							</button>
 						</div>
@@ -297,16 +301,21 @@
 		height: 100%;
 		display: flex;
 		flex-direction: column;
-		padding: 20px;
+		padding: var(--novel-spacing-md);
 	}
 
 	.toolbar {
-		margin-bottom: 20px;
+		margin-bottom: var(--novel-spacing-md);
+		position: sticky;
+		top: 0;
+		background-color: var(--background-primary);
+		z-index: 10;
+		padding: var(--novel-spacing-sm) 0;
 	}
 
 	.filters {
 		display: flex;
-		gap: 12px;
+		gap: var(--novel-spacing-sm);
 		flex-wrap: wrap;
 		align-items: stretch;
 	}
@@ -315,10 +324,28 @@
 	.date-input,
 	.search-input,
 	.sort-select {
-		padding: 8px 12px;
-		border-radius: 6px;
+		padding: var(--novel-spacing-sm) var(--novel-spacing-md);
+		border-radius: var(--novel-radius-md);
 		border: 1px solid var(--background-modifier-border);
 		background: var(--background-primary);
+		font-size: var(--novel-font-size-base);
+		transition: all 0.2s;
+	}
+
+	.novel-select:hover,
+	.date-input:hover,
+	.search-input:hover,
+	.sort-select:hover {
+		border-color: var(--interactive-accent);
+	}
+
+	.novel-select:focus,
+	.date-input:focus,
+	.search-input:focus,
+	.sort-select:focus {
+		outline: none;
+		border-color: var(--interactive-accent);
+		box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.1);
 	}
 
 	.search-input {
@@ -330,64 +357,77 @@
 		flex: 1;
 		overflow-y: auto;
 		display: grid;
-		gap: 16px;
+		gap: var(--novel-spacing-md);
 	}
 
 	.note-item {
 		background: var(--background-secondary);
-		border-radius: 8px;
-		padding: 16px;
+		border-radius: var(--novel-radius-md);
+		padding: var(--novel-spacing-md);
+		transition: all 0.2s;
+	}
+
+	.note-item:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 	}
 
 	.note-header {
 		display: flex;
-		gap: 12px;
+		gap: var(--novel-spacing-sm);
 		align-items: center;
-		margin-bottom: 12px;
+		margin-bottom: var(--novel-spacing-sm);
 	}
 
 	.novel-title {
 		font-weight: 500;
+		font-size: var(--novel-font-size-lg);
+		margin-bottom: var(--novel-spacing-sm);
 	}
 
 	.chapter-info {
 		color: var(--text-muted);
-		font-size: 0.9em;
+		font-size: var(--novel-font-size-sm);
 	}
 
 	.timestamp {
 		color: var(--text-muted);
-		font-size: 0.9em;
+		font-size: var(--novel-font-size-sm);
 		margin-left: auto;
 	}
 
 	.selected-text {
 		background: var(--background-primary);
-		padding: 12px;
-		border-radius: 6px;
-		margin-bottom: 12px;
+		padding: var(--novel-spacing-sm);
+		border-radius: var(--novel-radius-sm);
+		margin-bottom: var(--novel-spacing-sm);
 		font-style: italic;
 		color: var(--text-muted);
+		border-left: 3px solid var(--interactive-accent);
 	}
 
 	.note-content {
-		margin-bottom: 12px;
+		margin-bottom: var(--novel-spacing-sm);
 		line-height: 1.6;
+		color: var(--text-normal);
 	}
 
 	.note-actions {
 		display: flex;
-		gap: 8px;
+		gap: var(--novel-spacing-xs);
 		justify-content: flex-end;
 	}
 
 	.edit-button,
 	.delete-button {
-		padding: 6px 12px;
-		border-radius: 4px;
+		display: flex;
+		align-items: center;
+		gap: var(--novel-spacing-xs);
+		padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+		border-radius: var(--novel-radius-sm);
 		border: none;
 		cursor: pointer;
-		font-size: 14px;
+		font-size: var(--novel-font-size-base);
 		transition: all 0.2s;
 	}
 
@@ -396,30 +436,41 @@
 		color: var(--text-on-accent);
 	}
 
+	.edit-button:hover {
+		background: var(--interactive-accent-hover);
+		transform: translateY(-1px);
+	}
+
 	.delete-button {
 		background: var(--background-modifier-error);
 		color: white;
 	}
 
+	.delete-button:hover {
+		opacity: 0.9;
+		transform: translateY(-1px);
+	}
+
 	.empty-message {
 		text-align: center;
-		padding: 32px;
+		padding: var(--novel-spacing-xl);
 		color: var(--text-muted);
+		font-size: var(--novel-font-size-base);
 	}
 
 	.filter-input {
-		padding: 8px 12px;
-		border-radius: 6px;
+		padding: var(--novel-spacing-sm) var(--novel-spacing-md);
+		border-radius: var(--novel-radius-md);
 		border: 1px solid var(--background-modifier-border);
 		background: var(--background-primary);
-		height: 36px; /* 固定高度 */
-		box-sizing: border-box; /* 确保padding不会增加总高度 */
-		font-size: 14px;
+		height: 36px;
+		box-sizing: border-box;
+		font-size: var(--novel-font-size-base);
 	}
 
 	.search-container {
 		display: flex;
-		gap: 8px;
+		gap: var(--novel-spacing-xs);
 		flex: 1;
 	}
 
@@ -432,11 +483,12 @@
 		transition: all 0.2s;
 		display: flex;
 		align-items: center;
+		gap: var(--novel-spacing-xs);
 		justify-content: center;
 	}
 
 	.search-button:hover {
-		opacity: 0.9;
+		background: var(--interactive-accent-hover);
 		transform: translateY(-1px);
 	}
 
@@ -446,6 +498,23 @@
 	}
 
 	.date-input {
-		width: 130px;
+		min-width: 130px;
+	}
+
+	/* SVG图标样式 */
+	.icon svg {
+		display: inline-block;
+		vertical-align: middle;
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+		fill: none;
+	}
+
+	.search-button .icon svg,
+	.edit-button .icon svg,
+	.delete-button .icon svg {
+		width: 14px;
+		height: 14px;
 	}
 </style>
