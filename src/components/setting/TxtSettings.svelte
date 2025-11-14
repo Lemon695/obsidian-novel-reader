@@ -4,6 +4,7 @@
 	import type { Novel } from '../../types';
 	import type { ChapterProgress} from "../../types/txt/txt-reader";
 	import {parseChapters} from "../../lib/txt.reader/chapter-logic";
+	import { icons } from '../library/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -95,7 +96,7 @@
 			class:active={activeSettingTab === 'pattern'}
 			on:click={() => activeSettingTab = 'pattern'}
 		>
-			<span class="nav-icon">📝</span>
+			<span class="nav-icon">{@html icons.note}</span>
 			章节解析
 		</button>
 	</div>
@@ -253,6 +254,18 @@
 		background: var(--background-modifier-active);
 		color: var(--text-accent);
 		font-weight: 500;
+	}
+
+	.nav-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.nav-icon :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
 	}
 
 	.settings-main {

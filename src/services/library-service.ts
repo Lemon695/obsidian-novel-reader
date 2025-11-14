@@ -8,6 +8,7 @@ import {BookCoverManagerService} from "./book-cover-service";
 import {EpubCoverManager} from "./epub/epub-cover-manager-serivce";
 import {PathsService} from "./utils/paths-service";
 import * as pdfjs from 'pdfjs-dist';
+import { TIMING, FILE_CONFIG } from '../constants/app-config';
 
 export class LibraryService {
 	private novels: Novel[] = [];
@@ -23,11 +24,11 @@ export class LibraryService {
 	// 封面缓存
 	private coverCache: Map<string, string> = new Map();
 	private coverCacheTime = 0;
-	private readonly COVER_CACHE_DURATION = 5 * 60 * 1000; // 5分钟缓存
+	private readonly COVER_CACHE_DURATION = FILE_CONFIG.CACHE_EXPIRY;
 
 	// 保存防抖
 	private saveDebounceTimer: NodeJS.Timeout | null = null;
-	private readonly SAVE_DEBOUNCE_DURATION = 1000; // 1秒防抖
+	private readonly SAVE_DEBOUNCE_DURATION = TIMING.SAVE_DEBOUNCE;
 
 	constructor(private app: App, private plugin: NovelReaderPlugin) {
 		this.pathsService = this.plugin.pathsService;
@@ -185,7 +186,7 @@ export class LibraryService {
 			} catch (error) {
 				console.error('Error loading library:', error);
 				if (i === retryCount - 1) throw error;
-				await new Promise(resolve => setTimeout(resolve, 1000));
+				await new Promise(resolve => setTimeout(resolve, TIMING.RETRY_DELAY));
 			}
 		}
 	}
@@ -200,14 +201,14 @@ export class LibraryService {
 		}
 
 		// 设置新的防抖计时器
-		return new Promise<void>((resolve) => {
+		return new Promise<void>((resolve, reject) => {
 			this.saveDebounceTimer = setTimeout(async () => {
 				try {
 					await this.saveLibraryImmediate(logType);
 					resolve();
 				} catch (error) {
 					console.error('Error in debounced save:', error);
-					throw error;
+					reject(error);
 				}
 			}, this.SAVE_DEBOUNCE_DURATION);
 		});

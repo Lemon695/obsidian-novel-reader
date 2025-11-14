@@ -2,6 +2,7 @@ import Loki, {Collection} from 'lokijs';
 import {App, FileSystemAdapter, Notice} from 'obsidian';
 import type NovelReaderPlugin from '../main';
 import type {NovelReadingStats, ReadingSession} from "../types/reading-stats";
+import { DATABASE_CONFIG } from '../constants/app-config';
 
 export class DatabaseService {
 	private db: Loki | null = null;
@@ -52,7 +53,7 @@ export class DatabaseService {
 			// 设置自动保存
 			this.db.autosaveEnable();
 			this.db.autosave = true;
-			this.db.autosaveInterval = 4000;
+			this.db.autosaveInterval = DATABASE_CONFIG.AUTOSAVE_INTERVAL;
 
 			this.initialized = true;
 			console.log('Database initialized successfully');

@@ -9,6 +9,8 @@
 	import ReaderSettingsMenu from '../setting/ReaderSettingsMenu.svelte';
 	import type {ChapterHistory} from "../../types/reading-stats";
 	import {handleChapterChange} from "../../lib/txt.reader/chapter-logic";
+	import { icons } from '../library/icons';
+	import LoadingSpinner from '../LoadingSpinner.svelte';
 
 	const dispatch = createEventDispatcher();
 
@@ -517,14 +519,14 @@
 					on:click={() => handleZoom('out')}
 					title="缩小"
 				>
-					🔍-
+					<span class="zoom-icon">{@html icons.zoomOut}</span>
 				</button>
 				<button
 					class="tool-button"
 					on:click={() => handleZoom('in')}
 					title="放大"
 				>
-					🔍+
+					<span class="zoom-icon">{@html icons.zoomIn}</span>
 				</button>
 				<span class="zoom-level">{Math.round(zoomLevel * 100)}%</span>
 			</div>
@@ -572,7 +574,7 @@
 
 		<div id="pdf-container" class="pdf-container">
 			{#if isLoading}
-				<div class="loading">加载中...</div>
+				<LoadingSpinner message="正在加载PDF文档..." />
 			{/if}
 		</div>
 	</div>
@@ -761,6 +763,12 @@
 
 	.tool-button:hover {
 		background: var(--background-modifier-hover);
+	}
+
+	.zoom-icon :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
 	}
 
 	.zoom-level {

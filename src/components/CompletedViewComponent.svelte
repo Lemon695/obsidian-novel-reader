@@ -2,6 +2,8 @@
 	import { onMount } from 'svelte';
 	import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 	import type { Novel } from '../types';
+	import { icons } from './library/icons';
+	import { formatDate, formatPercentage } from '../utils/format-utils';
 
 	export let novels: Novel[] = [];
 	export let stats: {
@@ -24,20 +26,14 @@
 	}));
 
 	// 计算目标完成率
-	$: completionRate = Math.round((stats.yearlyGoal.current / stats.yearlyGoal.target) * 100);
-
-	function formatDate(timestamp: number): string {
-		if (!timestamp) return '未知';
-		const date = new Date(timestamp);
-		return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
-	}
+	$: completionRate = formatPercentage(stats.yearlyGoal.current, stats.yearlyGoal.target, 0).replace('%', '');
 </script>
 
 <div class="completed-view">
 	<div class="header">
 		<h2>阅读完成情况</h2>
 		<button class="refresh-button" on:click={onRefresh}>
-			<span class="refresh-icon">🔄</span>
+			<span class="refresh-icon">{@html icons.refresh}</span>
 			刷新
 		</button>
 	</div>
@@ -105,7 +101,7 @@
 
 <style>
 	.completed-view {
-		padding: 20px;
+		padding: var(--novel-spacing-lg);
 		height: 100%;
 		overflow-y: auto;
 	}
@@ -114,81 +110,87 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		margin-bottom: 24px;
+		margin-bottom: var(--novel-spacing-lg);
 	}
 
 	.refresh-button {
 		display: flex;
 		align-items: center;
-		gap: 4px;
-		padding: 8px 12px;
-		border-radius: 20px;
+		gap: var(--novel-spacing-xs);
+		padding: var(--novel-spacing-sm);
+		border-radius: var(--novel-radius-full);
 		border: 1px solid var(--background-modifier-border);
 		background: var(--background-primary);
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: var(--novel-transition-base);
 	}
 
 	.refresh-button:hover {
 		background: var(--background-modifier-hover);
 	}
 
+	.refresh-icon :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
+	}
+
 	.stats-cards {
 		display: grid;
 		grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-		gap: 20px;
-		margin-bottom: 30px;
+		gap: var(--novel-spacing-lg);
+		margin-bottom: var(--novel-spacing-2xl);
 	}
 
 	.stat-card {
 		background: var(--background-secondary);
-		padding: 20px;
-		border-radius: 10px;
+		padding: var(--novel-spacing-lg);
+		border-radius: var(--novel-radius-md);
 		text-align: center;
 	}
 
 	.stat-value {
-		font-size: 36px;
+		font-size: var(--novel-font-size-3xl);
 		font-weight: bold;
 		color: var(--interactive-accent);
-		margin: 10px 0;
+		margin: var(--novel-spacing-sm) 0;
 	}
 
 	.stat-subtext {
 		color: var(--text-muted);
-		font-size: 14px;
+		font-size: var(--novel-font-size-base);
 	}
 
 	.progress-bar {
 		width: 100%;
 		height: 6px;
 		background: var(--background-modifier-border);
-		border-radius: 3px;
-		margin: 10px 0;
+		border-radius: var(--novel-radius-sm);
+		margin: var(--novel-spacing-sm) 0;
 	}
 
 	.progress {
 		height: 100%;
 		background: var(--interactive-accent);
-		border-radius: 3px;
-		transition: width 0.3s ease;
+		border-radius: var(--novel-radius-sm);
+		transition: var(--novel-transition-slow);
 	}
 
 	.chart-container {
 		background: var(--background-secondary);
-		padding: 20px;
-		border-radius: 10px;
-		margin-bottom: 30px;
+		padding: var(--novel-spacing-lg);
+		border-radius: var(--novel-radius-md);
+		margin-bottom: var(--novel-spacing-2xl);
 	}
 
 	.completed-list {
 		background: var(--background-secondary);
-		padding: 20px;
-		border-radius: 10px;
+		padding: var(--novel-spacing-lg);
+		border-radius: var(--novel-radius-md);
 	}
 
 	.book-item {
-		padding: 15px;
+		padding: var(--novel-spacing-md);
 		border-bottom: 1px solid var(--background-modifier-border);
 	}
 
@@ -204,25 +206,25 @@
 
 	.book-info h4 {
 		margin: 0;
-		font-size: 16px;
+		font-size: var(--novel-font-size-md);
 	}
 
 	.completion-date {
-		font-size: 14px;
+		font-size: var(--novel-font-size-base);
 		color: var(--text-muted);
 	}
 
 	.book-tags {
-		margin-top: 8px;
+		margin-top: var(--novel-spacing-sm);
 		display: flex;
-		gap: 8px;
+		gap: var(--novel-spacing-sm);
 		flex-wrap: wrap;
 	}
 
 	.tag {
-		font-size: 12px;
-		padding: 2px 8px;
-		border-radius: 12px;
+		font-size: var(--novel-font-size-sm);
+		padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+		border-radius: var(--novel-radius-lg);
 		background: var(--background-modifier-success);
 		color: var(--text-on-accent);
 	}

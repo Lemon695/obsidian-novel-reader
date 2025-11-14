@@ -2,6 +2,7 @@
 	import type { CustomShelf } from '../types/shelf';
 	import { createEventDispatcher } from 'svelte';
 	import {slide} from 'svelte/transition';
+	import { icons } from './library/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -37,7 +38,7 @@
 					class:active={showFavorites}
 					on:click={() => handleViewChange('favorites')}
 				>
-					<span class="icon">❤️</span>
+					<span class="icon">{@html icons.heart}</span>
 					我的喜爱
 				</button>
 
@@ -46,7 +47,7 @@
 					class:active={showNotes}
 					on:click={() => handleViewChange('notes')}
 				>
-					<span class="icon">📝</span>
+					<span class="icon">{@html icons.note}</span>
 					我的笔记
 				</button>
 			</div>
@@ -60,7 +61,7 @@
 						class="menu-item"
 						on:click={() => handleViewChange(`shelf:${shelf.id}`)}
 					>
-						<span class="icon">{shelf.icon || '📚'}</span>
+						<span class="icon">{#if shelf.icon}{shelf.icon}{:else}{@html icons.shelf}{/if}</span>
 						{shelf.name}
 						<span class="count">({shelf.novels.length})</span>
 					</button>
@@ -149,8 +150,17 @@
 	}
 
 	.icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		font-size: 16px;
 		opacity: 0.8;
+	}
+
+	.icon :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
 	}
 
 	.count {

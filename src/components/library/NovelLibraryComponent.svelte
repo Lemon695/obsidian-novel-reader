@@ -69,7 +69,7 @@
 			// 基础视图筛选
 			let isInView = true;
 			if (currentView === 'favorites') {
-				isInView = plugin.customShelfService.isFavorite(novel.id);
+				isInView = plugin?.customShelfService?.isFavorite(novel.id) ?? false;
 			} else if (currentView === 'notes') {
 				isInView = !!novel.notePath;
 			} else if (currentView.startsWith('shelf:')) {
@@ -111,8 +111,19 @@
 	$: {
 		if (currentView === 'favorites') {
 			(async () => {
-				const favoriteIds = await plugin.customShelfService.getFavoriteNovels();
-				filteredNovels = novels.filter(novel => favoriteIds.includes(novel.id));
+				try {
+					if (!plugin?.customShelfService) {
+						console.error('customShelfService未初始化');
+						filteredNovels = [];
+						return;
+					}
+					const favoriteIds = await plugin.customShelfService.getFavoriteNovels();
+					filteredNovels = novels.filter(novel => favoriteIds.includes(novel.id));
+				} catch (error) {
+					console.error('加载喜爱列表失败:', error);
+					new Notice('加载喜爱列表失败，请重试');
+					filteredNovels = [];
+				}
 			})();
 		}
 	}
@@ -601,6 +612,7 @@
 				<button type="button" on:click={() => onAddNovel()} class="add-button">
 					添加图书
 				</button>
+				<!-- 添加刷新按钮 -->
 				<button type="button" on:click={handleRefresh} class="refresh-button">
 					<span class="refresh-icon">{@html icons.refresh}</span>
 					刷新
@@ -825,7 +837,7 @@
 									/>
 								{:else}
 									<div class="book-cover placeholder">
-										<span class="book-icon">{@html icons.book32}</span>
+										<span class="placeholder-icon">{@html icons.book}</span>
 									</div>
 								{/if}
 							</div>
@@ -882,11 +894,7 @@
 													on:click|stopPropagation={() => toggleFavorite(activeMenuNovel)}
 												>
             										<span class="menu-icon">
-                										{#if isFavorite(activeMenuNovel.id)}
-                    										❤️
-														{:else}
-                    										🤍
-                										{/if}
+                										{@html isFavorite(activeMenuNovel.id) ? icons.heartFilled : icons.heart}
             										</span>
 													<span>{isFavorite(activeMenuNovel.id) ? '取消喜爱' : '添加到喜爱'}</span>
 												</button>
@@ -897,13 +905,13 @@
 													class="menu-item"
 													on:click|stopPropagation={(e) => handleOpenChapterGrid(activeMenuNovel, e)}
 												>
-													<span class="menu-icon">📑</span>
+													<span class="menu-icon">{@html icons.list}</span>
 													<span>图书目录</span>
 												</button>
 
 												<div class="submenu">
 													<button class="menu-item">
-														<span class="menu-icon">📚</span>
+														<span class="menu-icon">{@html icons.shelf}</span>
 														<span>添加到书架</span>
 													</button>
 													<div class="submenu-content">
@@ -922,7 +930,7 @@
 													class="menu-item"
 													on:click|stopPropagation={(e) => handleShelfManage(activeMenuNovel, e)}
 												>
-													<span class="menu-icon">📚</span>
+													<span class="menu-icon">{@html icons.shelf}</span>
 													<span>选择书架</span>
 												</button>
 
@@ -930,7 +938,7 @@
 													class="menu-item"
 													on:click|stopPropagation={(e) => handleTagManage(activeMenuNovel, e)}
 												>
-													<span class="menu-icon">🏷️</span>
+													<span class="menu-icon">{@html icons.tag}</span>
 													<span>管理标签</span>
 												</button>
 
@@ -938,7 +946,7 @@
 													class="menu-item"
 													on:click|stopPropagation={(e) => handleCategoryManage(activeMenuNovel, e)}
 												>
-													<span class="menu-icon">📁</span>
+													<span class="menu-icon">{@html icons.folderOpen}</span>
 													<span>管理分类</span>
 												</button>
 
@@ -946,7 +954,7 @@
 													class="menu-item"
 													on:click|stopPropagation={(e) => handleOpenNoteWithCheck(activeMenuNovel, e)}
 												>
-													<span class="menu-icon">📝️</span>
+													<span class="menu-icon">{@html icons.info}</span>
 													<span>图书信息</span>
 												</button>
 
@@ -954,7 +962,7 @@
 													class="menu-item"
 													on:click|stopPropagation={(e) => handleOpenStats(activeMenuNovel, e)}
 												>
-													<span class="menu-icon">📊</span>
+													<span class="menu-icon">{@html icons.barChart}</span>
 													<span>阅读统计</span>
 												</button>
 
@@ -962,7 +970,7 @@
 													class="menu-item"
 													on:click|stopPropagation={(e) => handleRemoveWithCheck(activeMenuNovel, e)}
 												>
-													<span class="menu-icon">🗑️</span>
+													<span class="menu-icon">{@html icons.trash}</span>
 													<span>移除图书</span>
 												</button>
 											</div>

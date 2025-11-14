@@ -11,8 +11,9 @@
 	import {handleChapterChangeEPUB, parseChapters, switchChapter} from "../../lib/txt.reader/chapter-logic";
 	import type {ChapterHistory} from "../../types/reading-stats";
 	import {saveReadingProgress} from "../../lib/txt.reader/progress-logic";
-	import type {ChapterProgress} from "../../types/txt/txt-reader";
+	import type{ChapterProgress} from "../../types/txt/txt-reader";
 	import type {Note} from "../../types/notes";
+	import LoadingSpinner from '../LoadingSpinner.svelte';
 
 	const dispatch = createEventDispatcher();
 
@@ -922,7 +923,7 @@
 
 	<div class="content-area" id={`content-area-${viewInstanceId}`}>
 		{#if isLoading}
-			<div class="loading">加载中...</div>
+			<LoadingSpinner message="正在加载EPUB电子书..." />
 		{/if}
 
 		<!-- 添加文本选择菜单 -->

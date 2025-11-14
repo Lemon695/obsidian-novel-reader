@@ -10,6 +10,7 @@
 	import type {ChapterHistory} from "../../types/reading-stats";
 	import ReadingStatsPanel from "../ReadingStatsPanel.svelte";
 	import TxtSettings from "./TxtSettings.svelte";
+	import { icons } from '../library/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -217,7 +218,7 @@
 		on:click={handleSettingsClick}
 		title="设置菜单"
 	>
-		⚙️
+		<span class="settings-icon">{@html icons.settings}</span>
 	</button>
 
 	{#if showSettingsDropdown}
@@ -226,7 +227,7 @@
 				class="dropdown-item"
 				on:click={() => handleMenuSelect('settings')}
 			>
-				<span class="icon">⚙️</span>
+				<span class="icon">{@html icons.settings}</span>
 				设置
 			</button>
 			{#if showReadingProgress}
@@ -234,7 +235,7 @@
 					class="dropdown-item"
 					on:click={() => handleMenuSelect('history')}
 				>
-					<span class="icon">📖</span>
+					<span class="icon">{@html icons.bookOpen}</span>
 					阅读历史
 				</button>
 			{/if}
@@ -242,7 +243,7 @@
 				class="dropdown-item"
 				on:click={() => handleMenuSelect('notes')}
 			>
-				<span class="icon">📝</span>
+				<span class="icon">{@html icons.note}</span>
 				笔记列表
 			</button>
 			<button
@@ -351,6 +352,12 @@
 		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 	}
 
+	.settings-icon :global(svg) {
+		width: 18px;
+		height: 18px;
+		stroke: currentColor;
+	}
+
 	.settings-dropdown {
 		position: absolute;
 		top: calc(100% + 8px);
@@ -382,8 +389,17 @@
 	}
 
 	.dropdown-item .icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		font-size: 16px;
 		opacity: 0.8;
+	}
+
+	.dropdown-item .icon :global(svg) {
+		width: 16px;
+		height: 16px;
+		stroke: currentColor;
 	}
 
 	.settings-panel {

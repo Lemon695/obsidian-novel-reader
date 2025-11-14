@@ -1,4 +1,4 @@
-import { App } from 'obsidian';
+import { App, Notice } from 'obsidian';
 import type NovelReaderPlugin from '../main';
 import type { CustomShelf } from '../types/shelf';
 import { v4 as uuidv4 } from 'uuid';
@@ -59,6 +59,7 @@ export class CustomShelfService {
 			);
 		} catch (error) {
 			console.error('Error saving custom shelves:', error);
+			new Notice('保存书架数据失败，请检查文件权限');
 			throw error;
 		}
 	}
@@ -73,6 +74,7 @@ export class CustomShelfService {
 			);
 		} catch (error) {
 			console.error('Error saving favorites:', error);
+			new Notice('保存收藏数据失败，请检查文件权限');
 			throw error;
 		}
 	}

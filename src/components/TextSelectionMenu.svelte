@@ -94,17 +94,24 @@
 		showMenu = false;
 	}
 
+	// 提取为命名函数以确保可以正确移除事件监听器
+	const handleMouseEnter = () => {
+		isActive = true;
+	};
+
+	const handleMouseLeave = () => {
+		isActive = false;
+	};
+
+	let readerContainer: Element | null = null;
+
 	onMount(() => {
 		// 获取父级阅读器容器 (指定激活页面-激活监控)
-		const readerContainer = document.querySelector('.novel-reader');
+		readerContainer = document.querySelector('.novel-reader');
 		if (readerContainer) {
 			// 监听焦点事件
-			readerContainer.addEventListener('mouseenter', () => {
-				isActive = true;
-			});
-			readerContainer.addEventListener('mouseleave', () => {
-				isActive = false;
-			});
+			readerContainer.addEventListener('mouseenter', handleMouseEnter);
+			readerContainer.addEventListener('mouseleave', handleMouseLeave);
 		}
 
 		document.addEventListener('mouseup', handleMouseUp);
@@ -113,15 +120,10 @@
 	});
 
 	onDestroy(() => {
-		//指定激活页面-激活监控
-		const readerContainer = document.querySelector('.novel-reader');
+		// 指定激活页面-激活监控
 		if (readerContainer) {
-			readerContainer.removeEventListener('mouseenter', () => {
-				isActive = true;
-			});
-			readerContainer.removeEventListener('mouseleave', () => {
-				isActive = false;
-			});
+			readerContainer.removeEventListener('mouseenter', handleMouseEnter);
+			readerContainer.removeEventListener('mouseleave', handleMouseLeave);
 		}
 
 		document.removeEventListener('mouseup', handleMouseUp);
@@ -150,25 +152,25 @@
 		z-index: 1000;
 		background: var(--background-primary);
 		border: 1px solid var(--background-modifier-border);
-		border-radius: 4px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-		padding: 4px;
+		border-radius: var(--novel-radius-sm);
+		box-shadow: var(--novel-shadow-sm);
+		padding: var(--novel-spacing-xs);
 		transform: translate(-50%, -50%);
 	}
 
 	.menu-item {
 		display: block;
-		padding: 6px 12px;
+		padding: var(--novel-spacing-sm);
 		min-width: 100px;
 		background: none;
 		border: none;
 		cursor: pointer;
 		color: var(--text-normal);
-		font-size: 14px;
-		border-radius: 4px;
+		font-size: var(--novel-font-size-base);
+		border-radius: var(--novel-radius-sm);
 		text-align: left;
 		width: 100%;
-		transition: background-color 0.2s;
+		transition: var(--novel-transition-base);
 	}
 
 	.menu-item:hover {
@@ -176,6 +178,6 @@
 	}
 
 	.menu-item + .menu-item {
-		margin-top: 2px;
+		margin-top: var(--novel-spacing-xs);
 	}
 </style>

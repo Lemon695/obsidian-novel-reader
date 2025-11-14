@@ -117,27 +117,27 @@
 <style>
 	.book-card {
 		position: relative;
-		border-radius: 8px;
+		border-radius: var(--novel-radius-md);
 		overflow: hidden;
 		background: var(--background-secondary);
-		transition: transform 0.2s;
+		transition: var(--novel-transition-base);
 	}
 
 	.book-tags {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 4px;
-		padding: 4px;
+		gap: var(--novel-spacing-xs);
+		padding: var(--novel-spacing-xs);
 	}
 
 	.tag {
-		font-size: 12px;
-		padding: 2px 6px;
-		border-radius: 12px;
+		font-size: var(--novel-font-size-sm);
+		padding: var(--novel-spacing-xs);
+		border-radius: var(--novel-radius-lg);
 		background: var(--background-modifier-accent);
 		color: var(--text-muted);
 		cursor: pointer;
-		transition: transform 0.1s;
+		transition: var(--novel-transition-fast);
 	}
 
 	.tag:hover {
@@ -146,28 +146,28 @@
 
 	.menu-button {
 		position: absolute;
-		top: 8px;
-		right: 8px;
+		top: var(--novel-spacing-sm);
+		right: var(--novel-spacing-sm);
 		background: none;
 		border: none;
 		color: var(--text-muted);
 		cursor: pointer;
-		padding: 4px 8px;
-		border-radius: 4px;
+		padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+		border-radius: var(--novel-radius-sm);
 	}
 
 	.menu-panel {
 		position: fixed;
 		background: var(--background-primary);
 		border: 1px solid var(--background-modifier-border);
-		border-radius: 4px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+		border-radius: var(--novel-radius-sm);
+		box-shadow: var(--novel-shadow-sm);
 		z-index: 1000;
 		min-width: 150px;
 	}
 
 	.menu-item {
-		padding: 8px 12px;
+		padding: var(--novel-spacing-sm);
 		cursor: pointer;
 	}
 
@@ -176,18 +176,18 @@
 	}
 
 	.menu-section {
-		padding: 8px 12px;
+		padding: var(--novel-spacing-sm);
 		border-top: 1px solid var(--background-modifier-border);
 	}
 
 	.shelf-submenu {
-		margin-top: 4px;
+		margin-top: var(--novel-spacing-xs);
 		border-left: 2px solid var(--background-modifier-border);
-		margin-left: 4px;
+		margin-left: var(--novel-spacing-xs);
 	}
 
 	.shelf-submenu .menu-item {
-		padding-left: 16px;
+		padding-left: var(--novel-spacing-md);
 	}
 
 	.book-cover {
@@ -213,34 +213,34 @@
 	}
 
 	.book-info {
-		padding: 12px;
+		padding: var(--novel-spacing-sm);
 		position: relative;
 	}
 
 	.book-title {
 		margin: 0;
-		font-size: 14px;
+		font-size: var(--novel-font-size-base);
 		font-weight: 500;
-		line-height: 1.4;
-		margin-right: 24px;
+		line-height: var(--novel-line-height-tight);
+		margin-right: var(--novel-spacing-lg);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
 
 	.menu-section {
-		padding: 8px 12px;
+		padding: var(--novel-spacing-sm);
 		border-top: 1px solid var(--background-modifier-border);
 	}
 
 	.shelf-submenu {
-		margin-top: 4px;
+		margin-top: var(--novel-spacing-xs);
 		border-left: 2px solid var(--background-modifier-border);
-		margin-left: 4px;
+		margin-left: var(--novel-spacing-xs);
 	}
 
 	.shelf-submenu .menu-item {
-		padding-left: 16px;
+		padding-left: var(--novel-spacing-md);
 	}
 
 	.menu-panel {
@@ -249,18 +249,18 @@
 		right: 0;
 		background: var(--background-primary);
 		border: 1px solid var(--background-modifier-border);
-		border-radius: 4px;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+		border-radius: var(--novel-radius-sm);
+		box-shadow: var(--novel-shadow-sm);
 		z-index: 1000;
 		min-width: 150px;
-		margin-top: 4px;
+		margin-top: var(--novel-spacing-xs);
 	}
 
 	.menu-item {
-		padding: 8px 12px;
+		padding: var(--novel-spacing-sm);
 		cursor: pointer;
 		color: var(--text-normal);
-		transition: background-color 0.2s;
+		transition: var(--novel-transition-base);
 	}
 
 	.menu-item:hover {

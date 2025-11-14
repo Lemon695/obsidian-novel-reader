@@ -15,6 +15,7 @@
 	import {Notice} from "obsidian";
 	import TextSelectionMenu from "../TextSelectionMenu.svelte";
 	import {NotesService} from "../../services/note/notes-service";
+	import { icons } from '../library/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -554,7 +555,7 @@
                     data-note-id="${note.id}"
                     onclick="event.stopPropagation(); window.dispatchEvent(new CustomEvent('noteIconClick', {detail: {noteId: '${note.id}'}}))"
                     title="点击查看笔记">
-                    📝
+                    ${icons.note}
                 </button>
             </span>${after}`;
 			}

@@ -1,4 +1,4 @@
-import { TFile } from 'obsidian';
+import { TFile, Notice } from 'obsidian';
 import type NovelReaderPlugin from '../main';
 
 export class ContentLoaderService {
@@ -23,6 +23,8 @@ export class ContentLoaderService {
 			return content;
 		} catch (error) {
 			console.error('Error loading file content:', error);
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
+			new Notice(`加载文件失败: ${file.name} - ${errorMsg}`);
 			throw error;
 		}
 	}

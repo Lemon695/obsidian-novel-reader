@@ -137,6 +137,13 @@
 		font-size: 48px;
 	}
 
+	.book-cover.placeholder .placeholder-icon svg {
+		width: 64px;
+		height: 64px;
+		stroke: var(--text-muted);
+		opacity: 0.3;
+	}
+
 	.book-info {
 		padding: 0 var(--novel-spacing-xs);
 		position: relative;
