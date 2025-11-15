@@ -103,12 +103,8 @@ export class PathsService {
 	}
 
 	getCacheIndexFilePath(): string {
-		// 确保缓存目录存在
+		// 注意：缓存目录的创建在使用前由调用者处理（ObsidianCacheService）
 		const cachePath = this.getCacheDirPath();
-		if (!this.app.vault.adapter.exists(cachePath)) {
-			this.app.vault.adapter.mkdir(cachePath);
-		}
-
 		return `${cachePath}/${this.INDEX_FILE}`;
 	}
 

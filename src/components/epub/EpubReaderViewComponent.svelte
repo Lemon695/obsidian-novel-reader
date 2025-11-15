@@ -59,6 +59,105 @@
 	// hover模式相关状态
 	let isMenuVisible = false;
 
+	// EPUB 悬浮目录：目录/页码切换功能
+	let viewMode: 'chapters' | 'pages' = 'chapters';
+	let virtualPages: Array<{
+		pageNum: number,
+		chapterId: number,
+		chapterTitle: string,
+		subPage?: number,
+		totalSubPages?: number
+	}> = [];
+	let currentPageNum = 1;
+
+	// 计算虚拟页码（EPUB基于章节，章节数少时细分）
+	function calculateVirtualPages() {
+		virtualPages = [];
+		let pageNum = 1;
+
+		// 如果章节数少于5，每个章节细分为10个虚拟页
+		const CHAPTER_THRESHOLD = 5;
+		const SUBPAGES_PER_CHAPTER = 10;
+		const needsSubdivision = chapters.length < CHAPTER_THRESHOLD;
+
+		chapters.forEach((chapter, index) => {
+			if (needsSubdivision) {
+				// 章节数少，细分每个章节
+				for (let i = 0; i < SUBPAGES_PER_CHAPTER; i++) {
+					virtualPages.push({
+						pageNum: pageNum++,
+						chapterId: chapter.id,
+						chapterTitle: chapter.title,
+						subPage: i + 1,
+						totalSubPages: SUBPAGES_PER_CHAPTER
+					});
+				}
+			} else {
+				// 章节数足够，每章节=一页
+				virtualPages.push({
+					pageNum: pageNum++,
+					chapterId: chapter.id,
+					chapterTitle: chapter.title
+				});
+			}
+		});
+	}
+
+	// 根据当前章节计算当前页码
+	function updateCurrentPage() {
+		if (!currentChapter || virtualPages.length === 0) return;
+
+		// 找到当前章节的第一页
+		const page = virtualPages.find(p => p.chapterId === currentChapter.id);
+		if (page) {
+			currentPageNum = page.pageNum;
+		}
+	}
+
+	// 跳转到指定页码
+	async function jumpToPage(pageNum: number) {
+		const page = virtualPages.find(p => p.pageNum === pageNum);
+		if (!page) return;
+
+		const targetChapter = chapters.find(ch => ch.id === page.chapterId);
+		if (targetChapter) {
+			const success = await displayChapter(targetChapter);
+			if (success) {
+				currentChapter = targetChapter;
+				saveProgress();
+			}
+		}
+	}
+
+	// 从 novel.customSettings 读取用户偏好
+	$: {
+		if (novel?.customSettings?.epubViewMode) {
+			viewMode = novel.customSettings.epubViewMode;
+		} else {
+			// 优先显示目录，如果没有目录则显示页码
+			viewMode = chapters.length > 0 ? 'chapters' : 'pages';
+		}
+	}
+
+	// 当章节变化时更新页码
+	$: if (currentChapter && virtualPages.length > 0) {
+		updateCurrentPage();
+	}
+
+	// 切换目录/页码显示模式
+	async function toggleViewMode() {
+		viewMode = viewMode === 'chapters' ? 'pages' : 'chapters';
+
+		// 保存用户选择到 novel.customSettings
+		if (!novel.customSettings) {
+			novel.customSettings = {};
+		}
+		novel.customSettings.epubViewMode = viewMode;
+
+		// 更新到数据库
+		await plugin.libraryService.updateNovel(novel);
+	}
+
 	//添加笔记、右键菜单
 	let selectedText = '';
 	let currentCfi = '';
@@ -143,6 +242,9 @@
 		if (chapters) {
 			//parseAndSetChapters();
 			contentLoaded = true;
+
+			// 计算虚拟页码
+			calculateVirtualPages();
 
 			console.log('Epub.1---', JSON.stringify(savedProgress))
 
@@ -856,32 +958,63 @@
 			<div class="chapters-panel"
 				 class:visible={isMenuVisible}>
 				<div class="chapters-header">
-					<h3>目录</h3>
+					<div class="header-content">
+						<h3>{viewMode === 'chapters' ? '目录' : '页码'}</h3>
+						{#if chapters.length > 0}
+							<button
+								class="view-mode-toggle"
+								on:click={toggleViewMode}
+								title={viewMode === 'chapters' ? '切换到页码视图' : '切换到目录视图'}
+							>
+								{viewMode === 'chapters' ? '页码' : '目录'}
+							</button>
+						{/if}
+					</div>
 				</div>
 				<div class="chapters-scroll">
-					{#each chapters as chapter}
-						<button
-							class="chapter-item"
-							class:active={currentChapter?.href === chapter.href}
-							class:level-0={chapter.level === 0}
-							class:level-1={chapter.level === 1}
-							style="margin-left: {chapter.level === 1 ? '20px' : '0'}"
-							on:click={async () => {
-								const success = await displayChapter(chapter);
-								if (success) {
-									currentChapter = chapter;
-									saveProgress();
-								}
-							}}
-						>
-							<span class="chapter-indent">
-								{#if chapter.level === 1}
-									<span class="chapter-bullet">•</span>
-								{/if}
-								{chapter.title}
-							</span>
-						</button>
-					{/each}
+					{#if viewMode === 'chapters'}
+						<!-- 目录视图 -->
+						{#each chapters as chapter}
+							<button
+								class="chapter-item"
+								class:active={currentChapter?.href === chapter.href}
+								class:level-0={chapter.level === 0}
+								class:level-1={chapter.level === 1}
+								style="margin-left: {chapter.level === 1 ? '20px' : '0'}"
+								on:click={async () => {
+									const success = await displayChapter(chapter);
+									if (success) {
+										currentChapter = chapter;
+										saveProgress();
+									}
+								}}
+							>
+								<span class="chapter-indent">
+									{#if chapter.level === 1}
+										<span class="chapter-bullet">•</span>
+									{/if}
+									{chapter.title}
+								</span>
+							</button>
+						{/each}
+					{:else}
+						<!-- 页码视图 -->
+						{#each virtualPages as page}
+							<button
+								class="page-item"
+								class:active={page.pageNum === currentPageNum}
+								on:click={() => jumpToPage(page.pageNum)}
+							>
+								<span class="page-title">
+									第 {page.pageNum} 页
+									{#if page.subPage}
+										<span class="sub-page-info">({page.subPage}/{page.totalSubPages})</span>
+									{/if}
+								</span>
+								<span class="page-chapter">{page.chapterTitle}</span>
+							</button>
+						{/each}
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -998,7 +1131,7 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 40px;
+		width: 60px;
 		z-index: 100;
 	}
 
@@ -1026,8 +1159,29 @@
 		border-bottom: 1px solid var(--background-modifier-border);
 	}
 
+	.header-content {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
 	.chapters-header h3 {
 		margin: 0;
+	}
+
+	.view-mode-toggle {
+		padding: 4px 12px;
+		border: none;
+		border-radius: 4px;
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		cursor: pointer;
+		font-size: 12px;
+		transition: all 0.2s;
+	}
+
+	.view-mode-toggle:hover {
+		background: var(--interactive-accent-hover);
 	}
 
 	.chapters-scroll {
@@ -1127,6 +1281,49 @@
 
 	.chapter-item.level-1.active {
 		font-weight: 500;
+	}
+
+	.page-item {
+		width: 100%;
+		margin-bottom: 4px;
+		padding: 8px 12px;
+		border: none;
+		border-radius: 4px;
+		background: transparent;
+		cursor: pointer;
+		text-align: left;
+		color: var(--text-normal);
+		transition: background-color 0.2s;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.page-item:hover {
+		background: var(--background-modifier-hover);
+	}
+
+	.page-item.active {
+		background: var(--background-modifier-active);
+		color: var(--text-accent);
+	}
+
+	.page-title {
+		font-weight: 500;
+	}
+
+	.sub-page-info {
+		font-size: 0.85em;
+		color: var(--text-muted);
+		margin-left: 4px;
+	}
+
+	.page-chapter {
+		font-size: 0.85em;
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.content-area {

@@ -63,6 +63,10 @@ export class ObsidianCacheService {
 
 	async setFileContent(file: TFile, content: string | ArrayBuffer): Promise<void> {
 		try {
+			// 确保缓存目录存在
+			const cacheDir = this.pathsService.getCacheDirPath();
+			await this.pathsService.ensureDirectoryExists(cacheDir);
+
 			const cachePath = this.pathsService.getCachePath(file);
 
 			// 保存内容到缓存文件
@@ -105,6 +109,10 @@ export class ObsidianCacheService {
 
 	async setChaptersCache(file: TFile, chapters: any[]): Promise<void> {
 		try {
+			// 确保缓存目录存在
+			const cacheDir = this.pathsService.getCacheDirPath();
+			await this.pathsService.ensureDirectoryExists(cacheDir);
+
 			const chaptersPath = this.pathsService.getChaptersCachePath(file);
 			await this.app.vault.adapter.write(chaptersPath, JSON.stringify(chapters));
 
@@ -157,6 +165,10 @@ export class ObsidianCacheService {
 
 	private async saveIndex(): Promise<void> {
 		try {
+			// 确保缓存目录存在
+			const cacheDir = this.pathsService.getCacheDirPath();
+			await this.pathsService.ensureDirectoryExists(cacheDir);
+
 			const indexPath = this.pathsService.getCacheIndexFilePath();
 			await this.app.vault.adapter.write(indexPath, JSON.stringify(this.cacheIndex, null, 2));
 		} catch (error) {

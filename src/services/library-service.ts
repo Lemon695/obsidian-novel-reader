@@ -110,6 +110,11 @@ export class LibraryService {
 		}
 
 		// 缓存失效或首次加载，重新加载封面（使用allSettled允许部分失败）
+		if (!this.plugin.bookCoverManagerService) {
+			console.warn('Book cover service not initialized, returning novels without covers');
+			return [...this.novels];
+		}
+
 		const results = await Promise.allSettled(
 			this.novels.map(async novel => {
 				const novelWithCover = await this.plugin.bookCoverManagerService.loadNovelWithCover(novel);
@@ -359,28 +364,37 @@ export class LibraryService {
 						}
 					})();
 
-					const coverTask = (async () => {
-						try {
-							coverFileName = await this.pdfCoverManagerService.getPDFCover(file, format);
-						} catch (error) {
-							console.error('PDF cover extraction failed:', error);
-							// 封面提取失败不阻止添加
-						}
-					})();
+					tasks.push(pdfTask);
 
-					tasks.push(pdfTask, coverTask);
+					// 添加封面任务（带空值检查）
+					if (this.pdfCoverManagerService && this.plugin.pdfCoverManagerService) {
+						const coverTask = (async () => {
+							try {
+								coverFileName = await this.pdfCoverManagerService.getPDFCover(file, format);
+							} catch (error) {
+								console.error('PDF cover extraction failed:', error);
+								// 封面提取失败不阻止添加
+							}
+						})();
+						tasks.push(coverTask);
+					} else {
+						console.warn('PDF cover service not initialized, skipping cover extraction');
+					}
 				} else if (format === 'epub') {
-					// EPUB: 获取封面
-					const epubCoverTask = (async () => {
-						try {
-							coverFileName = await this.epubCoverManager.getEpubCover(file, format);
-						} catch (error) {
-							console.error('EPUB cover extraction failed:', error);
-							// 封面提取失败不阻止添加
-						}
-					})();
-
-					tasks.push(epubCoverTask);
+					// EPUB: 获取封面（带空值检查）
+					if (this.epubCoverManager && this.plugin.epubCoverManager) {
+						const epubCoverTask = (async () => {
+							try {
+								coverFileName = await this.epubCoverManager.getEpubCover(file, format);
+							} catch (error) {
+								console.error('EPUB cover extraction failed:', error);
+								// 封面提取失败不阻止添加
+							}
+						})();
+						tasks.push(epubCoverTask);
+					} else {
+						console.warn('EPUB cover service not initialized, skipping cover extraction');
+					}
 				}
 
 				// 并行执行所有任务
@@ -413,12 +427,16 @@ export class LibraryService {
 			};
 
 			// 6. 准备笔记文件路径（但不创建笔记）
-			try {
-				novel.notePath = await this.noteService.getNotePath(novel);
-			} catch (error) {
-				console.error('Error preparing note path:', error);
-				new Notice(`笔记路径准备失败，但图书已添加`);
-				// 笔记路径失败不阻止添加
+			if (this.noteService && this.plugin.noteService) {
+				try {
+					novel.notePath = await this.noteService.getNotePath(novel);
+				} catch (error) {
+					console.error('Error preparing note path:', error);
+					new Notice(`笔记路径准备失败，但图书已添加`);
+					// 笔记路径失败不阻止添加
+				}
+			} else {
+				console.warn('Note service not initialized, skipping note path preparation');
 			}
 
 			// 7. 添加到集合并保存
@@ -498,13 +516,15 @@ export class LibraryService {
 			// 调试日志
 			console.log('Saving novel with pattern:', this.novels[index].customSettings?.chapterPattern);
 
-			// 如果有笔记文件，同步更新笔记
-			if (novel.notePath) {
+			// 如果有笔记文件，同步更新笔记（带空值检查）
+			if (novel.notePath && this.noteService && this.plugin.noteService) {
 				try {
 					await this.noteService.updateNovelMetadata(novel);
 				} catch (error) {
 					console.error('Error updating note metadata:', error);
 				}
+			} else if (novel.notePath && !this.noteService) {
+				console.warn('Note service not initialized, skipping note metadata update');
 			}
 
 			try {
@@ -521,6 +541,12 @@ export class LibraryService {
 	 * 打开小说笔记
 	 */
 	async openNovelNote(novel: Novel): Promise<void> {
+		if (!this.noteService || !this.plugin.noteService) {
+			console.warn('Note service not initialized, cannot open note');
+			new Notice('笔记服务未初始化，无法打开笔记');
+			return;
+		}
+
 		try {
 			await this.noteService.createOrOpenNote(novel);
 		} catch (error) {

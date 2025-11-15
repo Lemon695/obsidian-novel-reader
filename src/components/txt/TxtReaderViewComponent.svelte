@@ -66,6 +66,115 @@
 	let selectedTextChapterId = 0;
 	let showNoteList = false;
 
+	// TXT 悬浮目录：目录/页码切换功能
+	const LINES_PER_PAGE = 30; // 每页显示30行
+	let viewMode: 'chapters' | 'pages' = 'chapters';
+	let virtualPages: Array<{
+		pageNum: number,
+		chapterId: number,
+		chapterTitle: string,
+		startLine: number,
+		endLine: number
+	}> = [];
+	let currentPageNum = 1;
+
+	// 计算基于行数的虚拟页码
+	function calculateVirtualPages() {
+		virtualPages = [];
+		let pageNum = 1;
+
+		chapters.forEach(chapter => {
+			const lines = chapter.content.split('\n');
+			const totalLines = lines.length;
+
+			// 为每个章节按行数分页
+			for (let startLine = 0; startLine < totalLines; startLine += LINES_PER_PAGE) {
+				const endLine = Math.min(startLine + LINES_PER_PAGE - 1, totalLines - 1);
+
+				virtualPages.push({
+					pageNum: pageNum++,
+					chapterId: chapter.id,
+					chapterTitle: chapter.title,
+					startLine: startLine,
+					endLine: endLine
+				});
+			}
+		});
+	}
+
+	// 根据当前章节和滚动位置计算当前页码
+	function updateCurrentPage() {
+		if (!currentChapter || virtualPages.length === 0) return;
+
+		// 简化：使用章节的第一页作为当前页
+		const page = virtualPages.find(p =>
+			p.chapterId === currentChapter.id && p.startLine === 0
+		);
+		if (page) {
+			currentPageNum = page.pageNum;
+		}
+	}
+
+	// 跳转到指定页码
+	async function jumpToPage(pageNum: number) {
+		const page = virtualPages.find(p => p.pageNum === pageNum);
+		if (!page) return;
+
+		const targetChapter = chapters.find(ch => ch.id === page.chapterId);
+		if (!targetChapter) return;
+
+		// 切换章节（如果需要）
+		if (!currentChapter || currentChapter.id !== targetChapter.id) {
+			selectChapter(targetChapter);
+		}
+
+		// 等待章节内容渲染
+		await new Promise(resolve => setTimeout(resolve, 100));
+
+		// 滚动到指定行
+		scrollToLine(page.startLine);
+	}
+
+	// 滚动到指定行号
+	function scrollToLine(lineNumber: number) {
+		const contentArea = document.querySelector('.content-area');
+		if (!contentArea) return;
+
+		const targetParagraph = contentArea.querySelector(`[data-line-number="${lineNumber}"]`);
+		if (targetParagraph) {
+			targetParagraph.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		}
+	}
+
+	// 从 novel.customSettings 读取用户偏好
+	$: {
+		if (novel?.customSettings?.txtViewMode) {
+			viewMode = novel.customSettings.txtViewMode;
+		} else {
+			// 优先显示目录，如果没有目录则显示页码
+			viewMode = chapters.length > 0 ? 'chapters' : 'pages';
+		}
+	}
+
+	// 当章节变化时更新页码
+	$: if (currentChapter && virtualPages.length > 0) {
+		updateCurrentPage();
+	}
+
+	// 切换目录/页码显示模式
+	async function toggleViewMode() {
+		viewMode = viewMode === 'chapters' ? 'pages' : 'chapters';
+
+		// 保存用户选择到 novel.customSettings
+		if (!novel.customSettings) {
+			novel.customSettings = {};
+		}
+		novel.customSettings.txtViewMode = viewMode;
+
+		// 更新到数据库
+		await plugin.libraryService.updateNovel(novel);
+	}
+
 	// 合并所有 onMount 逻辑，避免重复的事件监听器
 	onMount(async () => {
 		// 1. 初始化笔记服务
@@ -247,6 +356,8 @@
 		if (chapters.length > 0) {
 			currentChapter = chapters[0];
 		}
+		// 计算虚拟页码
+		calculateVirtualPages();
 		// 触发自定义事件通知父组件章节更新
 		const event = new CustomEvent('chaptersUpdated', {
 			detail: {chapters}
@@ -666,20 +777,46 @@
 			<div class="chapters-panel"
 				 class:visible={isMenuVisible}>
 				<div class="chapters-header">
-					<h3>目录</h3>
+					<div class="header-content">
+						<h3>{viewMode === 'chapters' ? '目录' : '页码'}</h3>
+						{#if chapters.length > 0}
+							<button
+								class="view-mode-toggle"
+								on:click={toggleViewMode}
+								title={viewMode === 'chapters' ? '切换到页码视图' : '切换到目录视图'}
+							>
+								{viewMode === 'chapters' ? '页码' : '目录'}
+							</button>
+						{/if}
+					</div>
 				</div>
 				<div class="chapters-scroll"
 					 bind:this={hoverChaptersContainer}>
-					{#each chapters as chapter}
-						<button
-							class="chapter-item"
-							class:active={currentChapter?.id === chapter.id}
-							use:setChapterElement={chapter.id}
-							on:click={() => selectChapter(chapter)}
-						>
-							{chapter.title}
-						</button>
-					{/each}
+					{#if viewMode === 'chapters'}
+						<!-- 目录视图 -->
+						{#each chapters as chapter}
+							<button
+								class="chapter-item"
+								class:active={currentChapter?.id === chapter.id}
+								use:setChapterElement={chapter.id}
+								on:click={() => selectChapter(chapter)}
+							>
+								{chapter.title}
+							</button>
+						{/each}
+					{:else}
+						<!-- 页码视图 -->
+						{#each virtualPages as page}
+							<button
+								class="page-item"
+								class:active={page.pageNum === currentPageNum}
+								on:click={() => jumpToPage(page.pageNum)}
+							>
+								<span class="page-title">第 {page.pageNum} 页</span>
+								<span class="page-chapter">{page.chapterTitle}</span>
+							</button>
+						{/each}
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -741,7 +878,7 @@
 				<h2>{currentChapter.title}</h2>
 				<div class="content-text">
 					{#each currentChapter.content.split('\n') as paragraph, index}
-						<p>
+						<p data-line-number={index}>
 							{@html addNoteMarkers(paragraph, currentChapter.id, index)}
 						</p>
 					{/each}
@@ -861,7 +998,7 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 40px;
+		width: 60px;
 		z-index: 100;
 	}
 
@@ -877,6 +1014,7 @@
 		display: flex;
 		flex-direction: column;
 		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
+		z-index: 101;
 	}
 
 	.chapters-panel.visible {
@@ -970,8 +1108,29 @@
 		border-bottom: 1px solid var(--background-modifier-border);
 	}
 
+	.header-content {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
 	.chapters-header h3 {
 		margin: 0;
+	}
+
+	.view-mode-toggle {
+		padding: 4px 12px;
+		border: none;
+		border-radius: 4px;
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		cursor: pointer;
+		font-size: 12px;
+		transition: all 0.2s;
+	}
+
+	.view-mode-toggle:hover {
+		background: var(--interactive-accent-hover);
 	}
 
 	.chapters-scroll {
@@ -1007,6 +1166,43 @@
 	.chapter-item.active {
 		background: var(--background-modifier-active);
 		color: var(--text-accent);
+	}
+
+	.page-item {
+		width: 100%;
+		margin-bottom: 4px;
+		padding: 8px 12px;
+		border: none;
+		border-radius: 4px;
+		background: transparent;
+		cursor: pointer;
+		text-align: left;
+		color: var(--text-normal);
+		transition: background-color 0.2s;
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+
+	.page-item:hover {
+		background: var(--background-modifier-hover);
+	}
+
+	.page-item.active {
+		background: var(--background-modifier-active);
+		color: var(--text-accent);
+	}
+
+	.page-title {
+		font-weight: 500;
+	}
+
+	.page-chapter {
+		font-size: 0.85em;
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.content-area {

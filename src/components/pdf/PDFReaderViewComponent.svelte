@@ -38,6 +38,20 @@
 	// hover模式相关状态
 	let isMenuVisible = false;
 
+	// PDF 悬浮目录：目录/页码切换功能
+	// 'chapters' = 显示目录，'pages' = 显示页码列表
+	let viewMode: 'chapters' | 'pages' = 'chapters';
+
+	// 从 novel.customSettings 读取用户偏好
+	$: {
+		if (novel?.customSettings?.pdfViewMode) {
+			viewMode = novel.customSettings.pdfViewMode;
+		} else {
+			// 优先显示目录，如果没有目录则显示页码
+			viewMode = chapters.length > 0 ? 'chapters' : 'pages';
+		}
+	}
+
 	$: currentPage = showingCoverPage ? 1 : currentPage;
 
 	let pageState = {
@@ -188,16 +202,18 @@
 				}
 			}
 
-			// 处理最后一章
-			const lastChapter = chapters[chapters.length - 1];
-			lastChapter.endPage = pdfDoc.numPages;
-			if (lastChapter.subChapters) {
-				for (let j = 0; j < lastChapter.subChapters.length - 1; j++) {
-					lastChapter.subChapters[j].endPage = lastChapter.subChapters[j + 1].startPage - 1;
-				}
-				const lastSubChapter = lastChapter.subChapters[lastChapter.subChapters.length - 1];
-				if (lastSubChapter) {
-					lastSubChapter.endPage = pdfDoc.numPages;
+			// 处理最后一章（如果存在章节）
+			if (chapters.length > 0) {
+				const lastChapter = chapters[chapters.length - 1];
+				lastChapter.endPage = pdfDoc.numPages;
+				if (lastChapter.subChapters && lastChapter.subChapters.length > 0) {
+					for (let j = 0; j < lastChapter.subChapters.length - 1; j++) {
+						lastChapter.subChapters[j].endPage = lastChapter.subChapters[j + 1].startPage - 1;
+					}
+					const lastSubChapter = lastChapter.subChapters[lastChapter.subChapters.length - 1];
+					if (lastSubChapter) {
+						lastSubChapter.endPage = pdfDoc.numPages;
+					}
 				}
 			}
 		}
@@ -425,6 +441,20 @@
 		});
 	}
 
+	// 切换目录/页码显示模式
+	async function toggleViewMode() {
+		viewMode = viewMode === 'chapters' ? 'pages' : 'chapters';
+
+		// 保存用户选择到 novel.customSettings
+		if (!novel.customSettings) {
+			novel.customSettings = {};
+		}
+		novel.customSettings.pdfViewMode = viewMode;
+
+		// 更新到数据库
+		await plugin.libraryService.updateNovel(novel);
+	}
+
 </script>
 
 <div class="pdf-reader"
@@ -439,35 +469,61 @@
 			<div class="chapters-panel"
 				 class:visible={isMenuVisible}>
 				<div class="chapters-header">
-					<h3>目录</h3>
+					<div class="header-content">
+						<h3>{viewMode === 'chapters' ? '目录' : '页码'}</h3>
+						{#if chapters.length > 0}
+							<button
+								class="view-mode-toggle"
+								on:click={toggleViewMode}
+								title={viewMode === 'chapters' ? '切换到页码视图' : '切换到目录视图'}
+							>
+								{viewMode === 'chapters' ? '页码' : '目录'}
+							</button>
+						{/if}
+					</div>
 				</div>
 				<div class="chapters-scroll">
-					{#each chapters as chapter, index}
-						<button
-							class="chapter-item"
-							class:active={chapterActiveStates[index]}
-							on:click={() => handleOutlineClick(chapter.startPage)}
-						>
-							<span class="chapter-title">{chapter.title}</span>
-							<span class="page-number">{chapter.startPage}</span>
-						</button>
+					{#if viewMode === 'chapters'}
+						<!-- 目录视图 -->
+						{#each chapters as chapter, index}
+							<button
+								class="chapter-item"
+								class:active={chapterActiveStates[index]}
+								on:click={() => handleOutlineClick(chapter.startPage)}
+							>
+								<span class="chapter-title">{chapter.title}</span>
+								<span class="page-number">{chapter.startPage}</span>
+							</button>
 
-						{#if chapter.subChapters && chapter.subChapters.length > 0}
-							<div class="sub-chapters">
-								{#each chapter.subChapters as subChapter}
-									{@const isSubActive = currentPage >= subChapter.startPage &&
-									currentPage <= (subChapter.endPage || numPages)}
-									<button
-										class="sub-chapter-item"
-										class:active={isSubActive}
-										on:click={() => handleOutlineClick(subChapter.startPage)}
-									>
-										{subChapter.title} ({subChapter.startPage})
-									</button>
-								{/each}
-							</div>
-						{/if}
-					{/each}
+							{#if chapter.subChapters && chapter.subChapters.length > 0}
+								<div class="sub-chapters">
+									{#each chapter.subChapters as subChapter}
+										{@const isSubActive = currentPage >= subChapter.startPage &&
+										currentPage <= (subChapter.endPage || numPages)}
+										<button
+											class="sub-chapter-item"
+											class:active={isSubActive}
+											on:click={() => handleOutlineClick(subChapter.startPage)}
+										>
+											{subChapter.title} ({subChapter.startPage})
+										</button>
+									{/each}
+								</div>
+							{/if}
+						{/each}
+					{:else}
+						<!-- 页码视图 -->
+						{#each Array(numPages) as _, index}
+							{@const pageNum = index + 1}
+							<button
+								class="page-item"
+								class:active={pageNum === currentPage}
+								on:click={() => handleOutlineClick(pageNum)}
+							>
+								<span class="page-title">第 {pageNum} 页</span>
+							</button>
+						{/each}
+					{/if}
 				</div>
 			</div>
 		</div>
@@ -594,7 +650,7 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 40px;
+		width: 60px;
 		z-index: 100;
 	}
 
@@ -622,10 +678,31 @@
 		border-bottom: 1px solid var(--background-modifier-border);
 	}
 
+	.header-content {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
 	.chapters-header h3 {
 		margin: 0;
 		font-size: 18px;
 		font-weight: 500;
+	}
+
+	.view-mode-toggle {
+		padding: 4px 12px;
+		border: none;
+		border-radius: 4px;
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		cursor: pointer;
+		font-size: 12px;
+		transition: all 0.2s;
+	}
+
+	.view-mode-toggle:hover {
+		background: var(--interactive-accent-hover);
 	}
 
 	.chapters-scroll {
@@ -723,6 +800,37 @@
 	.page-number {
 		color: var(--text-muted);
 		font-size: 0.9em;
+	}
+
+	.page-item {
+		width: 100%;
+		padding: 8px 12px;
+		border: none;
+		border-radius: 4px;
+		background: transparent;
+		cursor: pointer;
+		text-align: left;
+		color: var(--text-normal);
+		transition: background-color 0.2s;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.page-item:hover {
+		background: var(--background-modifier-hover);
+	}
+
+	.page-item.active {
+		background: var(--background-modifier-active);
+		color: var(--text-accent);
+	}
+
+	.page-title {
+		flex: 1;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
 	.content-area {
