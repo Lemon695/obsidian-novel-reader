@@ -19,6 +19,9 @@
 	export let displayMode: 'hover' | 'outline' | 'sidebar' = 'sidebar';
 	export let initialPage: number;
 
+	// 为每个PDF实例生成唯一ID，避免多个PDF视图冲突
+	const pdfInstanceId = `pdf-${novel.id}-${Date.now()}`;
+
 	let pdfDoc: PDFDocumentProxy | null = null;
 	let zoomLevel = 1.5;
 	let isLoading = true;
@@ -326,12 +329,12 @@
 			console.error('Failed to load chapter history:', error);
 		}
 
-		// 获取或创建容器元素
-		const container = document.getElementById('pdf-container');
+		// 获取或创建容器元素（使用唯一ID）
+		const container = document.getElementById(pdfInstanceId);
 		if (container) {
 			readerContainer = container;
 			containerInitialized = true;
-			console.log("Container initialized");
+			console.log("Container initialized with ID:", pdfInstanceId);
 
 			// 如果PDF已加载且有待渲染的页面
 			if (pdfDoc && pendingRender) {
@@ -653,7 +656,7 @@
 			/>
 		</div>
 
-		<div id="pdf-container" class="pdf-container">
+		<div id="{pdfInstanceId}" class="pdf-container">
 			{#if isLoading}
 				<LoadingSpinner message="正在加载PDF文档..." />
 			{/if}

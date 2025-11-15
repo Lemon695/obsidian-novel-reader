@@ -29,9 +29,14 @@
 	export let savedProgress: ReadingProgress | null = null;
 	export let chapters: ChapterProgress[] = [];
 
+	// 唯一实例ID用于调试
+	const instanceId = `TXT-${novel.id.substring(0, 8)}-${Date.now()}`;
+	console.log(`[${instanceId}] Component created for novel: ${novel.title}`);
+
 	let notesService: NotesService; //笔记
 
 	let isActive = false;
+	let readerElement: HTMLElement; // 阅读器主元素引用
 
 	let currentChapter: ChapterProgress | null = null;
 	let contentLoaded = false;
@@ -383,7 +388,7 @@
 		};
 
 		// 7. 添加所有事件监听器（确保每个事件只监听一次）
-		window.addEventListener('keydown', handleKeyDown);
+		// 键盘事件已改为主div的on:keydown，不再使用全局window监听
 		window.addEventListener('noteIconClick', handleNoteIconClick as EventListener);
 		document.addEventListener('visibilitychange', handleVisibilityHandler);
 
@@ -413,7 +418,7 @@
 			debouncedScrollToChapter.cancel();
 
 			// 移除所有事件监听器
-			window.removeEventListener('keydown', handleKeyDown);
+			// 键盘事件已改为主div的on:keydown，不需要在这里移除
 			window.removeEventListener('noteIconClick', handleNoteIconClick as EventListener);
 			document.removeEventListener('visibilitychange', handleVisibilityHandler);
 
@@ -429,6 +434,14 @@
 	}
 
 	$: if (currentChapterId !== null && chapters.length > 0) {
+		console.log(`[${instanceId}] 🔄 Reactive statement triggered by currentChapterId change`, {
+			currentChapterId: currentChapterId,
+			novelId: novel.id,
+			novelTitle: novel.title,
+			isActive: isActive,
+			stackTrace: new Error().stack?.split('\n').slice(2, 5).join('\n')
+		});
+
 		const chapter = chapters.find(c => c.id === currentChapterId);
 		if (chapter) {
 			currentChapter = chapter;
@@ -436,6 +449,7 @@
 			if (viewMode === 'chapters') {
 				const progress = saveReadingProgress(novel, currentChapter, chapters);
 				if (progress) {
+					console.log(`[${instanceId}] 💾 Dispatching saveProgress from reactive statement`);
 					// 使用组件事件而不是全局window事件，避免多视图互相干扰
 					dispatch('saveProgress', {progress});
 				}
@@ -518,8 +532,33 @@
 	}
 
 	function handleKeyDown(event: KeyboardEvent) {
-		// 只有当页面激活时才处理键盘事件
-		if (!isActive) return;
+		console.log(`[${instanceId}] 🎯 handleKeyDown TRIGGERED`, {
+			key: event.key,
+			isActive: isActive,
+			readerElement: !!readerElement,
+			activeElement: document.activeElement?.className,
+			activeElementTagName: document.activeElement?.tagName,
+			eventTarget: (event.target as HTMLElement)?.className,
+			eventPhase: event.eventPhase
+		});
+
+		// 严格检查：只有当前元素真正具有焦点时才处理键盘事件
+		if (!isActive) {
+			console.log(`[${instanceId}] ❌ REJECTED: not active`);
+			return;
+		}
+
+		// 额外检查：确保事件目标是当前阅读器元素或其子元素
+		if (readerElement && !readerElement.contains(document.activeElement)) {
+			console.log(`[${instanceId}] ❌ REJECTED: focus not within reader`, {
+				activeElement: document.activeElement?.tagName,
+				activeElementClass: document.activeElement?.className,
+				readerContainsActive: readerElement.contains(document.activeElement)
+			});
+			return;
+		}
+
+		console.log(`[${instanceId}] ✅ PROCESSING keyboard event: ${event.key}`);
 
 		if (event.key === 'ArrowLeft') {
 			// 根据模式选择切换方式
@@ -529,6 +568,7 @@
 				handleSwitchChapter('prev');
 			}
 			event.preventDefault();
+			event.stopPropagation(); // 防止事件冒泡到其他视图
 		} else if (event.key === 'ArrowRight') {
 			// 根据模式选择切换方式
 			if (viewMode === 'pages') {
@@ -537,20 +577,30 @@
 				handleSwitchChapter('next');
 			}
 			event.preventDefault();
+			event.stopPropagation(); // 防止事件冒泡到其他视图
 		} else if (event.key === 'ArrowUp') {
 			event.preventDefault();
+			event.stopPropagation();
 			handleScroll('up');
 		} else if (event.key === 'ArrowDown') {
 			event.preventDefault();
+			event.stopPropagation();
 			handleScroll('down');
 		}
 	}
 
 	function handleFocus() {
+		console.log(`[${instanceId}] 🔵 handleFocus called, activating reader`);
 		isActive = true;
+		// 鼠标进入时自动聚焦，确保键盘事件能够响应
+		if (readerElement && document.activeElement !== readerElement) {
+			console.log(`[${instanceId}] 🔵 Auto-focusing reader element`);
+			readerElement.focus();
+		}
 	}
 
 	function handleBlur() {
+		console.log(`[${instanceId}] 🔴 handleBlur called, deactivating reader`);
 		isActive = false;
 	}
 
@@ -584,11 +634,24 @@
 
 	// 处理章节切换
 	function handleSwitchChapter(direction: 'prev' | 'next') {
+		console.log(`[${instanceId}] 📖 handleSwitchChapter called`, {
+			direction: direction,
+			currentChapterId: currentChapterId,
+			currentChapterTitle: currentChapter?.title,
+			novelTitle: novel.title
+		});
+
 		switchChapter(
 			direction,
 			currentChapter,
 			chapters,
 			(newChapter) => {
+				console.log(`[${instanceId}] 📝 Updating currentChapterId in handleSwitchChapter`, {
+					oldChapterId: currentChapterId,
+					newChapterId: newChapter.id,
+					newChapterTitle: newChapter.title
+				});
+
 				currentChapter = newChapter;
 				currentChapterId = newChapter.id;
 				dispatch('chapterChanged', {chapterId: newChapter.id});
@@ -944,12 +1007,13 @@
 </script>
 
 <div class="novel-reader" class:outline-mode={displayMode === 'outline' || displayMode === 'sidebar'}
-	 on:mouseenter={() => isActive = true}
-	 on:mouseleave={() => isActive = false}
+	 bind:this={readerElement}
+	 tabindex="0"
+	 on:mouseenter={handleFocus}
+	 on:mouseleave={handleBlur}
 	 on:focus={() => isActive = true}
 	 on:blur={() => isActive = false}
-	 on:mouseenter={handleFocus}
-	 on:mouseleave={handleBlur}>
+	 on:keydown={handleKeyDown}>
 
 	<!-- 悬浮章节模式 -->
 	{#if displayMode === 'hover'}

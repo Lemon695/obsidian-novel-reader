@@ -19,8 +19,8 @@ export function saveReadingProgress(novel: Novel, currentChapter: ChapterProgres
 		position: {
 			chapterId: currentChapter.id,
 			chapterTitle: currentChapter.title,
-			cfi: "",
-			percentage: 0
+			cfi: '',  // TXT不使用CFI，设置为空字符串
+			percentage: 0  // TXT基于章节，percentage设置为0
 		}
 	};
 

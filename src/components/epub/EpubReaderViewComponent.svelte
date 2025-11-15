@@ -32,6 +32,7 @@
 	let selectedTextForNote = '';
 	let notes: EpubNote[] = [];
 	let readerContainer: HTMLElement | null = null;
+	let readerElement: HTMLElement; // 阅读器主元素引用
 	let currentChapter: EpubChapter | null = null;
 	export let currentChapterId: number | null = null;
 	const viewInstanceId = `epub-view-${novel.id}-${Date.now()}`;
@@ -54,7 +55,9 @@
 	let sessionStartTime: number | null = null;
 	let lastActivityTime = Date.now();
 
-	let keydownHandler: (event: KeyboardEvent) => void;
+	// 唯一实例ID用于调试
+	const instanceId = `EPUB-${novel.id.substring(0, 8)}-${Date.now()}`;
+	console.log(`[${instanceId}] Component created for novel: ${novel.title}`);
 
 	// hover模式相关状态
 	let isMenuVisible = false;
@@ -211,6 +214,8 @@
 	$: if (currentChapter) {
 		console.log('EpubReaderViewComponent--->', JSON.stringify(currentChapter))
 
+		// 注释掉响应式历史保存，避免重复记录（已由view层的chapterChanged事件统一处理）
+		/*
 		handleChapterChangeEPUB(
 			currentChapter,
 			novel,
@@ -219,6 +224,7 @@
 				chapterHistory = newHistory;
 			}
 		);
+		*/
 
 		chapterProcessCurrentChapter = {
 			id: currentChapter.id,
@@ -395,6 +401,13 @@
 			// 方法1：尝试使用清理后的href
 			const cleanHref = chapter.href.split('#')[0].split('?')[0];
 			await rendition.display(cleanHref);
+
+			// 切换章节后重新获取焦点，确保键盘事件能继续响应
+			const readerElement = document.querySelector('.epub-reader') as HTMLElement;
+			if (readerElement) {
+				setTimeout(() => readerElement.focus(), 100);
+			}
+
 			return true;
 		} catch (error) {
 			console.warn('Failed to display by href, trying spine index:', error);
@@ -404,6 +417,13 @@
 				const spineIndex = findSpineIndex(chapter);
 				if (spineIndex !== null) {
 					await rendition.display(spineIndex);
+
+					// 切换章节后重新获取焦点
+					const readerElement = document.querySelector('.epub-reader') as HTMLElement;
+					if (readerElement) {
+						setTimeout(() => readerElement.focus(), 100);
+					}
+
 					return true;
 				}
 			} catch (spineError) {
@@ -413,6 +433,13 @@
 			// 方法3：尝试使用原始href（最后的尝试）
 			try {
 				await rendition.display(chapter.href);
+
+				// 切换章节后重新获取焦点
+				const readerElement = document.querySelector('.epub-reader') as HTMLElement;
+				if (readerElement) {
+					setTimeout(() => readerElement.focus(), 100);
+				}
+
 				return true;
 			} catch (originalError) {
 				console.error('Failed to display chapter by any method:', originalError);
@@ -569,31 +596,41 @@
 			rendition.on('touchend', (event: TouchEvent) => {
 				event.preventDefault();
 			});
-			// 处理键盘事件
+			// 处理键盘事件（来自iframe内部）- 方法1: rendition.on
 			rendition.on('keyup', (event: KeyboardEvent) => {
-				// 阻止默认行为
-				//event.preventDefault?.();  // 使用可选链操作符
-
-				if (event.key === 'ArrowLeft') {
-					console.log('keyup---ArrowLeft')
-				} else if (event.key === 'ArrowRight') {
-					console.log('keyup---ArrowRight')
-				}
-
-				handleKeyDown(event);
+				console.log(`[${instanceId}] 📥 rendition.on('keyup') triggered:`, event.key);
+				// 标记事件来自rendition（iframe内部），跳过严格的焦点检查
+				handleKeyDown(event, true);
 			});
+
+			// 方法2: 直接在iframe的contentDocument上监听（备用方案）
+			// 等待iframe加载完成后添加监听
+			setTimeout(() => {
+				const iframe = document.querySelector(`#epub-container-${viewInstanceId} iframe`) as HTMLIFrameElement;
+				if (iframe && iframe.contentWindow && iframe.contentWindow.document) {
+					console.log(`[${instanceId}] 🔧 Adding keyboard listener to iframe contentDocument`);
+
+					const iframeDoc = iframe.contentWindow.document;
+
+					// 在iframe document上添加键盘监听
+					iframeDoc.addEventListener('keyup', (event: KeyboardEvent) => {
+						console.log(`[${instanceId}] 📥 iframe contentDocument keyup triggered:`, event.key);
+						handleKeyDown(event, true);
+					});
+
+					// 禁用右键菜单
+					iframeDoc.addEventListener('contextmenu', (event: MouseEvent) => {
+						event.preventDefault();
+						console.log(`[${instanceId}] Right-click disabled inside iframe`);
+						showMenu = true;
+					});
+				} else {
+					console.warn(`[${instanceId}] ⚠️ Failed to find iframe for keyboard listener`);
+				}
+			}, 1000);
 
 			// 处理文本选择
 			rendition.on('selected', handleTextSelection);
-
-			const iframe = document.querySelector("iframe");
-			if (iframe) {
-				iframe?.contentWindow?.document.addEventListener('contextmenu', (event: MouseEvent) => {
-					event.preventDefault();  // 禁用默认右键菜单
-					console.log("Right-click disabled inside iframe");
-					showMenu = true;
-				});
-			}
 
 			isLoading = false;
 
@@ -620,8 +657,6 @@
 		}
 
 		endReadingSession();
-
-		window.removeEventListener('keydown', handleKeyDown);
 	});
 
 	async function handleKeyEvents(event: KeyboardEvent) {
@@ -788,18 +823,28 @@
 	}
 
 	function saveProgress() {
-		if (!rendition || !book) return;
+		if (!rendition || !book || !currentChapter) return;
 
-		const progress = {
+		// 计算进度百分比
+		const cfi = rendition.location?.start?.cfi || '';
+		const percentage = book.locations.percentageFromCfi(cfi) || 0;
+		const progressPercent = (currentChapter.id / chapters.length) * 100;
+
+		const progress: ReadingProgress = {
 			novelId: novel.id,
+			chapterIndex: currentChapter.id,
+			progress: progressPercent,
 			timestamp: Date.now(),
+			totalChapters: chapters.length,
 			position: {
-				cfi: rendition.location?.start?.cfi,
-				chapterTitle: currentChapter?.title || '',
-				percentage: book.locations.percentageFromCfi(rendition.location?.start.cfi)
+				chapterId: currentChapter.id,
+				chapterTitle: currentChapter.title,
+				cfi: cfi,  // 确保不是undefined
+				percentage: percentage
 			}
 		};
 
+		console.log(`[${instanceId}] 💾 saveProgress called`, progress);
 		dispatch('saveProgress', {progress});
 	}
 
@@ -876,6 +921,10 @@
 	function handleFocus() {
 		console.log("EPUB,Reader view focused");
 		isActive = true;
+		// 鼠标进入时自动聚焦，确保键盘事件能够响应
+		if (readerElement && document.activeElement !== readerElement) {
+			readerElement.focus();
+		}
 	}
 
 	function handleBlur() {
@@ -883,21 +932,51 @@
 		isActive = false;
 	}
 
-	function handleKeyDown(event: KeyboardEvent) {
-		console.log("handleKeyDown called with key:", event.key);
-		console.log("Active status:", isActive);
-		console.log("Event target:", event.target);
+	function handleKeyDown(event: KeyboardEvent, fromRendition: boolean = false) {
+		console.log(`[${instanceId}] 🎯 handleKeyDown TRIGGERED`, {
+			key: event.key,
+			fromRendition: fromRendition,
+			isActive: isActive,
+			readerElement: !!readerElement,
+			activeElement: document.activeElement?.tagName,
+			activeElementClass: document.activeElement?.className
+		});
 
 		// 检查事件是否已被处理
 		if (event.defaultPrevented) {
-			console.log("Event was already handled");
+			console.log(`[${instanceId}] ❌ Event already handled`);
 			return;
 		}
 
+		// 严格检查：确保当前元素真正具有焦点
 		if (!isActive) {
-			console.log("Reader not active, ignoring keypress");
+			console.log(`[${instanceId}] ❌ REJECTED: not active`);
 			return;
 		}
+
+		// 焦点检查：区分两种情况
+		// 1. 如果事件来自rendition（iframe内部），跳过contains检查
+		// 2. 如果事件来自主div，需要检查焦点
+		if (!fromRendition && readerElement) {
+			const activeEl = document.activeElement;
+			const isIframe = activeEl?.tagName === 'IFRAME';
+			const iframeInReader = isIframe && readerElement.contains(activeEl);
+			const activeInReader = readerElement.contains(activeEl);
+
+			console.log(`[${instanceId}] Focus check:`, {
+				isIframe: isIframe,
+				iframeInReader: iframeInReader,
+				activeInReader: activeInReader
+			});
+
+			// 如果焦点不在reader内，且也不是reader内的iframe，则拒绝
+			if (!activeInReader && !iframeInReader) {
+				console.log(`[${instanceId}] ❌ REJECTED: focus not within reader`);
+				return;
+			}
+		}
+
+		console.log(`[${instanceId}] ✅ PROCESSING keyboard event: ${event.key}`);
 
 		if (event.key === 'ArrowLeft') {
 			if (viewMode === 'pages') {
@@ -907,7 +986,8 @@
 				// 章节模式：切换到上一章
 				handleSwitchChapter('prev');
 			}
-			//event.preventDefault?.();
+			event.preventDefault();
+			event.stopPropagation(); // 防止事件冒泡到其他视图
 		} else if (event.key === 'ArrowRight') {
 			if (viewMode === 'pages') {
 				// 页码模式：切换到下一页
@@ -916,7 +996,8 @@
 				// 章节模式：切换到下一章
 				handleSwitchChapter('next');
 			}
-			//event.preventDefault?.();
+			event.preventDefault();
+			event.stopPropagation(); // 防止事件冒泡到其他视图
 		} else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
 			// 处理页面滚动
 			const container = document.querySelector(`#epub-container-${viewInstanceId}`);
@@ -929,6 +1010,7 @@
 				});
 			}
 			event.preventDefault();
+			event.stopPropagation();
 		}
 	}
 
@@ -1111,14 +1193,9 @@
 <div
 	class="epub-reader"
 	class:outline-mode={displayMode === 'outline'}
-	on:mouseenter={() => {
-    	console.log("Mouse entered EPUB reader");
-    	isActive = true;
-  	}}
-	on:mouseleave={() => {
-    	console.log("Mouse left EPUB reader");
-    	isActive = false;
-  	}}
+	bind:this={readerElement}
+	on:mouseenter={handleFocus}
+	on:mouseleave={handleBlur}
 	on:focus={() => {
     	console.log("EPUB reader focused");
     	isActive = true;
