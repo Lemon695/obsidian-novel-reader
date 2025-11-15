@@ -1131,6 +1131,36 @@
 							</p>
 						{/each}
 					</div>
+					<!-- 章节导航栏 -->
+					<div class="chapter-navigation">
+						<button
+							class="nav-button prev-chapter"
+							disabled={!currentChapter || chapters.findIndex(ch => ch.id === currentChapter?.id) === 0}
+							on:click={() => switchChapter('prev')}
+							title="上一章"
+						>
+							← 上一章
+						</button>
+						<button
+							class="nav-button toggle-outline"
+							on:click={() => {
+								// 切换显示模式（如果需要）
+								const event = new CustomEvent('toggle-outline');
+								window.dispatchEvent(event);
+							}}
+							title="目录"
+						>
+							目录
+						</button>
+						<button
+							class="nav-button next-chapter"
+							disabled={!currentChapter || chapters.findIndex(ch => ch.id === currentChapter?.id) === chapters.length - 1}
+							on:click={() => switchChapter('next')}
+							title="下一章"
+						>
+							下一章 →
+						</button>
+					</div>
 				</div>
 			{:else}
 				<div class="no-chapter">
@@ -1947,6 +1977,53 @@
 	.dropdown-item .icon {
 		font-size: 16px;
 		opacity: 0.8;
+	}
+
+	/* 章节导航栏样式 */
+	.chapter-navigation {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 12px;
+		padding: 24px 20px;
+		margin-top: 40px;
+		border-top: 1px solid var(--background-modifier-border);
+	}
+
+	.chapter-navigation .nav-button {
+		padding: 8px 16px;
+		background: var(--interactive-normal);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: 6px;
+		color: var(--text-normal);
+		font-size: 14px;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.chapter-navigation .nav-button:hover:not(:disabled) {
+		background: var(--interactive-hover);
+		border-color: var(--interactive-accent);
+	}
+
+	.chapter-navigation .nav-button:active:not(:disabled) {
+		background: var(--interactive-active);
+	}
+
+	.chapter-navigation .nav-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.chapter-navigation .nav-button.toggle-outline {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		font-weight: 500;
+	}
+
+	.chapter-navigation .nav-button.toggle-outline:hover {
+		background: var(--interactive-accent-hover);
 	}
 
 </style>

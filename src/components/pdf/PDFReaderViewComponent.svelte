@@ -661,6 +661,37 @@
 				<LoadingSpinner message="正在加载PDF文档..." />
 			{/if}
 		</div>
+
+		<!-- 章节导航栏 -->
+		<div class="chapter-navigation">
+			<button
+				class="nav-button prev-chapter"
+				disabled={currentPage <= 1}
+				on:click={() => handlePageChange(currentPage - 1)}
+				title="上一页"
+			>
+				← 上一页
+			</button>
+			<button
+				class="nav-button toggle-outline"
+				on:click={() => {
+					// 切换显示模式
+					const event = new CustomEvent('toggle-outline');
+					window.dispatchEvent(event);
+				}}
+				title="目录"
+			>
+				目录
+			</button>
+			<button
+				class="nav-button next-chapter"
+				disabled={currentPage >= numPages}
+				on:click={() => handlePageChange(currentPage + 1)}
+				title="下一页"
+			>
+				下一页 →
+			</button>
+		</div>
 	</div>
 </div>
 
@@ -866,6 +897,8 @@
 		display: flex;
 		flex-direction: column;
 		overflow: hidden;
+		position: relative;
+		padding-bottom: 56px; /* 为底部导航栏留出空间 */
 	}
 
 	.toolbar {
@@ -968,5 +1001,57 @@
 		height: 100%;
 		color: var(--text-muted);
 		font-size: 1.2em;
+	}
+
+	/* 章节导航栏样式 */
+	.chapter-navigation {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 20px;
+		background: var(--background-primary);
+		border-top: 1px solid var(--background-modifier-border);
+		z-index: 100;
+	}
+
+	.nav-button {
+		padding: 8px 16px;
+		background: var(--interactive-normal);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: 6px;
+		color: var(--text-normal);
+		font-size: 14px;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.nav-button:hover:not(:disabled) {
+		background: var(--interactive-hover);
+		border-color: var(--interactive-accent);
+	}
+
+	.nav-button:active:not(:disabled) {
+		background: var(--interactive-active);
+	}
+
+	.nav-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.nav-button.toggle-outline {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		font-weight: 500;
+	}
+
+	.nav-button.toggle-outline:hover {
+		background: var(--interactive-accent-hover);
 	}
 </style>

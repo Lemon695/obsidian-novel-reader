@@ -42,7 +42,7 @@
 	export let chapterHistory: ChapterHistory[] = []; // 章节历史记录（export让view层可以更新）
 	let isActive = false;
 	let contentLoaded = false;
-	let initialChapterId: number | null = null; //初始章节
+	export let initialChapterId: number | null = null; //初始章节（从父组件传入）
 
 	let chapterProgressDatas: ChapterProgress[] = []; //当前阅读进度
 	let chapterProcessCurrentChapter: ChapterProgress | null = null; //阅读进度格式-章节集合
@@ -322,24 +322,33 @@
 
 			// 章节历史现在由view层传入，不需要在这里加载
 
-			console.log('Epub.1---', JSON.stringify(savedProgress))
+			console.log(`[${instanceId}] 📚 章节初始化参数:`, {
+				savedProgressChapterId: savedProgress?.position?.chapterId,
+				initialChapterId: initialChapterId,
+				totalChapters: chapters.length
+			});
 
 			// 恢复上次阅读进度
-			if (savedProgress?.position?.chapterId) {
-				currentChapterId = savedProgress.position.chapterId;
-				const savedChapter = chapters.find(ch => ch.id === currentChapterId);
-				if (savedChapter) {
-					currentChapter = savedChapter;
-				}
-			} else if (initialChapterId !== null) {
-				// 如果有初始章节ID，加载该章节
+			// 优先使用传入的initialChapterId（从setNovelData传来），如果没有则使用savedProgress
+			if (initialChapterId !== null) {
+				// 使用传入的初始章节ID（最高优先级）
 				const savedChapter = chapters.find(ch => ch.id === initialChapterId);
+				console.log(`[${instanceId}] ✅ 使用传入的initialChapterId: ${initialChapterId}`, savedChapter);
 				if (savedChapter) {
 					currentChapter = savedChapter;
 					currentChapterId = savedChapter.id;
 				}
+			} else if (savedProgress?.position?.chapterId) {
+				// 使用savedProgress中的章节ID
+				currentChapterId = savedProgress.position.chapterId;
+				const savedChapter = chapters.find(ch => ch.id === currentChapterId);
+				console.log(`[${instanceId}] 📖 使用savedProgress中的章节ID: ${currentChapterId}`, savedChapter);
+				if (savedChapter) {
+					currentChapter = savedChapter;
+				}
 			} else if (chapters.length > 0) {
 				// 否则加载第一章
+				console.log(`[${instanceId}] 📄 没有保存的进度，加载第一章`);
 				currentChapter = chapters[0];
 				currentChapterId = chapters[0].id;
 			}
@@ -1382,6 +1391,37 @@
 				on:close={handleNoteDialogClose}
 			/>
 		{/if}
+
+		<!-- 章节导航栏 -->
+		<div class="chapter-navigation">
+			<button
+				class="nav-button prev-chapter"
+				disabled={!currentChapter || chapters.findIndex(ch => ch.id === currentChapter?.id) === 0}
+				on:click={() => handleSwitchChapter('prev')}
+				title="上一章"
+			>
+				← 上一章
+			</button>
+			<button
+				class="nav-button toggle-outline"
+				on:click={() => {
+					// 切换outline显示
+					const event = new CustomEvent('toggle-outline');
+					window.dispatchEvent(event);
+				}}
+				title="目录"
+			>
+				目录
+			</button>
+			<button
+				class="nav-button next-chapter"
+				disabled={!currentChapter || chapters.findIndex(ch => ch.id === currentChapter?.id) === chapters.length - 1}
+				on:click={() => handleSwitchChapter('next')}
+				title="下一章"
+			>
+				下一章 →
+			</button>
+		</div>
 	</div>
 
 
@@ -1629,6 +1669,7 @@
 		flex: 1;
 		overflow: hidden;
 		position: relative;
+		padding-bottom: 56px; /* 为底部导航栏留出空间 */
 	}
 
 	.loading {
@@ -1758,6 +1799,58 @@
 
 	.menu-item + .menu-item {
 		margin-top: 2px;
+	}
+
+	/* 章节导航栏样式 */
+	.chapter-navigation {
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 12px;
+		padding: 12px 20px;
+		background: var(--background-primary);
+		border-top: 1px solid var(--background-modifier-border);
+		z-index: 100;
+	}
+
+	.nav-button {
+		padding: 8px 16px;
+		background: var(--interactive-normal);
+		border: 1px solid var(--background-modifier-border);
+		border-radius: 6px;
+		color: var(--text-normal);
+		font-size: 14px;
+		cursor: pointer;
+		transition: all 0.2s;
+		white-space: nowrap;
+	}
+
+	.nav-button:hover:not(:disabled) {
+		background: var(--interactive-hover);
+		border-color: var(--interactive-accent);
+	}
+
+	.nav-button:active:not(:disabled) {
+		background: var(--interactive-active);
+	}
+
+	.nav-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.nav-button.toggle-outline {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		font-weight: 500;
+	}
+
+	.nav-button.toggle-outline:hover {
+		background: var(--interactive-accent-hover);
 	}
 
 
