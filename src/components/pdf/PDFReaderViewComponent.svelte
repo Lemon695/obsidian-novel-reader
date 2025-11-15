@@ -30,7 +30,7 @@
 	let showPageInput = false;
 	let outlines: any[] = []; //PDF大纲数据
 	let isActive = false;
-	let chapterHistory: ChapterHistory[] = []; //章节历史记录
+	export let chapterHistory: ChapterHistory[] = []; //章节历史记录（export让view层可以更新）
 	let currentChapter: any = null;
 	let pendingRender = false;
 	let containerInitialized = false;
@@ -278,11 +278,8 @@
 			chapterTitle: `Page ${currentPage}`
 		};
 
-		// 触发进度保存事件
-		const event = new CustomEvent('saveProgress', {
-			detail: {progress}
-		});
-		window.dispatchEvent(event);
+		// 使用Svelte的dispatch而不是全局window事件，避免多个视图互相干扰
+		dispatch('saveProgress', {progress});
 	}
 
 	function handleZoom(action: 'in' | 'out') {
@@ -301,6 +298,9 @@
 			showingCoverPage = false;
 			showPageInput = false;
 			renderPage('handlePageInput');
+
+			// 触发pageChanged事件以记录历史和进度
+			dispatch('pageChanged', { pageNum: pageNum });
 		}
 	}
 
@@ -311,7 +311,7 @@
 			showingCoverPage = false;
 			renderPage('handleOutlineClick');
 
-			// 触发pageChanged事件以记录历史
+			// 触发pageChanged事件（view层会记录历史并更新chapterHistory）
 			dispatch('pageChanged', { pageNum: pageNumber });
 		}
 	}
@@ -344,8 +344,6 @@
 		}
 
 		await initializePDF();
-
-		window.addEventListener('keydown', handleKeyDown);
 	});
 
 	onDestroy(() => {
@@ -468,8 +466,10 @@
 </script>
 
 <div class="pdf-reader"
+	 tabindex="0"
 	 on:mouseenter={handleFocus}
-	 on:mouseleave={handleBlur}>
+	 on:mouseleave={handleBlur}
+	 on:keydown={handleKeyDown}>
 
 	<!-- 悬浮章节模式 -->
 	{#if displayMode === 'hover'}

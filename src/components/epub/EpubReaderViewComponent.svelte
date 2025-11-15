@@ -38,7 +38,7 @@
 	// 添加漫画检测逻辑
 	let isManga = false;
 	let readingStats: any = null;
-	let chapterHistory: ChapterHistory[] = []; // 章节历史记录
+	export let chapterHistory: ChapterHistory[] = []; // 章节历史记录（export让view层可以更新）
 	let isActive = false;
 	let contentLoaded = false;
 	let initialChapterId: number | null = null; //初始章节
@@ -140,7 +140,17 @@
 			const success = await displayChapter(targetChapter);
 			if (success) {
 				currentChapter = targetChapter;
+				currentChapterId = targetChapter.id;
 				saveProgress();
+
+				// 触发章节切换事件以记录历史
+				dispatch('chapterChanged', {
+					chapterId: targetChapter.id,
+					chapterTitle: targetChapter.title
+				});
+
+				// 重新激活键盘导航
+				isActive = true;
 			}
 		}
 	}
@@ -304,12 +314,7 @@
 			// 计算虚拟页码
 			calculateVirtualPages();
 
-			// 加载章节历史
-			try {
-				chapterHistory = await plugin.chapterHistoryService.getHistory(novel.id);
-			} catch (error) {
-				console.error('Failed to load chapter history:', error);
-			}
+			// 章节历史现在由view层传入，不需要在这里加载
 
 			console.log('Epub.1---', JSON.stringify(savedProgress))
 
@@ -337,8 +342,8 @@
 	});
 
 	onMount(() => {
-		console.log("Adding keyboard event listener");
-		window.addEventListener('keydown', handleKeyDown, {passive: false});
+		console.log("Adding event listeners");
+		// 键盘事件已改为主div的on:keydown，不再使用全局window监听
 		window.addEventListener('noteIconClick', handleNoteIconClick as EventListener);
 
 		const visibilityHandler = () => {
@@ -352,7 +357,6 @@
 
 		// 返回清理函数，移除所有事件监听器
 		return () => {
-			window.removeEventListener('keydown', handleKeyDown);
 			window.removeEventListener('noteIconClick', handleNoteIconClick as EventListener);
 
 			document.removeEventListener('visibilitychange', visibilityHandler);
@@ -1123,6 +1127,7 @@
     	console.log("EPUB reader blurred");
     	isActive = false;
   	}}
+	on:keydown={handleKeyDown}
 	tabindex="0"
 >
 

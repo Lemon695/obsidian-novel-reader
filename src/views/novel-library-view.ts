@@ -21,6 +21,7 @@ export class NovelLibraryView extends ItemView {
 	private component: NovelLibraryComponent | null = null;
 	private lastRefreshTime: number = 0;
 	private readonly REFRESH_COOLDOWN = 5000; // 5秒冷却时间
+	private isAddingNovel = false; // 防止重复添加图书
 
 	private libraryService!: LibraryService;
 	private noteService!: NovelNoteService;
@@ -79,8 +80,18 @@ export class NovelLibraryView extends ItemView {
 					onAddNovel: async () => {
 						console.log('onAddNovel called');
 						try {
+							// 防止重复触发
+							if (this.isAddingNovel) {
+								console.log('Already adding novels, skipping...');
+								new Notice('正在添加图书，请稍候...');
+								return;
+							}
+							this.isAddingNovel = true;
+
 							const result = await this.libraryService.pickNovelFile();
-							if (!result) return;
+							if (!result) {
+								return;
+							}
 
 							// 判断是单个文件还是多个文件
 							if (Array.isArray(result)) {
@@ -89,23 +100,29 @@ export class NovelLibraryView extends ItemView {
 								const addedNovels = await this.libraryService.batchAddNovels(
 									result,
 									async (novel, index, total) => {
-										// 每添加一本图书后，立即刷新显示
-										const novels = await this.libraryService.getAllNovels() || [];
-										const updatedNovels = await Promise.all(
-											novels.map(n => this.plugin.bookCoverManagerService.loadNovelWithCover(n))
-										);
+										try {
+											// 只为新添加的图书加载封面，避免每次重新加载所有图书
+											const novelWithCover = await this.plugin.bookCoverManagerService.loadNovelWithCover(novel);
 
-										// 更新组件的 novels 属性
-										if (this.component) {
-											this.component.$set({novels: updatedNovels});
+											// 获取当前图书列表并更新
+											const novels = await this.libraryService.getAllNovels() || [];
+
+											// 更新组件的 novels 属性
+											if (this.component) {
+												this.component.$set({novels: novels});
+											}
+
+											// 显示进度
+											new Notice(`已添加 ${index}/${total}: ${novel.title}`, 2000);
+										} catch (error) {
+											console.error(`Failed to update UI for ${novel.title}:`, error);
+											// 即使UI更新失败，也继续处理下一本书
 										}
-
-										// 显示进度
-										new Notice(`已添加 ${index}/${total}: ${novel.title}`, 2000);
 									}
 								);
 
-								// 已在添加过程中逐个刷新，不需要再次刷新
+								// 批量添加完成后，刷新一次以确保所有封面都已加载
+								await this.refresh();
 
 								new Notice(`批量添加完成：成功 ${addedNovels.length} 本，失败 ${result.length - addedNovels.length} 本`);
 							} else {
@@ -126,8 +143,12 @@ export class NovelLibraryView extends ItemView {
 								new Notice(`添加成功: ${result.basename}`);
 							}
 						} catch (error) {
-							console.error('Error:', error);
-							new Notice('添加失败');
+							console.error('Error adding novel:', error);
+							const errorMsg = error instanceof Error ? error.message : '未知错误';
+							new Notice(`添加失败: ${errorMsg}`);
+						} finally {
+							// 确保标志位被重置，即使发生错误
+							this.isAddingNovel = false;
 						}
 					},
 					onRemoveNovel: async (novel: Novel) => {

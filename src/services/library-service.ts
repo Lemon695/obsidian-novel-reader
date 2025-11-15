@@ -607,6 +607,10 @@ export class LibraryService {
 				await this.initialize();
 			}
 
+			// CRITICAL: 在load之前必须flush待处理的save，避免竞态条件
+			// 否则快速切换章节时，load会读到旧数据，覆盖新进度
+			await this.flushPendingSave();
+
 			await this.loadLibrary();
 			await this.ensureInitialized();
 
@@ -628,14 +632,15 @@ export class LibraryService {
 				if (!novel) {
 					// 小说可能还在加载中，尝试重新加载
 					console.warn('Novel not found in cache, reloading library:', novelId);
+					await this.flushPendingSave();
 					await this.loadLibrary();
 					novel = this.novels.find(n => n.id === novelId);
 
 					if (!novel) {
 						// 如果重新加载后还是找不到，仅记录警告不中断流程
 						console.warn('Novel still not found after reload, progress saved but novel data not updated:', novelId);
-						// 仍然保存进度数据
-						await this.saveLibrary("updateProgress");
+						// 仍然保存进度数据，但立即执行，不用防抖
+						await this.saveLibraryImmediate("updateProgress");
 						return;
 					}
 				}
@@ -661,8 +666,8 @@ export class LibraryService {
 					});
 				}
 
-				// 保存更新后的数据
-				await this.saveLibrary("updateProgress");
+				// 立即保存，不使用防抖，确保进度不丢失
+				await this.saveLibraryImmediate("updateProgress");
 				console.log('Progress updated and saved successfully');
 			} catch (error) {
 				console.error('Failed to update progress:', error);

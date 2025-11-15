@@ -185,6 +185,11 @@
 			const targetChapter = chapters.find(ch => ch.id === page.chapterId);
 			if (targetChapter && (!currentChapter || currentChapter.id !== targetChapter.id)) {
 				currentChapter = targetChapter;
+				currentChapterId = targetChapter.id;
+
+				// 记录章节历史和保存进度
+				recordChapterHistory(targetChapter);
+				saveChapterProgress();
 			}
 		}
 	}
@@ -606,6 +611,12 @@
 		currentChapter = chapter;
 		currentChapterId = chapter.id;
 
+		// 记录章节历史
+		recordChapterHistory(chapter);
+
+		// 保存阅读进度
+		saveChapterProgress();
+
 		// 根据当前模式滚动到选中的章节（使用防抖优化）
 		if (displayMode === 'hover' && hoverChaptersContainer) {
 			debouncedScrollToChapter(hoverChaptersContainer);
@@ -614,6 +625,40 @@
 		} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
 			debouncedScrollToChapter(sidebarChaptersContainer);
 		}
+	}
+
+	// 记录章节历史
+	async function recordChapterHistory(chapter: ChapterProgress) {
+		try {
+			await plugin.chapterHistoryService.addHistory(novel.id, chapter.id, chapter.title);
+			const newHistory = await plugin.chapterHistoryService.getHistory(novel.id);
+			chapterHistory = newHistory;
+		} catch (error) {
+			console.error('Failed to record chapter history:', error);
+		}
+	}
+
+	// 保存章节进度
+	function saveChapterProgress() {
+		if (!currentChapter) return;
+
+		const progress = {
+			novelId: novel.id,
+			chapterIndex: currentChapter.id - 1,
+			progress: (currentChapter.id / chapters.length) * 100,
+			timestamp: Date.now(),
+			totalChapters: chapters.length,
+			position: {
+				chapterId: currentChapter.id,
+				chapterTitle: currentChapter.title,
+			}
+		};
+
+		// 发送自定义事件通知父组件保存进度
+		const event = new CustomEvent('saveProgress', {
+			detail: {progress}
+		});
+		window.dispatchEvent(event);
 	}
 
 	// 初始化阅读会话

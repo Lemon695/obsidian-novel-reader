@@ -19,21 +19,11 @@ export class PDFNovelReaderView extends ItemView {
 	public novel: Novel | null = null;
 	private dataReady = false;
 	private currentSessionId: string | undefined;
-	private progressHandler: ((event: Event) => Promise<void>) | null = null;
 	private libraryService: LibraryService;
 
 	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
 		super(leaf);
 		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
-
-		// 添加进度保存事件处理器
-		this.progressHandler = async (event: Event) => {
-			const progressEvent = event as CustomProgressEvent;
-			if (this.novel && progressEvent.detail?.progress) {
-				await this.libraryService.updateProgress(this.novel.id, progressEvent.detail.progress);
-			}
-		};
-		window.addEventListener('saveProgress', this.progressHandler as EventListener);
 	}
 
 	getViewType(): string {
@@ -90,13 +80,17 @@ export class PDFNovelReaderView extends ItemView {
 			console.error("Failed to start reading session:", error);
 		}
 
+		// 加载历史记录
+		const initialHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
+
 		this.component = new (PDFReaderViewComponent as ComponentType)({
 			target: container,
 			props: {
 				novel: this.novel,
 				displayMode: this.plugin.settings.chapterDisplayMode,
 				initialPage: selectPage,
-				plugin: this.plugin
+				plugin: this.plugin,
+				chapterHistory: initialHistory
 			}
 		});
 
@@ -162,6 +156,17 @@ export class PDFNovelReaderView extends ItemView {
 				}
 			}
 		});
+
+		// 监听进度保存事件（使用组件事件而不是全局window事件）
+		this.component.$on('saveProgress', async (event) => {
+			if (this.novel) {
+				try {
+					await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
+				} catch (error) {
+					console.error('Failed to save progress:', error);
+				}
+			}
+		});
 	}
 
 	async onClose() {
@@ -173,11 +178,6 @@ export class PDFNovelReaderView extends ItemView {
 		if (this.component) {
 			this.component.$destroy();
 			this.component = null;
-		}
-
-		if (this.progressHandler) {
-			window.removeEventListener('saveProgress', this.progressHandler as EventListener);
-			this.progressHandler = null;
 		}
 	}
 

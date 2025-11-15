@@ -17,7 +17,6 @@ export class EpubNovelReaderView extends ItemView {
 	private libraryService: LibraryService;
 	private noteService: NovelNoteService;
 	private dataReady = false;
-	private progressHandler: ((event: Event) => Promise<void>) | null = null;
 	private book: EpubBook | null = null;
 	private toc: any[] = [];
 	private chapters: EpubChapter[] = [];
@@ -26,16 +25,6 @@ export class EpubNovelReaderView extends ItemView {
 		super(leaf);
 		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
 		this.noteService = new NovelNoteService(this.app, plugin);
-
-		// 添加进度保存事件处理器
-		this.progressHandler = async (event: Event) => {
-			const progressEvent = event as CustomProgressEvent;
-			console.log('EpubView,监听"saveProgress"---', JSON.stringify(progressEvent.detail?.progress))
-			if (this.novel && progressEvent.detail?.progress) {
-				await this.libraryService.updateProgress(this.novel.id, progressEvent.detail.progress);
-			}
-		};
-		window.addEventListener('saveProgress', this.progressHandler as EventListener);
 	}
 
 	getViewType(): string {
@@ -128,6 +117,9 @@ export class EpubNovelReaderView extends ItemView {
 			console.error("Failed to start reading session:", error);
 		}
 
+		// 加载历史记录
+		const initialHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
+
 		this.component = new (EpubReaderViewComponent as unknown as ComponentType)({
 			target: container,
 			props: {
@@ -140,7 +132,8 @@ export class EpubNovelReaderView extends ItemView {
 				plugin: this.plugin,
 				book: this.book,
 				toc: this.toc,
-				chapters: this.chapters
+				chapters: this.chapters,
+				chapterHistory: initialHistory
 			}
 		});
 
