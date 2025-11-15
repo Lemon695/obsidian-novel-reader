@@ -136,6 +136,12 @@ export class PDFNovelReaderView extends ItemView {
 						event.detail.pageNum,
 						`第 ${event.detail.pageNum} 页`
 					);
+
+					// 刷新历史显示
+					const newHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
+					if (this.component) {
+						this.component.$set({ chapterHistory: newHistory });
+					}
 				} catch (error) {
 					console.error('Failed to record page history:', error);
 				}

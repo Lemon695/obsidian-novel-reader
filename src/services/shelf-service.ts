@@ -132,8 +132,15 @@ export class ShelfService {
 	}
 
 	private async saveShelves() {
-		const path = this.plugin.pathsService.getShelfFilePath();
-		await this.app.vault.adapter.write(path, JSON.stringify(this.shelves, null, 2));
+		try {
+			// 确保目录存在
+			await this.plugin.pathsService.initLibraryPath();
+			const path = this.plugin.pathsService.getShelfFilePath();
+			await this.app.vault.adapter.write(path, JSON.stringify(this.shelves, null, 2));
+		} catch (error) {
+			console.error('Error saving shelves:', error);
+			throw error;
+		}
 	}
 
 	async getNovelsByShelf(shelfId: string) {
@@ -284,16 +291,25 @@ export class ShelfService {
 
 	// 保存分类到文件
 	private async saveCategories() {
-		const path = this.plugin.pathsService.getCategoryFilePath();
-		await this.app.vault.adapter.write(
-			path,
-			JSON.stringify(this.categories, null, 2)
-		);
+		try {
+			// 确保目录存在
+			await this.plugin.pathsService.initLibraryPath();
+			const path = this.plugin.pathsService.getCategoryFilePath();
+			await this.app.vault.adapter.write(
+				path,
+				JSON.stringify(this.categories, null, 2)
+			);
+		} catch (error) {
+			console.error('Error saving categories:', error);
+			throw error;
+		}
 	}
 
 	// 保存标签到文件
 	private async saveTags(): Promise<void> {
 		try {
+			// 确保目录存在
+			await this.plugin.pathsService.initLibraryPath();
 			const path = this.plugin.pathsService.getTagFilePath();
 			await this.app.vault.adapter.write(
 				path,

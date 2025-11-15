@@ -170,6 +170,16 @@ export class EpubNovelReaderView extends ItemView {
 			}
 		});
 
+		this.component.$on('saveProgress', async (event) => {
+			if (this.novel) {
+				try {
+					await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
+				} catch (error) {
+					console.error('Failed to save progress:', error);
+				}
+			}
+		});
+
 		this.component.$on('chapterChanged', async (event) => {
 			if (this.novel) {
 				console.log('Chapter changed:', event.detail);
@@ -192,6 +202,12 @@ export class EpubNovelReaderView extends ItemView {
 						event.detail.chapterId,
 						event.detail.chapterTitle
 					);
+
+					// 刷新历史显示
+					const newHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
+					if (this.component) {
+						this.component.$set({ chapterHistory: newHistory });
+					}
 				} catch (error) {
 					console.error('Failed to record chapter history:', error);
 				}

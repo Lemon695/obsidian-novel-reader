@@ -86,10 +86,26 @@ export class NovelLibraryView extends ItemView {
 							if (Array.isArray(result)) {
 								// 批量添加
 								new Notice(`正在批量添加 ${result.length} 本图书...`);
-								const addedNovels = await this.libraryService.batchAddNovels(result);
+								const addedNovels = await this.libraryService.batchAddNovels(
+									result,
+									async (novel, index, total) => {
+										// 每添加一本图书后，立即刷新显示
+										const novels = await this.libraryService.getAllNovels() || [];
+										const updatedNovels = await Promise.all(
+											novels.map(n => this.plugin.bookCoverManagerService.loadNovelWithCover(n))
+										);
 
-								// 刷新列表
-								await this.refresh();
+										// 更新组件的 novels 属性
+										if (this.component) {
+											this.component.$set({novels: updatedNovels});
+										}
+
+										// 显示进度
+										new Notice(`已添加 ${index}/${total}: ${novel.title}`, 2000);
+									}
+								);
+
+								// 已在添加过程中逐个刷新，不需要再次刷新
 
 								new Notice(`批量添加完成：成功 ${addedNovels.length} 本，失败 ${result.length - addedNovels.length} 本`);
 							} else {

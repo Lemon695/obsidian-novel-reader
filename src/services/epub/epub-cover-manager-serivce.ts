@@ -51,11 +51,33 @@ export class EpubCoverManager {
 
 	// 获取EPUB封面
 	async getEpubCover(file: TFile, format: string): Promise<string | null> {
+		// 临时保存原始console.error，用于抑制epubjs内部的非致命错误
+		const originalConsoleError = console.error;
+		let suppressErrors = false;
+
 		try {
 			const arrayBuffer = await this.app.vault.readBinary(file);
 			const book = ePub() as unknown as EpubBook;
+
+			// 抑制epubjs解析时的非致命错误（如缺失的图片引用）
+			suppressErrors = true;
+			console.error = (...args: any[]) => {
+				// 只抑制"File not found in the epub"这类非致命错误
+				const errorMessage = args[0]?.message || args[0]?.toString() || '';
+				if (typeof errorMessage === 'string' && errorMessage.includes('File not found in the epub')) {
+					// 静默处理，不打印到控制台
+					return;
+				}
+				// 其他错误仍然打印
+				originalConsoleError.apply(console, args);
+			};
+
 			await book.open(arrayBuffer);
 			await book.ready;
+
+			// 恢复console.error
+			suppressErrors = false;
+			console.error = originalConsoleError;
 
 			const coverPath = await book.loaded.cover;
 			console.log('Cover path:', coverPath);
@@ -88,6 +110,11 @@ export class EpubCoverManager {
 		} catch (error) {
 			console.error('Error getting EPUB cover:', error);
 			return null;
+		} finally {
+			// 确保恢复console.error
+			if (suppressErrors) {
+				console.error = originalConsoleError;
+			}
 		}
 	}
 

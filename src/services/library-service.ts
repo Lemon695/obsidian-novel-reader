@@ -34,6 +34,11 @@ export class LibraryService {
 	constructor(private app: App, private plugin: NovelReaderPlugin) {
 		this.pathsService = this.plugin.pathsService;
 
+		// 配置 PDF.js worker（避免在 addNovel 时报错）
+		if (typeof pdfjs.GlobalWorkerOptions !== 'undefined') {
+			pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+		}
+
 		this.initPromise = this.initialize();
 
 		this.noteService = this.plugin.noteService;
@@ -806,14 +811,23 @@ export class LibraryService {
 	/**
 	 * 批量添加小说
 	 */
-	async batchAddNovels(files: TFile[]): Promise<Novel[]> {
+	async batchAddNovels(
+		files: TFile[],
+		onProgress?: (novel: Novel, index: number, total: number) => void | Promise<void>
+	): Promise<Novel[]> {
 		const addedNovels: Novel[] = [];
 		const failedFiles: string[] = [];
 
-		for (const file of files) {
+		for (let i = 0; i < files.length; i++) {
+			const file = files[i];
 			try {
 				const novel = await this.addNovel(file);
 				addedNovels.push(novel);
+
+				// 调用进度回调（如果提供）
+				if (onProgress) {
+					await onProgress(novel, i + 1, files.length);
+				}
 			} catch (error) {
 				console.error(`Failed to add ${file.path}:`, error);
 				failedFiles.push(file.path);
