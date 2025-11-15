@@ -16,6 +16,9 @@ export interface NovelSettings {
 		specificPaths: string[]; // 具体路径列表
 	};
 
+	// 读取目录设置
+	readDirectories: string[];  // 指定读取小说的目录列表，为空则读取所有
+
 	// 阅读设置
 	defaultTheme: string;
 	defaultFontSize: number;
@@ -77,6 +80,8 @@ export const DEFAULT_SETTINGS: NovelSettings = {
 		patterns: [],
 		specificPaths: []
 	},
+
+	readDirectories: [],
 
 	defaultTheme: 'light',
 	defaultFontSize: 18,

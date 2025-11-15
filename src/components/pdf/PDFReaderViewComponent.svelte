@@ -310,11 +310,21 @@
 			currentPage = pageNumber;
 			showingCoverPage = false;
 			renderPage('handleOutlineClick');
+
+			// 触发pageChanged事件以记录历史
+			dispatch('pageChanged', { pageNum: pageNumber });
 		}
 	}
 
 	onMount(async () => {
 		console.log("Component mounting with initial page:", initialPage);
+
+		// 加载章节历史
+		try {
+			chapterHistory = await plugin.chapterHistoryService.getHistory(novel.id);
+		} catch (error) {
+			console.error('Failed to load chapter history:', error);
+		}
 
 		// 获取或创建容器元素
 		const container = document.getElementById('pdf-container');
@@ -650,7 +660,7 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 60px;
+		width: 50px;
 		z-index: 100;
 	}
 

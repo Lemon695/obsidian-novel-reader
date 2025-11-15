@@ -74,7 +74,9 @@
 		chapterId: number,
 		chapterTitle: string,
 		startLine: number,
-		endLine: number
+		endLine: number,
+		absoluteStartLine: number,  // 原始文本绝对行号
+		absoluteEndLine: number     // 原始文本绝对行号
 	}> = [];
 	let currentPageNum = 1;
 	let currentVirtualPage: typeof virtualPages[0] | null = null;
@@ -84,23 +86,50 @@
 		virtualPages = [];
 		let pageNum = 1;
 
-		chapters.forEach(chapter => {
-			const lines = chapter.content.split('\n');
+		// 页码模式：直接按原始文本160行分页，不考虑章节
+		if (viewMode === 'pages' || chapters.length === 0) {
+			const lines = content.split('\n');
 			const totalLines = lines.length;
 
-			// 为每个章节按行数分页
 			for (let startLine = 0; startLine < totalLines; startLine += LINES_PER_PAGE) {
 				const endLine = Math.min(startLine + LINES_PER_PAGE - 1, totalLines - 1);
 
 				virtualPages.push({
 					pageNum: pageNum++,
-					chapterId: chapter.id,
-					chapterTitle: chapter.title,
+					chapterId: 0,  // 页码模式不关联章节
+					chapterTitle: '',
 					startLine: startLine,
-					endLine: endLine
+					endLine: endLine,
+					absoluteStartLine: startLine,
+					absoluteEndLine: endLine
 				});
 			}
-		});
+		} else {
+			// 章节模式：基于章节分页
+			let absoluteLineOffset = 0;
+
+			chapters.forEach(chapter => {
+				const lines = chapter.content.split('\n');
+				const totalLines = lines.length;
+
+				// 为每个章节按行数分页
+				for (let startLine = 0; startLine < totalLines; startLine += LINES_PER_PAGE) {
+					const endLine = Math.min(startLine + LINES_PER_PAGE - 1, totalLines - 1);
+
+					virtualPages.push({
+						pageNum: pageNum++,
+						chapterId: chapter.id,
+						chapterTitle: chapter.title,
+						startLine: startLine,
+						endLine: endLine,
+						absoluteStartLine: absoluteLineOffset + startLine,
+						absoluteEndLine: absoluteLineOffset + endLine
+					});
+				}
+
+				absoluteLineOffset += totalLines;
+			});
+		}
 
 		// 初始化第一页
 		if (virtualPages.length > 0) {
@@ -136,11 +165,51 @@
 		currentVirtualPage = page;
 		currentPageNum = pageNum;
 
-		// 同时更新当前章节引用
-		const targetChapter = chapters.find(ch => ch.id === page.chapterId);
-		if (targetChapter) {
-			currentChapter = targetChapter;
+		if (viewMode === 'pages') {
+			// 页码模式：不依赖章节，直接保存页码进度
+			// 如果有章节信息，设置一个有效的currentChapter以避免空指针
+			if (page.chapterId > 0) {
+				const targetChapter = chapters.find(ch => ch.id === page.chapterId);
+				if (targetChapter && (!currentChapter || currentChapter.id !== targetChapter.id)) {
+					currentChapter = targetChapter;
+				}
+			} else if (chapters.length > 0 && !currentChapter) {
+				// 页码模式下，设置一个默认章节以避免空指针
+				currentChapter = chapters[0];
+			}
+			savePageProgress();
+			// 记录页码历史
+			recordPageHistory(pageNum);
+		} else {
+			// 章节模式：在跨章节时更新currentChapter
+			const targetChapter = chapters.find(ch => ch.id === page.chapterId);
+			if (targetChapter && (!currentChapter || currentChapter.id !== targetChapter.id)) {
+				currentChapter = targetChapter;
+			}
 		}
+	}
+
+	// 保存页码进度
+	function savePageProgress() {
+		if (!currentVirtualPage) return;
+
+		const progress = {
+			novelId: novel.id,
+			chapterIndex: currentVirtualPage.pageNum - 1, // 使用页码作为索引
+			progress: (currentVirtualPage.pageNum / virtualPages.length) * 100,
+			timestamp: Date.now(),
+			totalChapters: virtualPages.length, // 使用总页数
+			position: {
+				chapterId: currentVirtualPage.chapterId || 0,  // 页码模式下chapterId为0
+				chapterTitle: `第 ${currentVirtualPage.pageNum} 页`,
+			}
+		};
+
+		// 发送自定义事件通知父组件保存进度
+		const event = new CustomEvent('saveProgress', {
+			detail: {progress}
+		});
+		window.dispatchEvent(event);
 	}
 
 	// 切换到上一页/下一页
@@ -160,12 +229,32 @@
 		}
 	}
 
+	// 记录页码历史
+	async function recordPageHistory(pageNum: number) {
+		const pageTitle = `第 ${pageNum} 页`;
+		try {
+			await plugin.chapterHistoryService.addHistory(novel.id, pageNum, pageTitle);
+			const newHistory = await plugin.chapterHistoryService.getHistory(novel.id);
+			chapterHistory = newHistory;
+		} catch (error) {
+			console.error('Failed to record page history:', error);
+		}
+	}
+
 	// 获取当前虚拟页的内容
 	function getCurrentPageContent(): string[] {
-		if (!currentVirtualPage || !currentChapter) return [];
+		if (!currentVirtualPage) return [];
 
-		const lines = currentChapter.content.split('\n');
-		return lines.slice(currentVirtualPage.startLine, currentVirtualPage.endLine + 1);
+		if (viewMode === 'pages') {
+			// 页码模式：使用原始文本，完全不考虑章节
+			const lines = content.split('\n');
+			return lines.slice(currentVirtualPage.absoluteStartLine, currentVirtualPage.absoluteEndLine + 1);
+		} else {
+			// 章节模式：使用章节内容
+			if (!currentChapter) return [];
+			const lines = currentChapter.content.split('\n');
+			return lines.slice(currentVirtualPage.startLine, currentVirtualPage.endLine + 1);
+		}
 	}
 
 	// 从 novel.customSettings 读取用户偏好
@@ -193,6 +282,9 @@
 		}
 		novel.customSettings.txtViewMode = viewMode;
 
+		// 重新计算虚拟页（因为页码模式和章节模式的分页逻辑不同）
+		calculateVirtualPages();
+
 		// 更新到数据库
 		await plugin.libraryService.updateNovel(novel);
 	}
@@ -215,6 +307,16 @@
 				const savedChapter = chapters.find(ch => ch.id === currentChapterId);
 				if (savedChapter) {
 					currentChapter = savedChapter;
+				}
+
+				// 如果是页码模式且有保存的页码进度，恢复到对应页码
+				if (viewMode === 'pages' && savedProgress.chapterIndex !== undefined) {
+					const savedPageNum = savedProgress.chapterIndex + 1; // chapterIndex是从0开始的
+					const savedPage = virtualPages.find(p => p.pageNum === savedPageNum);
+					if (savedPage) {
+						currentVirtualPage = savedPage;
+						currentPageNum = savedPageNum;
+					}
 				}
 			} else if (initialChapterId !== null) {
 				// 如果有初始章节ID，加载该章节
@@ -328,8 +430,10 @@
 		const chapter = chapters.find(c => c.id === currentChapterId);
 		if (chapter) {
 			currentChapter = chapter;
-			// 无论是通过大纲还是切换章节，只要章节ID变化就保存进度
-			saveReadingProgress(novel, currentChapter, chapters);
+			// 只在章节模式下保存章节进度，页码模式下由switchPage单独处理
+			if (viewMode === 'chapters') {
+				saveReadingProgress(novel, currentChapter, chapters);
+			}
 		}
 	}
 
@@ -351,14 +455,17 @@
 
 		startNewSession();
 
-		handleChapterChange(
-			currentChapter,
-			novel,
-			plugin.chapterHistoryService,
-			(newHistory) => {
-				chapterHistory = newHistory;
-			}
-		);
+		// 只在章节模式下记录章节历史，页码模式下由recordPageHistory单独处理
+		if (viewMode === 'chapters') {
+			handleChapterChange(
+				currentChapter,
+				novel,
+				plugin.chapterHistoryService,
+				(newHistory) => {
+					chapterHistory = newHistory;
+				}
+			);
+		}
 
 		// 根据显示模式滚动到对应位置（使用防抖）
 		if (displayMode === 'hover' && hoverChaptersContainer) {
@@ -925,18 +1032,13 @@
 			{/if}
 		{:else}
 			<!-- 页码模式：只显示当前虚拟页的内容 -->
-			{#if currentVirtualPage && currentChapter}
+			{#if currentVirtualPage}
 				<div class="chapter-content">
-					<h2>
-						第 {currentVirtualPage.pageNum} 页
-						<span class="page-subtitle">
-							来自：{currentVirtualPage.chapterTitle}
-						</span>
-					</h2>
+					<h2>第 {currentVirtualPage.pageNum} 页</h2>
 					<div class="content-text">
 						{#each getCurrentPageContent() as paragraph, index}
-							<p data-line-number={currentVirtualPage.startLine + index}>
-								{@html addNoteMarkers(paragraph, currentChapter.id, currentVirtualPage.startLine + index)}
+							<p data-line-number={currentVirtualPage.absoluteStartLine + index}>
+								{@html addNoteMarkers(paragraph, currentVirtualPage.chapterId || 0, currentVirtualPage.absoluteStartLine + index)}
 							</p>
 						{/each}
 					</div>
@@ -1005,6 +1107,7 @@
 			currentChapterId={currentChapter?.id}
 			notes={notes}
 			readingStats={readingStats}
+			chapterHistory={chapterHistory}
 			on:savePattern={async (event) => {
     try {
       const {novel: updatedNovel, chapters: newChapters} = event.detail;
@@ -1042,14 +1145,53 @@
             	showNoteList = false; // 关闭列表面板
         	}}
 			on:jumpToChapter={async (event) => {
-    			const chapter = chapters.find(ch => ch.id === event.detail.chapterId);
-    			if (chapter) {
-      				currentChapter = chapter;
-      				currentChapterId = chapter.id;
-      				// 触发滚动到顶部
-      				const contentElement = document.querySelector('.content-area');
-      				if (contentElement) {
-        				contentElement.scrollTo({top: 0, behavior: 'smooth'});
+    			const { chapterId, chapterTitle } = event.detail;
+
+    			// 判断是页码历史还是章节历史
+    			if (chapterTitle && chapterTitle.includes('页')) {
+      				// 页码历史：提取页码并跳转
+      				const pageMatch = chapterTitle.match(/第\s*(\d+)\s*页/);
+      				if (pageMatch) {
+        				const pageNum = parseInt(pageMatch[1], 10);
+        				// 切换到页码模式
+        				if (viewMode !== 'pages') {
+          					viewMode = 'pages';
+          					if (!novel.customSettings) {
+            					novel.customSettings = {};
+          					}
+          					novel.customSettings.txtViewMode = viewMode;
+          					calculateVirtualPages();
+          					await plugin.libraryService.updateNovel(novel);
+        				}
+        				// 跳转到指定页码
+        				jumpToPage(pageNum);
+        				// 触发滚动到顶部
+        				const contentElement = document.querySelector('.content-area');
+        				if (contentElement) {
+          					contentElement.scrollTo({top: 0, behavior: 'smooth'});
+        				}
+      				}
+    			} else {
+      				// 章节历史：查找章节并跳转
+      				const chapter = chapters.find(ch => ch.id === chapterId);
+      				if (chapter) {
+        				// 切换到章节模式
+        				if (viewMode !== 'chapters') {
+          					viewMode = 'chapters';
+          					if (!novel.customSettings) {
+            					novel.customSettings = {};
+          					}
+          					novel.customSettings.txtViewMode = viewMode;
+          					calculateVirtualPages();
+          					await plugin.libraryService.updateNovel(novel);
+        				}
+        				currentChapter = chapter;
+        				currentChapterId = chapter.id;
+        				// 触发滚动到顶部
+        				const contentElement = document.querySelector('.content-area');
+        				if (contentElement) {
+          					contentElement.scrollTo({top: 0, behavior: 'smooth'});
+        				}
       				}
     			}
   			}}
@@ -1076,7 +1218,7 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 60px;
+		width: 50px;
 		z-index: 100;
 	}
 

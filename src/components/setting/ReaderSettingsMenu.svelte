@@ -21,6 +21,7 @@
 	export let notes: any[] = [];
 	export let readingStats: any = null;
 	export let showReadingProgress: boolean = true;
+	export let chapterHistory: ChapterHistory[] = [];  // 从父组件接收
 
 	let showSettingsDropdown = false;
 	let showHistoryPanel = false;
@@ -28,15 +29,13 @@
 	let showNoteList = false;
 	let showSettingsPanel = false;
 
-	// 章节历史记录
-	let chapterHistory: ChapterHistory[] = [];
-
 	export let readerType: 'txt' | 'pdf' | 'epub';
 
 	onMount(() => {
 		// 立即执行异步初始化
 		const initialize = async () => {
-			if (novel && plugin.chapterHistoryService) {
+			// 如果父组件没有传递chapterHistory，则自己加载
+			if ((!chapterHistory || chapterHistory.length === 0) && novel && plugin.chapterHistoryService) {
 				try {
 					chapterHistory = await plugin.chapterHistoryService.getHistory(novel.id);
 				} catch (error) {

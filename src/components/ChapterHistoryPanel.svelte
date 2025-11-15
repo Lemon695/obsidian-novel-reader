@@ -14,20 +14,22 @@
 	);
 
 	function formatDate(timestamp: number): string {
-		const now = Date.now();
-		const diff = now - timestamp;
-		const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-		if (days === 0) return '今天';
-		if (days === 1) return '昨天';
-		if (days < 7) return `${days}天前`;
-
 		const date = new Date(timestamp);
-		return `${date.getMonth() + 1}月${date.getDate()}日`;
+		const year = date.getFullYear();
+		const month = String(date.getMonth() + 1).padStart(2, '0');
+		const day = String(date.getDate()).padStart(2, '0');
+		const hours = String(date.getHours()).padStart(2, '0');
+		const minutes = String(date.getMinutes()).padStart(2, '0');
+		const seconds = String(date.getSeconds()).padStart(2, '0');
+
+		return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 	}
 
-	function handleJumpToChapter(chapterId: number) {
-		dispatch('jumpToChapter', { chapterId });
+	function handleJumpToChapter(record: ChapterHistory) {
+		dispatch('jumpToChapter', {
+			chapterId: record.chapterId,
+			chapterTitle: record.chapterTitle
+		});
 	}
 
 	function handleDeleteRecord(timestamp: number) {
@@ -63,7 +65,7 @@
 				<div class="record-actions">
 					<button
 						class="jump-button"
-						on:click={() => handleJumpToChapter(record.chapterId)}
+						on:click={() => handleJumpToChapter(record)}
 					>
 						跳转
 					</button>

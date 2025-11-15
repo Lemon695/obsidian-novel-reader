@@ -28,7 +28,7 @@ export class TxtNovelReaderView extends ItemView {
 	constructor(leaf: WorkspaceLeaf, plugin: NovelReaderPlugin) {
 		super(leaf);
 		this.plugin = plugin;
-		this.libraryService = new LibraryService(this.app, plugin);
+		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
 		this.chapterHistoryService = new ChapterHistoryService(this.app, plugin);
 		this.readingProgressService = new ReadingProgressService(this.app, plugin);
 

@@ -79,10 +79,22 @@ export class NovelLibraryView extends ItemView {
 					onAddNovel: async () => {
 						console.log('onAddNovel called');
 						try {
-							const file = await this.libraryService.pickNovelFile();
-							if (file) {
-								// 添加新图书
-								let newNovel = await this.libraryService.addNovel(file);
+							const result = await this.libraryService.pickNovelFile();
+							if (!result) return;
+
+							// 判断是单个文件还是多个文件
+							if (Array.isArray(result)) {
+								// 批量添加
+								new Notice(`正在批量添加 ${result.length} 本图书...`);
+								const addedNovels = await this.libraryService.batchAddNovels(result);
+
+								// 刷新列表
+								await this.refresh();
+
+								new Notice(`批量添加完成：成功 ${addedNovels.length} 本，失败 ${result.length - addedNovels.length} 本`);
+							} else {
+								// 单个添加
+								let newNovel = await this.libraryService.addNovel(result);
 								// 加载封面信息
 								newNovel = await this.plugin.bookCoverManagerService.loadNovelWithCover(newNovel);
 
@@ -95,7 +107,7 @@ export class NovelLibraryView extends ItemView {
 								if (this.component) {
 									this.component.$set({novels: updatedNovels});
 								}
-								new Notice(`添加成功: ${file.basename}`);
+								new Notice(`添加成功: ${result.basename}`);
 							}
 						} catch (error) {
 							console.error('Error:', error);

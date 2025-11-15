@@ -24,7 +24,7 @@ export class PDFNovelReaderView extends ItemView {
 
 	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
 		super(leaf);
-		this.libraryService = new LibraryService(this.app, plugin);
+		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
 
 		// 添加进度保存事件处理器
 		this.progressHandler = async (event: Event) => {
@@ -129,16 +129,31 @@ export class PDFNovelReaderView extends ItemView {
 			if (this.novel) {
 				console.log('Page changed:', event.detail);
 
-				// 结束当前会话
-				if (this.currentSessionId) {
-					await this.plugin.dbService?.endReadingSession(this.currentSessionId);
+				// 记录页码历史（优先执行，不依赖session）
+				try {
+					await this.plugin.chapterHistoryService.addHistory(
+						this.novel.id,
+						event.detail.pageNum,
+						`第 ${event.detail.pageNum} 页`
+					);
+				} catch (error) {
+					console.error('Failed to record page history:', error);
 				}
-				// 开始新会话
-				this.currentSessionId = await this.plugin.dbService?.startReadingSession(
-					this.novel.id,
-					event.detail.pageNum,
-					`Page ${event.detail.pageNum}`
-				);
+
+				// 结束当前会话（放在try-catch中，避免阻塞）
+				try {
+					if (this.currentSessionId) {
+						await this.plugin.dbService?.endReadingSession(this.currentSessionId);
+					}
+					// 开始新会话
+					this.currentSessionId = await this.plugin.dbService?.startReadingSession(
+						this.novel.id,
+						event.detail.pageNum,
+						`Page ${event.detail.pageNum}`
+					);
+				} catch (error) {
+					console.error('Failed to manage reading session:', error);
+				}
 			}
 		});
 	}

@@ -24,7 +24,7 @@ export class EpubNovelReaderView extends ItemView {
 
 	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
 		super(leaf);
-		this.libraryService = new LibraryService(this.app, plugin);
+		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
 		this.noteService = new NovelNoteService(this.app, plugin);
 
 		// 添加进度保存事件处理器
@@ -184,6 +184,17 @@ export class EpubNovelReaderView extends ItemView {
 					event.detail.chapterId,
 					event.detail.chapterTitle
 				);
+
+				// 记录章节历史
+				try {
+					await this.plugin.chapterHistoryService.addHistory(
+						this.novel.id,
+						event.detail.chapterId,
+						event.detail.chapterTitle
+					);
+				} catch (error) {
+					console.error('Failed to record chapter history:', error);
+				}
 
 				this.app.workspace.trigger('novel-chapter-selected', event.detail.chapterId);
 			}

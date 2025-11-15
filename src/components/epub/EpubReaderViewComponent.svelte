@@ -296,13 +296,20 @@
 		};
 	});
 
-	onMount(() => {
+	onMount(async () => {
 		if (chapters) {
 			//parseAndSetChapters();
 			contentLoaded = true;
 
 			// 计算虚拟页码
 			calculateVirtualPages();
+
+			// 加载章节历史
+			try {
+				chapterHistory = await plugin.chapterHistoryService.getHistory(novel.id);
+			} catch (error) {
+				console.error('Failed to load chapter history:', error);
+			}
 
 			console.log('Epub.1---', JSON.stringify(savedProgress))
 
@@ -1154,7 +1161,17 @@
 									const success = await displayChapter(chapter);
 									if (success) {
 										currentChapter = chapter;
+										currentChapterId = chapter.id;
 										saveProgress();
+
+										// 触发事件以记录历史
+										dispatch('chapterChanged', {
+											chapterId: chapter.id,
+											chapterTitle: chapter.title
+										});
+
+										// 重新激活键盘导航
+										isActive = true;
 									}
 								}}
 							>
@@ -1207,7 +1224,17 @@
 							const success = await displayChapter(chapter);
 							if (success) {
 								currentChapter = chapter;
+								currentChapterId = chapter.id;
 								saveProgress();
+
+								// 触发事件以记录历史
+								dispatch('chapterChanged', {
+									chapterId: chapter.id,
+									chapterTitle: chapter.title
+								});
+
+								// 重新激活键盘导航
+								isActive = true;
 							}
     					}}
 					>
@@ -1300,7 +1327,7 @@
 		left: 0;
 		top: 0;
 		bottom: 0;
-		width: 60px;
+		width: 50px;
 		z-index: 100;
 	}
 

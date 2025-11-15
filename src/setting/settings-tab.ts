@@ -27,6 +27,26 @@ export class NovelReaderSettingTab extends PluginSettingTab {
 				})
 			);
 
+		containerEl.createEl('h3', {text: '读取目录设置'});
+
+		new Setting(containerEl)
+			.setName('指定读取目录')
+			.setDesc('每行一个目录路径，只读取这些目录中的小说文件。留空则读取所有目录。')
+			.addTextArea(text => {
+				text
+					.setPlaceholder('示例：\nnovels\nbooks\nreading')
+					.setValue(this.plugin.settings.readDirectories.join('\n'))
+					.onChange(async (value) => {
+						// 将输入文本按行分割,过滤空行
+						this.plugin.settings.readDirectories = value.split('\n')
+							.map(line => line.trim())
+							.filter(line => line.length > 0);
+						await this.plugin.saveSettings();
+					});
+
+				this.setTextAreaStyle(text);
+			});
+
 		containerEl.createEl('h3', {text: '屏蔽设置'});
 
 		new Setting(containerEl)

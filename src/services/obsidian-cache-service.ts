@@ -7,6 +7,7 @@ interface CacheMetadata {
 	mtime: number;
 	size: number;
 	timestamp: number;
+	quickHash?: string;  // 文件前256字节的hash，用于快速检测内容变化
 }
 
 interface CacheIndex {
@@ -45,7 +46,7 @@ export class ObsidianCacheService {
 		const metadata = this.cacheIndex[file.path];
 
 		// 检查缓存是否有效
-		if (metadata && this.isCacheValid(metadata, file)) {
+		if (metadata && await this.isCacheValid(metadata, file)) {
 			try {
 				if (file.extension === 'txt') {
 					return await this.app.vault.adapter.read(cachePath);
@@ -76,12 +77,16 @@ export class ObsidianCacheService {
 				await this.app.vault.adapter.write(cachePath, content);
 			}
 
+			// 计算快速hash（文件前256字节）
+			const quickHash = this.calculateQuickHash(content);
+
 			// 更新索引
 			this.cacheIndex[file.path] = {
 				path: file.path,
 				mtime: file.stat.mtime,
 				size: file.stat.size,
-				timestamp: Date.now()
+				timestamp: Date.now(),
+				quickHash: quickHash
 			};
 
 			await this.saveIndex();
@@ -94,7 +99,7 @@ export class ObsidianCacheService {
 		const chaptersPath = this.pathsService.getChaptersCachePath(file);
 		const metadata = this.cacheIndex[file.path];
 
-		if (metadata && this.isCacheValid(metadata, file)) {
+		if (metadata && await this.isCacheValid(metadata, file)) {
 			try {
 				const content = await this.app.vault.adapter.read(chaptersPath);
 				return JSON.parse(content);
@@ -152,15 +157,64 @@ export class ObsidianCacheService {
 		}
 	}
 
-	private isCacheValid(metadata: CacheMetadata, file: TFile): boolean {
+	private async isCacheValid(metadata: CacheMetadata, file: TFile): Promise<boolean> {
 		const MAX_AGE = 7 * 24 * 60 * 60 * 1000; // 7 days
 		const age = Date.now() - metadata.timestamp;
 
-		return (
-			file.stat.mtime === metadata.mtime &&
-			file.stat.size === metadata.size &&
-			age < MAX_AGE
-		);
+		// 基本检查：mtime、size、age
+		if (file.stat.mtime !== metadata.mtime ||
+			file.stat.size !== metadata.size ||
+			age >= MAX_AGE) {
+			return false;
+		}
+
+		// 如果有quickHash，进行额外的内容校验
+		// 这可以检测到文件内容改变但mtime和size未变的情况
+		if (metadata.quickHash) {
+			try {
+				let content: string | ArrayBuffer;
+				if (file.extension === 'txt') {
+					content = await this.app.vault.read(file);
+				} else {
+					content = await this.app.vault.readBinary(file);
+				}
+
+				const currentHash = this.calculateQuickHash(content);
+				if (currentHash !== metadata.quickHash) {
+					console.log(`Cache hash mismatch for ${file.path}, invalidating cache`);
+					return false;
+				}
+			} catch (error) {
+				console.error('Error validating cache hash:', error);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+	// 计算快速hash（只取文件前256字节）
+	private calculateQuickHash(content: string | ArrayBuffer): string {
+		let sample: string;
+
+		if (content instanceof ArrayBuffer) {
+			// 对于二进制文件，取前256字节
+			const bytes = new Uint8Array(content, 0, Math.min(256, content.byteLength));
+			sample = Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+		} else {
+			// 对于文本文件，取前256个字符
+			sample = content.substring(0, 256);
+		}
+
+		// 简单的字符串hash算法
+		let hash = 0;
+		for (let i = 0; i < sample.length; i++) {
+			const char = sample.charCodeAt(i);
+			hash = ((hash << 5) - hash) + char;
+			hash = hash & hash; // Convert to 32bit integer
+		}
+
+		return hash.toString(36);
 	}
 
 	private async saveIndex(): Promise<void> {
