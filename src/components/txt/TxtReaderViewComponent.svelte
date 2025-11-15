@@ -7,7 +7,7 @@
 	import {handleChapterChange, parseChapters, switchChapter} from "../../lib/txt.reader/chapter-logic";
 	import {saveReadingProgress} from "../../lib/txt.reader/progress-logic";
 	import {scrollPage} from "../../lib/txt.reader/scroll-control";
-	import type {Note} from "../../types/notes";
+	import type{Note} from "../../types/notes";
 	import NoteDialog from "../NoteDialog.svelte";
 	import {v4 as uuidv4} from 'uuid';
 	import NoteViewer from "../NoteViewer.svelte";
@@ -16,6 +16,7 @@
 	import TextSelectionMenu from "../TextSelectionMenu.svelte";
 	import {NotesService} from "../../services/note/notes-service";
 	import { icons } from '../library/icons';
+	import { debounce, throttle } from '../../utils/debounce';
 
 	const dispatch = createEventDispatcher();
 
@@ -172,6 +173,10 @@
 				endCurrentSession();
 			}
 
+			// 清理防抖函数，防止内存泄漏
+			debouncedRenderChapter.cancel();
+			debouncedScrollToChapter.cancel();
+
 			// 移除所有事件监听器
 			window.removeEventListener('keydown', handleKeyDown);
 			window.removeEventListener('noteIconClick', handleNoteIconClick as EventListener);
@@ -197,6 +202,16 @@
 		}
 	}
 
+	// 防抖的章节内容渲染（延迟300ms执行，减少DOM重绘）
+	const debouncedRenderChapter = debounce((chapter: ChapterProgress) => {
+		processedContent = renderChapterContent(chapter);
+	}, 300);
+
+	// 防抖的滚动操作（延迟200ms执行）
+	const debouncedScrollToChapter = debounce((container: HTMLElement) => {
+		scrollToActiveChapter(container);
+	}, 200);
+
 	// 章节切换时更新会话
 	$: if (currentChapter) {
 		if (isReadingActive) {
@@ -214,16 +229,17 @@
 			}
 		);
 
-		// 根据显示模式滚动到对应位置
+		// 根据显示模式滚动到对应位置（使用防抖）
 		if (displayMode === 'hover' && hoverChaptersContainer) {
-			scrollToActiveChapter(hoverChaptersContainer);
+			debouncedScrollToChapter(hoverChaptersContainer);
 		} else if (displayMode === 'outline' && outlineChaptersContainer) {
-			scrollToActiveChapter(outlineChaptersContainer);
+			debouncedScrollToChapter(outlineChaptersContainer);
 		} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
-			scrollToActiveChapter(sidebarChaptersContainer);
+			debouncedScrollToChapter(sidebarChaptersContainer);
 		}
 
-		processedContent = renderChapterContent(currentChapter);
+		// 使用防抖渲染章节内容，减少高频DOM操作
+		debouncedRenderChapter(currentChapter);
 	}
 
 	function parseAndSetChapters() {
@@ -340,13 +356,13 @@
 		currentChapter = chapter;
 		currentChapterId = chapter.id;
 
-		// 根据当前模式滚动到选中的章节
+		// 根据当前模式滚动到选中的章节（使用防抖优化）
 		if (displayMode === 'hover' && hoverChaptersContainer) {
-			scrollToActiveChapter(hoverChaptersContainer);
+			debouncedScrollToChapter(hoverChaptersContainer);
 		} else if (displayMode === 'outline' && outlineChaptersContainer) {
-			scrollToActiveChapter(outlineChaptersContainer);
+			debouncedScrollToChapter(outlineChaptersContainer);
 		} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
-			scrollToActiveChapter(sidebarChaptersContainer);
+			debouncedScrollToChapter(sidebarChaptersContainer);
 		}
 	}
 
@@ -1034,8 +1050,8 @@
 	/* 设置 */
 	.toolbar {
 		position: fixed;
-		top: 10px;
-		right: 10px;
+		top: 13px; /* 原来10px，往下3px变成13px */
+		right: 15px; /* 原来10px，往左5px变成15px */
 		z-index: 1000;
 	}
 

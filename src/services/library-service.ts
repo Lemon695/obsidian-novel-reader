@@ -45,7 +45,9 @@ export class LibraryService {
 			await this.loadLibrary();
 			this.initialized = true;
 		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
 			console.error('Error initializing library:', error);
+			new Notice(`图书库初始化失败: ${errorMsg}`);
 			// 即使发生错误也要将 initialized 设置为 true
 			this.initialized = true;
 			throw error;
@@ -107,8 +109,8 @@ export class LibraryService {
 			return [...novelsWithCachedCovers];
 		}
 
-		// 缓存失效或首次加载，重新加载封面
-		this.novels = await Promise.all(
+		// 缓存失效或首次加载，重新加载封面（使用allSettled允许部分失败）
+		const results = await Promise.allSettled(
 			this.novels.map(async novel => {
 				const novelWithCover = await this.plugin.bookCoverManagerService.loadNovelWithCover(novel);
 				// 更新缓存
@@ -117,6 +119,11 @@ export class LibraryService {
 				}
 				return novelWithCover;
 			})
+		);
+
+		// 处理成功和失败的结果，失败的保留原值
+		this.novels = results.map((result, index) =>
+			result.status === 'fulfilled' ? result.value : this.novels[index]
 		);
 
 		this.coverCacheTime = now;
@@ -149,7 +156,9 @@ export class LibraryService {
 					try {
 						this.novels = JSON.parse(data);
 					} catch (e) {
+						const errorMsg = e instanceof Error ? e.message : '未知错误';
 						console.error('Error parsing library data:', e);
+						new Notice(`图书库数据解析失败: ${errorMsg}，已重置`);
 						this.novels = [];
 						needsSave = true;
 					}
@@ -164,7 +173,9 @@ export class LibraryService {
 					try {
 						this.progress = JSON.parse(progressData);
 					} catch (e) {
+						const errorMsg = e instanceof Error ? e.message : '未知错误';
 						console.error('Error parsing progress data:', e);
+						new Notice(`阅读进度数据解析失败: ${errorMsg}，已重置`);
 						this.progress = [];
 						needsSave = true;
 					}
@@ -278,73 +289,163 @@ export class LibraryService {
 	}
 
 	/**
-	 * 添加新小说
+	 * 添加新小说（优化版）
+	 * - 使用 async/await 和 Promise.all 并行处理
+	 * - 完善的错误处理和用户友好提示
+	 * - 验证文件有效性
 	 */
 	async addNovel(file: TFile): Promise<Novel> {
-		// 检查文件是否已存在
-		const existing = this.novels.find(n => n.path === file.path);
-		if (existing) {
-			throw new Error('Novel already exists in library');
-		}
-
-		const format = this.getFileFormat(file);
-		let pdfMetadata = {};
-		let coverFileName = null;
-
 		try {
-			if (format === 'pdf') {
-				const arrayBuffer = await this.app.vault.readBinary(file);
-				const pdfDoc = await pdfjs.getDocument(arrayBuffer).promise;
-				pdfMetadata = {
-					numPages: pdfDoc.numPages,
-					outlines: await pdfDoc.getOutline()
-				};
-
-				coverFileName = await this.pdfCoverManagerService.getPDFCover(file, format);
-			} else if (format === 'epub') {
-				coverFileName = await this.epubCoverManager.getEpubCover(file, format);
+			// 1. 检查文件是否已存在
+			const existing = this.novels.find(n => n.path === file.path);
+			if (existing) {
+				new Notice('该图书已存在于图书库中');
+				throw new Error('Novel already exists in library');
 			}
+
+			// 2. 验证文件格式
+			if (!this.isSupportedFormat(file)) {
+				new Notice(`不支持的文件格式: ${file.extension}`);
+				throw new Error(`Unsupported file format: ${file.extension}`);
+			}
+
+			// 3. 验证文件可读性（检查文件是否损坏）
+			const format = this.getFileFormat(file);
+			let isFileValid = false;
+
+			try {
+				if (format === 'txt') {
+					await this.app.vault.read(file);
+					isFileValid = true;
+				} else {
+					// PDF/EPUB 使用二进制读取
+					const arrayBuffer = await this.app.vault.readBinary(file);
+					if (arrayBuffer && arrayBuffer.byteLength > 0) {
+						isFileValid = true;
+					}
+				}
+			} catch (error) {
+				new Notice(`文件读取失败: ${file.basename} 可能已损坏`);
+				throw new Error(`Failed to read file: ${error instanceof Error ? error.message : 'Unknown error'}`);
+			}
+
+			if (!isFileValid) {
+				new Notice(`文件无效: ${file.basename}`);
+				throw new Error('Invalid file content');
+			}
+
+			// 4. 并行处理元数据和封面（使用 Promise.all 优化性能）
+			let pdfMetadata = {};
+			let coverFileName: string | null = null;
+
+			try {
+				const tasks: Promise<any>[] = [];
+
+				if (format === 'pdf') {
+					// PDF: 并行获取元数据和封面
+					const pdfTask = (async () => {
+						try {
+							const arrayBuffer = await this.app.vault.readBinary(file);
+							const pdfDoc = await pdfjs.getDocument(arrayBuffer).promise;
+							pdfMetadata = {
+								numPages: pdfDoc.numPages,
+								outlines: await pdfDoc.getOutline()
+							};
+						} catch (error) {
+							console.error('PDF metadata extraction failed:', error);
+							new Notice(`PDF元数据提取失败: ${error instanceof Error ? error.message : '未知错误'}`);
+							// PDF 元数据失败不阻止添加，使用默认值
+							pdfMetadata = { numPages: 0, outlines: null };
+						}
+					})();
+
+					const coverTask = (async () => {
+						try {
+							coverFileName = await this.pdfCoverManagerService.getPDFCover(file, format);
+						} catch (error) {
+							console.error('PDF cover extraction failed:', error);
+							// 封面提取失败不阻止添加
+						}
+					})();
+
+					tasks.push(pdfTask, coverTask);
+				} else if (format === 'epub') {
+					// EPUB: 获取封面
+					const epubCoverTask = (async () => {
+						try {
+							coverFileName = await this.epubCoverManager.getEpubCover(file, format);
+						} catch (error) {
+							console.error('EPUB cover extraction failed:', error);
+							// 封面提取失败不阻止添加
+						}
+					})();
+
+					tasks.push(epubCoverTask);
+				}
+
+				// 并行执行所有任务
+				if (tasks.length > 0) {
+					await Promise.all(tasks);
+				}
+			} catch (error) {
+				// 元数据/封面提取失败不应该阻止添加图书
+				console.error(`Metadata/cover extraction error for ${format}:`, error);
+			}
+
+			// 5. 创建新小说记录
+			const novel: Novel = {
+				id: uuidv4(),
+				title: file.basename,
+				author: 'Unknown',
+				path: file.path,
+				format: format,
+				addTime: Date.now(),
+				lastRead: undefined,
+				progress: 0,
+				isHidden: false,
+				tags: [],
+				shelfId: 'toread', // 默认放入"待读"书架
+				categoryId: undefined, // 默认无分类
+				customMetadata: {},
+				customSettings: {},
+				pdfMetadata: format === 'pdf' ? pdfMetadata : undefined,
+				coverFileName: coverFileName || undefined,
+			};
+
+			// 6. 准备笔记文件路径（但不创建笔记）
+			try {
+				novel.notePath = await this.noteService.getNotePath(novel);
+			} catch (error) {
+				console.error('Error preparing note path:', error);
+				new Notice(`笔记路径准备失败，但图书已添加`);
+				// 笔记路径失败不阻止添加
+			}
+
+			// 7. 添加到集合并保存
+			this.novels.push(novel);
+			await this.saveLibrary("addNovel");
+
+			// 8. 清除封面缓存，确保下次加载时重新获取
+			this.clearCoverCache();
+
+			// 9. 显示成功提示
+			new Notice(`✓ 已添加《${novel.title}》到图书库\n点击图书信息可添加笔记`);
+			return novel;
+
 		} catch (error) {
-			console.error(`Error reading ${format} metadata:`, error);
+			// 统一错误处理
+			const errorMessage = error instanceof Error ? error.message : '未知错误';
+			console.error('Failed to add novel:', error);
+
+			// 如果错误还没有通过 Notice 显示，则显示通用错误
+			if (!errorMessage.includes('already exists') &&
+				!errorMessage.includes('Unsupported') &&
+				!errorMessage.includes('Failed to read')) {
+				new Notice(`添加图书失败: ${errorMessage}`);
+			}
+
+			throw error;
 		}
-
-		// 创建新小说记录
-		const novel: Novel = {
-			id: uuidv4(),
-			title: file.basename,
-			author: 'Unknown',
-			path: file.path,
-			format: this.getFileFormat(file),
-			addTime: Date.now(),
-			lastRead: undefined,
-			progress: 0,
-			isHidden: false,
-			tags: [],
-			shelfId: 'toread', // 默认放入"待读"书架
-			categoryId: undefined, // 默认无分类
-			customMetadata: {},
-			customSettings: {},
-			pdfMetadata: format === 'pdf' ? pdfMetadata : undefined,
-			coverFileName: coverFileName || undefined,
-		};
-
-		// 准备笔记文件路径（但不创建笔记）
-		try {
-			// 获取笔记文件路径并保存
-			novel.notePath = await this.noteService.getNotePath(novel);
-		} catch (error) {
-			console.error('Error creating note file:', error);
-		}
-
-		// 添加到集合
-		this.novels.push(novel);
-		await this.saveLibrary("addNovel");
-
-		// 清除封面缓存，确保下次加载时重新获取
-		this.clearCoverCache();
-
-		new Notice(`已添加《${novel.title}》到图书库\n点击图书信息可添加笔记`);
-		return novel;
 	}
 
 	/**

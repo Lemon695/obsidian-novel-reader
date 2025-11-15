@@ -164,8 +164,9 @@ export default class NovelReaderPlugin extends Plugin {
 			this.registerEvents();
 
 		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
 			console.error('Failed to load novel reader plugin:', error);
-			new Notice('Failed to initialize Novel Reader plugin');
+			new Notice(`初始化Novel Reader插件失败: ${errorMsg}`);
 		}
 	}
 
@@ -220,7 +221,7 @@ export default class NovelReaderPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'open-novel-stats',
-			name: '打开阅读统计',
+			name: '打开当前图书统计',
 			checkCallback: (checking: boolean) => {
 				const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_LIBRARY)[0];
 				if (leaf) {
@@ -252,7 +253,7 @@ export default class NovelReaderPlugin extends Plugin {
 
 		this.addCommand({
 			id: 'open-global-reading-stats',
-			name: '打开阅读统计',
+			name: '打开全局阅读统计',
 			callback: () => this.activateGlobalStatsView()
 		});
 
@@ -336,30 +337,48 @@ export default class NovelReaderPlugin extends Plugin {
 		this.app.workspace.detachLeavesOfType(VIEW_TYPE_LIBRARY);
 	}
 
+	/**
+	 * 切换章节大纲视图（优化版）
+	 * - 添加状态提示
+	 * - 改进用户反馈
+	 * - 支持快捷键操作
+	 */
 	async toggleOutlineView() {
-		const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_OUTLINE);
-		if (existing.length) {
-			// 如果已经打开，就关闭
-			await Promise.all(existing.map(leaf => leaf.detach()));
-		} else {
-			// 如果没有打开，就在右侧边栏打开
-			const leaf = await this.app.workspace.getRightLeaf(false);
-			if (leaf) {
-				await leaf.setViewState({
-					type: VIEW_TYPE_OUTLINE,
-					active: true,
-				});
+		try {
+			const existing = this.app.workspace.getLeavesOfType(VIEW_TYPE_OUTLINE);
 
-				// 如果当前有打开的阅读器视图，重新触发其章节更新
-				const readerLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_TXT_READER);
-				for (const readerLeaf of readerLeaves) {
-					const readerView = readerLeaf.view as TxtNovelReaderView;
-					if (readerView && readerView.component && readerView.novel && readerView.content) {
-						// 强制重新渲染已打开的阅读器视图
-						await readerView.setNovelData(readerView.novel, readerView.content);
+			if (existing.length) {
+				// 如果已经打开，就关闭
+				await Promise.all(existing.map(leaf => leaf.detach()));
+				new Notice('已关闭章节大纲');
+			} else {
+				// 如果没有打开，就在右侧边栏打开
+				const leaf = await this.app.workspace.getRightLeaf(false);
+				if (leaf) {
+					await leaf.setViewState({
+						type: VIEW_TYPE_OUTLINE,
+						active: true,
+					});
+
+					// 如果当前有打开的阅读器视图，重新触发其章节更新
+					const readerLeaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_TXT_READER);
+					for (const readerLeaf of readerLeaves) {
+						const readerView = readerLeaf.view as TxtNovelReaderView;
+						if (readerView && readerView.component && readerView.novel && readerView.content) {
+							// 强制重新渲染已打开的阅读器视图
+							await readerView.setNovelData(readerView.novel, readerView.content);
+						}
 					}
+
+					new Notice('已打开章节大纲');
+				} else {
+					new Notice('无法打开章节大纲：右侧边栏不可用');
 				}
 			}
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
+			console.error('Error toggling outline view:', error);
+			new Notice(`切换章节大纲失败: ${errorMsg}`);
 		}
 	}
 
@@ -414,7 +433,9 @@ export default class NovelReaderPlugin extends Plugin {
 				await this.reloadFileContent(file, currentView);
 			}
 		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
 			console.error('Error handling file modification:', error);
+			new Notice(`文件修改处理失败: ${errorMsg}`);
 		}
 	}
 
@@ -449,7 +470,9 @@ export default class NovelReaderPlugin extends Plugin {
 				await view.setNovelData(view.novel);
 			}
 		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
 			console.error('Error reloading file content:', error);
+			new Notice(`文件内容重新加载失败: ${errorMsg}`);
 		}
 	}
 
@@ -470,7 +493,9 @@ export default class NovelReaderPlugin extends Plugin {
 				}
 			}
 		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
 			console.error('Error handling file deletion:', error);
+			new Notice(`文件删除处理失败: ${errorMsg}`);
 		}
 	}
 
