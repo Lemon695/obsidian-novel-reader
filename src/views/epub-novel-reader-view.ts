@@ -41,6 +41,7 @@ export class EpubNovelReaderView extends ItemView {
 
 		// 获取保存的进度
 		const progress = await this.plugin.libraryService.getProgress(novel.id);
+		console.log('[EpubView] setNovelData, saved progress:', progress);
 
 		await this.leaf.setViewState({
 			type: VIEW_TYPE_EPUB_READER,
@@ -51,7 +52,11 @@ export class EpubNovelReaderView extends ItemView {
 		});
 
 		if (this.contentEl) {
-			await this.initializeComponent(progress?.position?.chapterId);
+			// 传递章节ID和CFI
+			await this.initializeComponent(
+				progress?.position?.chapterId || null,
+				progress?.position?.cfi || null
+			);
 		}
 	}
 
@@ -76,7 +81,7 @@ export class EpubNovelReaderView extends ItemView {
 		return null;
 	}
 
-	private async initializeComponent(initialCfi: number | null = null) {
+	private async initializeComponent(initialChapterId: number | null = null, initialCfi: string | null = null) {
 		if (!this.dataReady || !this.novel) {
 			console.log("Data not ready yet");
 			return;
@@ -98,14 +103,17 @@ export class EpubNovelReaderView extends ItemView {
 		this.chapters = this.processNavItems(this.toc);
 
 		console.log("Initializing EPUB component with novel:", this.novel.title);
+		console.log("[EpubView] Initialization params - chapterId:", initialChapterId, "cfi:", initialCfi);
 		const container = this.contentEl;
 		container.empty();
 
-		// 获取上次阅读进度
+		// 获取上次阅读进度（如果没有传入参数，则从存储中获取）
 		const progress = await this.libraryService.getProgress(this.novel.id);
 		console.log("EpubView,Retrieved reading progress:", progress);
 
-		let selectChapterId = progress?.position?.chapterId || 1;
+		// 优先使用传入的章节ID，如果没有则使用进度中的章节ID
+		let selectChapterId = initialChapterId || progress?.position?.chapterId || 1;
+		let selectCfi = initialCfi || progress?.position?.cfi || null;
 		try {
 			// 优先使用传入的章节ID
 			this.currentSessionId = await this.plugin.dbService?.startReadingSession(
@@ -128,7 +136,7 @@ export class EpubNovelReaderView extends ItemView {
 				// 优先使用指定的章节ID，如果未指定则使用历史阅读进度
 				initialChapterId: selectChapterId,
 				savedProgress: progress,
-				initialCfi: initialCfi,
+				initialCfi: selectCfi,  // 使用selectCfi而不是initialCfi参数
 				plugin: this.plugin,
 				book: this.book,
 				toc: this.toc,

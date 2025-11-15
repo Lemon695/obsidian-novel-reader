@@ -206,7 +206,9 @@ export class TxtNovelReaderView extends ItemView {
 					event.detail.chapterTitle
 				);
 
-				this.app.workspace.trigger('novel-chapter-selected', event.detail.chapterId);
+				// ❌ 删除全局事件触发，避免影响其他打开的书籍
+				// 键盘切换章节时不需要通知其他视图，只有outline点击时才需要
+				// this.app.workspace.trigger('novel-chapter-selected', event.detail.chapterId);
 			}
 		});
 

@@ -671,6 +671,8 @@
 
 	function handleTextSelection(cfiRange: string, contents: any) {
 		try {
+			console.log(`[${instanceId}] 📝 Text selected, cfiRange:`, cfiRange);
+
 			// 安全检查：确保contents和window存在
 			if (!contents || !contents.window || typeof contents.window.getSelection !== 'function') {
 				console.warn('Invalid contents object in text selection');
@@ -706,6 +708,15 @@
 						y: absoluteY
 					};
 				}
+
+				// 重要：选择文字后恢复焦点到主元素，确保键盘事件继续工作
+				// 使用短延迟确保选择操作完成
+				setTimeout(() => {
+					if (readerElement) {
+						console.log(`[${instanceId}] 🔵 Refocusing reader element after text selection`);
+						readerElement.focus();
+					}
+				}, 100);
 			}
 		} catch (error) {
 			console.warn('Error handling text selection:', error);
@@ -948,32 +959,38 @@
 			return;
 		}
 
-		// 严格检查：确保当前元素真正具有焦点
-		if (!isActive) {
-			console.log(`[${instanceId}] ❌ REJECTED: not active`);
-			return;
-		}
-
 		// 焦点检查：区分两种情况
-		// 1. 如果事件来自rendition（iframe内部），跳过contains检查
-		// 2. 如果事件来自主div，需要检查焦点
-		if (!fromRendition && readerElement) {
-			const activeEl = document.activeElement;
-			const isIframe = activeEl?.tagName === 'IFRAME';
-			const iframeInReader = isIframe && readerElement.contains(activeEl);
-			const activeInReader = readerElement.contains(activeEl);
-
-			console.log(`[${instanceId}] Focus check:`, {
-				isIframe: isIframe,
-				iframeInReader: iframeInReader,
-				activeInReader: activeInReader
-			});
-
-			// 如果焦点不在reader内，且也不是reader内的iframe，则拒绝
-			if (!activeInReader && !iframeInReader) {
-				console.log(`[${instanceId}] ❌ REJECTED: focus not within reader`);
+		// 1. 如果事件来自rendition（iframe内部），跳过isActive检查，因为iframe内的键盘事件总是有效的
+		// 2. 如果事件来自主div，需要检查isActive
+		if (!fromRendition) {
+			// 只有来自主div的事件才需要检查isActive
+			if (!isActive) {
+				console.log(`[${instanceId}] ❌ REJECTED: not active`);
 				return;
 			}
+
+			// 额外检查：确保事件目标是当前阅读器元素或其子元素
+			if (readerElement) {
+				const activeEl = document.activeElement;
+				const isIframe = activeEl?.tagName === 'IFRAME';
+				const iframeInReader = isIframe && readerElement.contains(activeEl);
+				const activeInReader = readerElement.contains(activeEl);
+
+				console.log(`[${instanceId}] Focus check:`, {
+					isIframe: isIframe,
+					iframeInReader: iframeInReader,
+					activeInReader: activeInReader
+				});
+
+				// 如果焦点不在reader内，且也不是reader内的iframe，则拒绝
+				if (!activeInReader && !iframeInReader) {
+					console.log(`[${instanceId}] ❌ REJECTED: focus not within reader`);
+					return;
+				}
+			}
+		} else {
+			// 来自rendition的事件，跳过所有焦点检查
+			console.log(`[${instanceId}] ⚡ Event from rendition, skipping focus checks`);
 		}
 
 		console.log(`[${instanceId}] ✅ PROCESSING keyboard event: ${event.key}`);
@@ -1037,6 +1054,9 @@
 
 			// 使用辅助函数显示章节
 			await displayChapter(nextChapter);
+
+			// 保存阅读进度（左右键切换时也需要保存）
+			saveProgress();
 
 			// 触发章节更改事件
 			dispatch('chapterChanged', {
