@@ -1298,6 +1298,7 @@
 		currentChapterId={currentChapter?.id}
 		notes={notes}
 		readingStats={readingStats}
+		chapterHistory={chapterHistory}
 		on:jumpToChapter={async (event) => {
     		await jumpToChapter(event.detail.chapterId);
   		}}

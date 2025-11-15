@@ -210,11 +210,8 @@
 			}
 		};
 
-		// 发送自定义事件通知父组件保存进度
-		const event = new CustomEvent('saveProgress', {
-			detail: {progress}
-		});
-		window.dispatchEvent(event);
+		// 使用组件事件而不是全局window事件，避免多视图互相干扰
+		dispatch('saveProgress', {progress});
 	}
 
 	// 切换到上一页/下一页
@@ -437,7 +434,11 @@
 			currentChapter = chapter;
 			// 只在章节模式下保存章节进度，页码模式下由switchPage单独处理
 			if (viewMode === 'chapters') {
-				saveReadingProgress(novel, currentChapter, chapters);
+				const progress = saveReadingProgress(novel, currentChapter, chapters);
+				if (progress) {
+					// 使用组件事件而不是全局window事件，避免多视图互相干扰
+					dispatch('saveProgress', {progress});
+				}
 			}
 		}
 	}
@@ -654,11 +655,8 @@
 			}
 		};
 
-		// 发送自定义事件通知父组件保存进度
-		const event = new CustomEvent('saveProgress', {
-			detail: {progress}
-		});
-		window.dispatchEvent(event);
+		// 使用组件事件而不是全局window事件，避免多视图互相干扰
+		dispatch('saveProgress', {progress});
 	}
 
 	// 初始化阅读会话

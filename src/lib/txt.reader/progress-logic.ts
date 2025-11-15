@@ -1,4 +1,4 @@
-import type {Novel} from "../../types";
+import type {Novel, ReadingProgress} from "../../types";
 import type {ChapterProgress} from "../../types/txt/txt-reader";
 
 // export function startNewSession() { }
@@ -6,11 +6,11 @@ import type {ChapterProgress} from "../../types/txt/txt-reader";
 // export function updateActivity() { }
 // export function initializeReadingSession() { }
 
-// 保存阅读进度
-export function saveReadingProgress(novel: Novel, currentChapter: ChapterProgress, chapters: ChapterProgress[]) {
-	if (!currentChapter || !chapters.length) return;
+// 保存阅读进度 - 返回进度对象而不是发送全局事件
+export function saveReadingProgress(novel: Novel, currentChapter: ChapterProgress, chapters: ChapterProgress[]): ReadingProgress | null {
+	if (!currentChapter || !chapters.length) return null;
 
-	const progress = {
+	const progress: ReadingProgress = {
 		novelId: novel.id,
 		chapterIndex: currentChapter.id,
 		progress: (currentChapter.id / chapters.length) * 100,
@@ -19,14 +19,13 @@ export function saveReadingProgress(novel: Novel, currentChapter: ChapterProgres
 		position: {
 			chapterId: currentChapter.id,
 			chapterTitle: currentChapter.title,
+			cfi: "",
+			percentage: 0
 		}
 	};
 
 	console.log(`saveReadingProgress.保存阅读进度--->${currentChapter.id},${currentChapter.title},${JSON.stringify(progress)}`)
 
-	// 发送自定义事件通知父组件保存进度
-	const event = new CustomEvent('saveProgress', {
-		detail: {progress}
-	});
-	window.dispatchEvent(event);
+	// 返回进度对象，由组件通过dispatch发送事件，避免全局事件导致多视图互相干扰
+	return progress;
 }

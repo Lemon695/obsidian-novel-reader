@@ -635,6 +635,21 @@
 				currentChapterId={currentPage}
 				notes={notes}
 				readingStats={readingStats}
+				chapterHistory={chapterHistory}
+				on:jumpToChapter={(event) => {
+					const { chapterId, chapterTitle } = event.detail;
+					// PDF的历史记录都是页码形式（如"第 X 页"）
+					if (chapterTitle && chapterTitle.includes('页')) {
+						const pageMatch = chapterTitle.match(/第\s*(\d+)\s*页/);
+						if (pageMatch) {
+							const pageNum = parseInt(pageMatch[1], 10);
+							handleOutlineClick(pageNum);
+						}
+					} else if (typeof chapterId === 'number') {
+						// 如果chapterId是数字，直接作为页码使用
+						handleOutlineClick(chapterId);
+					}
+				}}
 			/>
 		</div>
 

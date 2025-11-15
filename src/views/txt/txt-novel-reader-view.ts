@@ -19,7 +19,6 @@ export class TxtNovelReaderView extends ItemView {
 	private dataReady = false;
 	private plugin: NovelReaderPlugin;
 	private chaptersUpdateHandler: (event: CustomEvent) => void;
-	private progressHandler: ((event: Event) => Promise<void>) | null = null;
 	private libraryService: LibraryService;
 	private currentSessionId: string | undefined;
 	private chapterHistoryService: ChapterHistoryService;
@@ -39,17 +38,6 @@ export class TxtNovelReaderView extends ItemView {
 				await outlineView.setNovelData(this.novel, event.detail.chapters);
 			}
 		};
-
-		// 监听阅读章节进度
-		this.progressHandler = async (event: Event) => {
-			const progressEvent = event as CustomProgressEvent;
-			console.log('TxtView,监听"saveProgress"---', JSON.stringify(progressEvent.detail?.progress))
-			if (this.novel && progressEvent.detail?.progress) {
-				await this.libraryService.updateProgress(this.novel.id, progressEvent.detail.progress);
-			}
-		};
-
-		window.addEventListener('saveProgress', this.progressHandler as EventListener);
 	}
 
 	getViewType(): string {
@@ -165,12 +153,6 @@ export class TxtNovelReaderView extends ItemView {
 		// 移除事件监听
 		window.removeEventListener('chaptersUpdated',
 			this.chaptersUpdateHandler as EventListener);
-
-		// 移除进度保存事件监听
-		if (this.progressHandler) {
-			window.removeEventListener('saveProgress', this.progressHandler as EventListener);
-			this.progressHandler = null;
-		}
 	}
 
 	async setCurrentChapter(chapterId: number) {
@@ -225,6 +207,18 @@ export class TxtNovelReaderView extends ItemView {
 				);
 
 				this.app.workspace.trigger('novel-chapter-selected', event.detail.chapterId);
+			}
+		});
+
+		// 监听进度保存事件（使用组件事件而不是全局window事件）
+		this.component.$on('saveProgress', async (event) => {
+			if (this.novel) {
+				console.log('TxtView,监听"saveProgress"---', JSON.stringify(event.detail?.progress));
+				try {
+					await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
+				} catch (error) {
+					console.error('Failed to save progress:', error);
+				}
 			}
 		});
 	}
