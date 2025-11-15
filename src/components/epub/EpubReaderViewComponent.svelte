@@ -69,6 +69,7 @@
 		totalSubPages?: number
 	}> = [];
 	let currentPageNum = 1;
+	let currentVirtualPage: typeof virtualPages[0] | null = null;
 
 	// 计算虚拟页码（EPUB基于章节，章节数少时细分）
 	function calculateVirtualPages() {
@@ -101,16 +102,28 @@
 				});
 			}
 		});
+
+		// 初始化第一页
+		if (virtualPages.length > 0) {
+			currentVirtualPage = virtualPages[0];
+			currentPageNum = 1;
+		}
 	}
 
 	// 根据当前章节计算当前页码
 	function updateCurrentPage() {
-		if (!currentChapter || virtualPages.length === 0) return;
-
-		// 找到当前章节的第一页
-		const page = virtualPages.find(p => p.chapterId === currentChapter.id);
-		if (page) {
-			currentPageNum = page.pageNum;
+		if (viewMode === 'chapters') {
+			// 章节模式：基于当前章节
+			if (!currentChapter || virtualPages.length === 0) return;
+			const page = virtualPages.find(p => p.chapterId === currentChapter.id);
+			if (page) {
+				currentPageNum = page.pageNum;
+			}
+		} else {
+			// 页码模式：基于当前虚拟页
+			if (currentVirtualPage) {
+				currentPageNum = currentVirtualPage.pageNum;
+			}
 		}
 	}
 
@@ -119,6 +132,9 @@
 		const page = virtualPages.find(p => p.pageNum === pageNum);
 		if (!page) return;
 
+		currentVirtualPage = page;
+		currentPageNum = pageNum;
+
 		const targetChapter = chapters.find(ch => ch.id === page.chapterId);
 		if (targetChapter) {
 			const success = await displayChapter(targetChapter);
@@ -126,6 +142,23 @@
 				currentChapter = targetChapter;
 				saveProgress();
 			}
+		}
+	}
+
+	// 切换到上一页/下一页
+	function switchEpubPage(direction: 'prev' | 'next') {
+		const currentIndex = virtualPages.findIndex(p => p.pageNum === currentPageNum);
+		if (currentIndex === -1) return;
+
+		let nextIndex: number;
+		if (direction === 'prev') {
+			nextIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
+		} else {
+			nextIndex = currentIndex < virtualPages.length - 1 ? currentIndex + 1 : currentIndex;
+		}
+
+		if (nextIndex !== currentIndex) {
+			jumpToPage(virtualPages[nextIndex].pageNum);
 		}
 	}
 
@@ -220,6 +253,26 @@
 	onMount(async () => {
 		console.log("Component mounting...");
 
+		// 添加全局错误处理器，捕获非标准EPUB DOM错误
+		const errorHandler = (event: ErrorEvent) => {
+			const error = event.error;
+			if (error && error.message) {
+				// 检查是否是非标准DOM相关的错误
+				if (
+					error.message.includes('getElementsByTagName is not a function') ||
+					error.message.includes('createElement is not a function') ||
+					error.message.includes('getElementById is not a function') ||
+					error.message.includes('getElementsByClassName is not a function')
+				) {
+					console.warn('Suppressed non-standard EPUB DOM error:', error.message);
+					event.preventDefault(); // 阻止错误传播到控制台
+					return true;
+				}
+			}
+		};
+
+		window.addEventListener('error', errorHandler);
+
 		// 创建并使用特定实例的内容区域
 		const contentArea = document.getElementById(`content-area-${viewInstanceId}`);
 		if (!contentArea) {
@@ -236,6 +289,11 @@
 		contentArea.appendChild(readerContainer);
 
 		await initializeReader();
+
+		// 清理：组件卸载时移除错误处理器
+		return () => {
+			window.removeEventListener('error', errorHandler);
+		};
 	});
 
 	onMount(() => {
@@ -381,20 +439,109 @@
 				keyBindings: false  // 禁用默认键盘绑定
 			});
 
+			// 修复非标准DOM：在epub.js使用之前为document添加缺失的方法
+			rendition.hooks.content.register((contents: any) => {
+				try {
+					if (contents && contents.document) {
+						const doc = contents.document;
+
+						// Polyfill getElementsByTagName if missing
+						if (typeof doc.getElementsByTagName !== 'function') {
+							doc.getElementsByTagName = function(tagName: string) {
+								console.warn('Using polyfilled getElementsByTagName for non-standard EPUB DOM');
+								try {
+									// 尝试使用querySelectorAll作为替代
+									if (typeof doc.querySelectorAll === 'function') {
+										return doc.querySelectorAll(tagName);
+									}
+									// 返回空的HTMLCollection-like对象
+									return [];
+								} catch (e) {
+									return [];
+								}
+							};
+						}
+
+						// Polyfill createElement if missing
+						if (typeof doc.createElement !== 'function') {
+							doc.createElement = function(tagName: string) {
+								console.warn('Using polyfilled createElement for non-standard EPUB DOM');
+								// 返回一个模拟的元素对象
+								return {
+									tagName: tagName.toUpperCase(),
+									setAttribute: function() {},
+									getAttribute: function() { return null; },
+									appendChild: function() {},
+									removeChild: function() {},
+									classList: {
+										add: function() {},
+										remove: function() {},
+										contains: function() { return false; }
+									}
+								};
+							};
+						}
+
+						// Polyfill getElementById if missing
+						if (typeof doc.getElementById !== 'function') {
+							doc.getElementById = function(id: string) {
+								console.warn('Using polyfilled getElementById for non-standard EPUB DOM');
+								try {
+									if (typeof doc.querySelector === 'function') {
+										return doc.querySelector(`#${id}`);
+									}
+									return null;
+								} catch (e) {
+									return null;
+								}
+							};
+						}
+					}
+				} catch (error) {
+					console.warn('Error polyfilling EPUB document methods:', error);
+				}
+			});
+
 			// 添加基本类名到 EPUB 文档
 			rendition.hooks.content.register((contents: any) => {
-				const body = contents.document.body;
-				body.classList.add('epub-doc');
-
-				// 为 iframe 内的文档添加点击事件监听
-				contents.document.addEventListener('click', (event: MouseEvent) => {
-					// 检查点击是否在选中文本区域外
-					const selection = contents.window.getSelection();
-					if (!selection || selection.toString().trim() === '') {
-						showMenu = false;
-						selectedText = '';
+				try {
+					// 安全检查：确保document和body存在且有效
+					if (!contents || !contents.document || !contents.document.body) {
+						console.warn('EPUB content structure is invalid, skipping hooks');
+						return;
 					}
-				});
+
+					// 检查是否有getElementsByTagName方法（标准DOM检查）
+					if (typeof contents.document.getElementsByTagName !== 'function') {
+						console.warn('EPUB document is not a standard DOM, skipping hooks');
+						return;
+					}
+
+					const body = contents.document.body;
+
+					// 安全地添加类名
+					if (body.classList && typeof body.classList.add === 'function') {
+						body.classList.add('epub-doc');
+					}
+
+					// 为 iframe 内的文档添加点击事件监听
+					if (typeof contents.document.addEventListener === 'function') {
+						contents.document.addEventListener('click', (event: MouseEvent) => {
+							try {
+								// 检查点击是否在选中文本区域外
+								const selection = contents.window?.getSelection?.();
+								if (!selection || selection.toString().trim() === '') {
+									showMenu = false;
+									selectedText = '';
+								}
+							} catch (err) {
+								console.warn('Error handling click event:', err);
+							}
+						});
+					}
+				} catch (error) {
+					console.warn('Error registering EPUB content hooks:', error);
+				}
 			});
 
 			// 加载初始位置或第一页
@@ -477,31 +624,45 @@
 	}
 
 	function handleTextSelection(cfiRange: string, contents: any) {
-		const selection = contents.window.getSelection();
-		selectedText = selection.toString().trim();
-
-		if (selectedText) {
-			currentCfi = cfiRange;
-
-			// 获取EPubJS的iframe元素
-			const iframe = document.querySelector(`#epub-container-${viewInstanceId} iframe`);
-			if (iframe) {
-				const range = selection.getRangeAt(0);
-				const rect = range.getBoundingClientRect();
-
-				// 获取iframe的位置
-				const iframeRect = iframe.getBoundingClientRect();
-
-				// 计算绝对位置：iframe的偏移量 + 选择区域在iframe中的相对位置
-				const absoluteX = iframeRect.left + rect.left + (rect.width / 2);
-				// 计算Y轴位置，确保菜单在选中文本下方
-				const absoluteY = iframeRect.top + rect.bottom + 5;
-
-				menuPosition = {
-					x: absoluteX,
-					y: absoluteY
-				};
+		try {
+			// 安全检查：确保contents和window存在
+			if (!contents || !contents.window || typeof contents.window.getSelection !== 'function') {
+				console.warn('Invalid contents object in text selection');
+				return;
 			}
+
+			const selection = contents.window.getSelection();
+			if (!selection) {
+				return;
+			}
+
+			selectedText = selection.toString().trim();
+
+			if (selectedText) {
+				currentCfi = cfiRange;
+
+				// 获取EPubJS的iframe元素
+				const iframe = document.querySelector(`#epub-container-${viewInstanceId} iframe`);
+				if (iframe && selection.rangeCount > 0) {
+					const range = selection.getRangeAt(0);
+					const rect = range.getBoundingClientRect();
+
+					// 获取iframe的位置
+					const iframeRect = iframe.getBoundingClientRect();
+
+					// 计算绝对位置：iframe的偏移量 + 选择区域在iframe中的相对位置
+					const absoluteX = iframeRect.left + rect.left + (rect.width / 2);
+					// 计算Y轴位置，确保菜单在选中文本下方
+					const absoluteY = iframeRect.top + rect.bottom + 5;
+
+					menuPosition = {
+						x: absoluteX,
+						y: absoluteY
+					};
+				}
+			}
+		} catch (error) {
+			console.warn('Error handling text selection:', error);
 		}
 	}
 
@@ -728,14 +889,22 @@
 		}
 
 		if (event.key === 'ArrowLeft') {
-			// 向前切换章节
-			handleSwitchChapter('prev');
-			// 阻止默认行为并停止传播
+			if (viewMode === 'pages') {
+				// 页码模式：切换到上一页
+				switchEpubPage('prev');
+			} else {
+				// 章节模式：切换到上一章
+				handleSwitchChapter('prev');
+			}
 			//event.preventDefault?.();
 		} else if (event.key === 'ArrowRight') {
-			// 向后切换章节
-			handleSwitchChapter('next');
-			// 阻止默认行为并停止传播
+			if (viewMode === 'pages') {
+				// 页码模式：切换到下一页
+				switchEpubPage('next');
+			} else {
+				// 章节模式：切换到下一章
+				handleSwitchChapter('next');
+			}
 			//event.preventDefault?.();
 		} else if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
 			// 处理页面滚动

@@ -67,7 +67,7 @@
 	let showNoteList = false;
 
 	// TXT 悬浮目录：目录/页码切换功能
-	const LINES_PER_PAGE = 30; // 每页显示30行
+	const LINES_PER_PAGE = 160; // 每页显示160行
 	let viewMode: 'chapters' | 'pages' = 'chapters';
 	let virtualPages: Array<{
 		pageNum: number,
@@ -77,6 +77,7 @@
 		endLine: number
 	}> = [];
 	let currentPageNum = 1;
+	let currentVirtualPage: typeof virtualPages[0] | null = null;
 
 	// 计算基于行数的虚拟页码
 	function calculateVirtualPages() {
@@ -100,50 +101,71 @@
 				});
 			}
 		});
+
+		// 初始化第一页
+		if (virtualPages.length > 0) {
+			currentVirtualPage = virtualPages[0];
+			currentPageNum = 1;
+		}
 	}
 
-	// 根据当前章节和滚动位置计算当前页码
+	// 根据当前章节计算当前页码
 	function updateCurrentPage() {
-		if (!currentChapter || virtualPages.length === 0) return;
-
-		// 简化：使用章节的第一页作为当前页
-		const page = virtualPages.find(p =>
-			p.chapterId === currentChapter.id && p.startLine === 0
-		);
-		if (page) {
-			currentPageNum = page.pageNum;
+		if (viewMode === 'chapters') {
+			// 章节模式：基于当前章节
+			if (!currentChapter || virtualPages.length === 0) return;
+			const page = virtualPages.find(p =>
+				p.chapterId === currentChapter.id && p.startLine === 0
+			);
+			if (page) {
+				currentPageNum = page.pageNum;
+			}
+		} else {
+			// 页码模式：基于当前虚拟页
+			if (currentVirtualPage) {
+				currentPageNum = currentVirtualPage.pageNum;
+			}
 		}
 	}
 
 	// 跳转到指定页码
-	async function jumpToPage(pageNum: number) {
+	function jumpToPage(pageNum: number) {
 		const page = virtualPages.find(p => p.pageNum === pageNum);
 		if (!page) return;
 
+		currentVirtualPage = page;
+		currentPageNum = pageNum;
+
+		// 同时更新当前章节引用
 		const targetChapter = chapters.find(ch => ch.id === page.chapterId);
-		if (!targetChapter) return;
-
-		// 切换章节（如果需要）
-		if (!currentChapter || currentChapter.id !== targetChapter.id) {
-			selectChapter(targetChapter);
+		if (targetChapter) {
+			currentChapter = targetChapter;
 		}
-
-		// 等待章节内容渲染
-		await new Promise(resolve => setTimeout(resolve, 100));
-
-		// 滚动到指定行
-		scrollToLine(page.startLine);
 	}
 
-	// 滚动到指定行号
-	function scrollToLine(lineNumber: number) {
-		const contentArea = document.querySelector('.content-area');
-		if (!contentArea) return;
+	// 切换到上一页/下一页
+	function switchPage(direction: 'prev' | 'next') {
+		const currentIndex = virtualPages.findIndex(p => p.pageNum === currentPageNum);
+		if (currentIndex === -1) return;
 
-		const targetParagraph = contentArea.querySelector(`[data-line-number="${lineNumber}"]`);
-		if (targetParagraph) {
-			targetParagraph.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		let nextIndex: number;
+		if (direction === 'prev') {
+			nextIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
+		} else {
+			nextIndex = currentIndex < virtualPages.length - 1 ? currentIndex + 1 : currentIndex;
 		}
+
+		if (nextIndex !== currentIndex) {
+			jumpToPage(virtualPages[nextIndex].pageNum);
+		}
+	}
+
+	// 获取当前虚拟页的内容
+	function getCurrentPageContent(): string[] {
+		if (!currentVirtualPage || !currentChapter) return [];
+
+		const lines = currentChapter.content.split('\n');
+		return lines.slice(currentVirtualPage.startLine, currentVirtualPage.endLine + 1);
 	}
 
 	// 从 novel.customSettings 读取用户偏好
@@ -387,10 +409,20 @@
 		if (!isActive) return;
 
 		if (event.key === 'ArrowLeft') {
-			handleSwitchChapter('prev');
+			// 根据模式选择切换方式
+			if (viewMode === 'pages') {
+				switchPage('prev');
+			} else {
+				handleSwitchChapter('prev');
+			}
 			event.preventDefault();
 		} else if (event.key === 'ArrowRight') {
-			handleSwitchChapter('next');
+			// 根据模式选择切换方式
+			if (viewMode === 'pages') {
+				switchPage('next');
+			} else {
+				handleSwitchChapter('next');
+			}
 			event.preventDefault();
 		} else if (event.key === 'ArrowUp') {
 			event.preventDefault();
@@ -873,21 +905,67 @@
 
 	<!-- 内容区域 -->
 	<div class="content-area">
-		{#if currentChapter}
-			<div class="chapter-content">
-				<h2>{currentChapter.title}</h2>
-				<div class="content-text">
-					{#each currentChapter.content.split('\n') as paragraph, index}
-						<p data-line-number={index}>
-							{@html addNoteMarkers(paragraph, currentChapter.id, index)}
-						</p>
-					{/each}
+		{#if viewMode === 'chapters'}
+			<!-- 章节模式：显示完整章节 -->
+			{#if currentChapter}
+				<div class="chapter-content">
+					<h2>{currentChapter.title}</h2>
+					<div class="content-text">
+						{#each currentChapter.content.split('\n') as paragraph, index}
+							<p data-line-number={index}>
+								{@html addNoteMarkers(paragraph, currentChapter.id, index)}
+							</p>
+						{/each}
+					</div>
 				</div>
-			</div>
+			{:else}
+				<div class="no-chapter">
+					请选择要阅读的章节
+				</div>
+			{/if}
 		{:else}
-			<div class="no-chapter">
-				请选择要阅读的章节
-			</div>
+			<!-- 页码模式：只显示当前虚拟页的内容 -->
+			{#if currentVirtualPage && currentChapter}
+				<div class="chapter-content">
+					<h2>
+						第 {currentVirtualPage.pageNum} 页
+						<span class="page-subtitle">
+							来自：{currentVirtualPage.chapterTitle}
+						</span>
+					</h2>
+					<div class="content-text">
+						{#each getCurrentPageContent() as paragraph, index}
+							<p data-line-number={currentVirtualPage.startLine + index}>
+								{@html addNoteMarkers(paragraph, currentChapter.id, currentVirtualPage.startLine + index)}
+							</p>
+						{/each}
+					</div>
+					<!-- 页码导航 -->
+					<div class="page-navigation-footer">
+						<button
+							class="nav-button"
+							disabled={currentPageNum === 1}
+							on:click={() => switchPage('prev')}
+						>
+							← 上一页
+						</button>
+						<span class="page-info">
+							第 {currentPageNum} 页 / 共 {virtualPages.length} 页
+						</span>
+						<button
+							class="nav-button"
+							disabled={currentPageNum === virtualPages.length}
+							on:click={() => switchPage('next')}
+						>
+							下一页 →
+						</button>
+					</div>
+				</div>
+			{:else}
+				<div class="no-chapter">
+					请选择要阅读的页面
+				</div>
+			{/if}
 		{/if}
 
 		<TextSelectionMenu
@@ -1221,6 +1299,50 @@
 		margin-bottom: 24px;
 		padding-bottom: 16px;
 		border-bottom: 1px solid var(--background-modifier-border);
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.page-subtitle {
+		font-size: 0.6em;
+		color: var(--text-muted);
+		font-weight: normal;
+	}
+
+	.page-navigation-footer {
+		margin-top: 32px;
+		padding-top: 24px;
+		border-top: 1px solid var(--background-modifier-border);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		gap: 16px;
+	}
+
+	.nav-button {
+		padding: 8px 16px;
+		border: none;
+		border-radius: 4px;
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		cursor: pointer;
+		font-size: 14px;
+		transition: all 0.2s;
+	}
+
+	.nav-button:hover:not(:disabled) {
+		background: var(--interactive-accent-hover);
+	}
+
+	.nav-button:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.page-info {
+		font-size: 14px;
+		color: var(--text-muted);
 	}
 
 	.content-text {

@@ -40,9 +40,35 @@ export class DatabaseService {
 
 			// 加载数据库
 			await new Promise<void>((resolve, reject) => {
-				this.db!.loadDatabase({}, (err) => {
+				this.db!.loadDatabase({}, async (err) => {
 					if (err) {
-						reject(err);
+						// 检查是否是JSON解析错误
+						if (err.message && err.message.includes('JSON')) {
+							console.warn('Database file corrupted, attempting recovery...');
+							try {
+								// 备份损坏的文件
+								const backupPath = `${dbPath}.corrupted.${Date.now()}`;
+								const exists = await this.app.vault.adapter.exists(dbPath);
+								if (exists) {
+									const content = await this.app.vault.adapter.read(dbPath);
+									await this.app.vault.adapter.write(backupPath, content);
+									console.log(`Corrupted database backed up to: ${backupPath}`);
+
+									// 删除损坏的文件
+									await this.app.vault.adapter.remove(dbPath);
+								}
+
+								// 初始化空数据库
+								this.initializeCollections();
+								new Notice('数据库文件损坏已修复，旧数据已备份');
+								resolve();
+							} catch (recoveryError) {
+								console.error('Failed to recover from corrupted database:', recoveryError);
+								reject(recoveryError);
+							}
+						} else {
+							reject(err);
+						}
 						return;
 					}
 					this.initializeCollections();

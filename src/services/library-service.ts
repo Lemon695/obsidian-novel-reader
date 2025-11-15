@@ -584,10 +584,20 @@ export class LibraryService {
 				//console.log('更新阅读进度.updateProgress---3---', novelId, JSON.stringify(this.novels))
 
 				// 更新小说的最后阅读时间和进度
-				const novel = this.novels.find(n => n.id === novelId);
+				let novel = this.novels.find(n => n.id === novelId);
 				if (!novel) {
-					console.error('Novel not found:', novelId);
-					return;
+					// 小说可能还在加载中，尝试重新加载
+					console.warn('Novel not found in cache, reloading library:', novelId);
+					await this.loadLibrary();
+					novel = this.novels.find(n => n.id === novelId);
+
+					if (!novel) {
+						// 如果重新加载后还是找不到，仅记录警告不中断流程
+						console.warn('Novel still not found after reload, progress saved but novel data not updated:', novelId);
+						// 仍然保存进度数据
+						await this.saveLibrary("updateProgress");
+						return;
+					}
 				}
 
 				novel.lastRead = Date.now();
