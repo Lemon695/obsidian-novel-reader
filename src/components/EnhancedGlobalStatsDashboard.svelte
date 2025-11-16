@@ -140,7 +140,7 @@
 
 		// 速度分布数据（分成6个区间）
 		const speeds = allNovelStats
-			.map(stats => stats.speedAnalysis?.averageSpeed || 0)
+			.map(stats => stats.behaviorStats?.averageReadingSpeed || 0)
 			.filter(speed => speed > 0);
 
 		const bins = [
@@ -347,12 +347,12 @@
 	}
 
 	function getAverageSpeed() {
-		const speeds = allNovelStats.map(s => s.speedAnalysis?.averageSpeed || 0).filter(s => s > 0);
+		const speeds = allNovelStats.map(s => s.behaviorStats?.averageReadingSpeed || 0).filter(s => s > 0);
 		return speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
 	}
 
 	function getMaxSpeed() {
-		const speeds = allNovelStats.map(s => s.speedAnalysis?.averageSpeed || 0).filter(s => s > 0);
+		const speeds = allNovelStats.map(s => s.behaviorStats?.averageReadingSpeed || 0).filter(s => s > 0);
 		return speeds.length > 0 ? Math.max(...speeds) : 0;
 	}
 
@@ -374,7 +374,7 @@
 				title: stats.novelId,
 				totalReadingTime: stats.basicStats.totalReadingTime,
 				sessionsCount: stats.basicStats.sessionsCount,
-				averageReadingSpeed: stats.speedAnalysis?.averageSpeed || 0
+				averageReadingSpeed: stats.behaviorStats?.averageReadingSpeed || 0
 			}))
 			.sort((a, b) => b.totalReadingTime - a.totalReadingTime)
 			.slice(0, 10);
@@ -385,9 +385,9 @@
 			.map(stats => ({
 				id: stats.novelId,
 				title: stats.novelId,
-				averageReadingSpeed: stats.speedAnalysis?.averageSpeed || 0,
+				averageReadingSpeed: stats.behaviorStats?.averageReadingSpeed || 0,
 				totalReadingTime: stats.basicStats.totalReadingTime,
-				progress: stats.progressStats.completionRate
+				progress: stats.progressTracking?.currentProgress || 0
 			}))
 			.filter(book => book.averageReadingSpeed > 0)
 			.sort((a, b) => b.averageReadingSpeed - a.averageReadingSpeed)
