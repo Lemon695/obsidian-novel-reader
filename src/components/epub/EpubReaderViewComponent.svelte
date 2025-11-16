@@ -62,6 +62,9 @@
 	// hover模式相关状态
 	let isMenuVisible = false;
 
+	// 目录面板显示状态
+	let showOutlinePanel = false;
+
 	// EPUB 悬浮目录：目录/页码切换功能
 	let viewMode: 'chapters' | 'pages' = 'chapters';
 	let virtualPages: Array<{
@@ -337,7 +340,9 @@
 				if (savedChapter) {
 					currentChapter = savedChapter;
 					currentChapterId = savedChapter.id;
-				}
+				// initializeReader已经会直接显示该章节，无需延迟调用
+				console.log(`[${instanceId}] 📖 章节状态已设置，等待initializeReader显示`);
+			}
 			} else if (savedProgress?.position?.chapterId) {
 				// 使用savedProgress中的章节ID
 				currentChapterId = savedProgress.position.chapterId;
@@ -345,6 +350,8 @@
 				console.log(`[${instanceId}] 📖 使用savedProgress中的章节ID: ${currentChapterId}`, savedChapter);
 				if (savedChapter) {
 					currentChapter = savedChapter;
+				// initializeReader已经会直接显示该章节，无需延迟调用
+				console.log(`[${instanceId}] 📖 章节状态已设置，等待initializeReader显示`);
 				}
 			} else if (chapters.length > 0) {
 				// 否则加载第一章
@@ -591,9 +598,34 @@
 				}
 			});
 
-			// 加载初始位置或第一页
+			// 加载初始位置 - 优先使用要恢复的章节，避免闪烁
+			let displayTarget = null;
+
+			// 优先级1: 使用initialCfi
 			if (initialCfi) {
-				await rendition.display(initialCfi);
+				displayTarget = initialCfi;
+				console.log(`[${instanceId}] 🎯 使用initialCfi初始化显示`);
+			}
+			// 优先级2: 检查是否有要恢复的章节ID
+			else if (initialChapterId !== null && chapters.length > 0) {
+				const targetChapter = chapters.find(ch => ch.id === initialChapterId);
+				if (targetChapter) {
+					displayTarget = targetChapter.href.split('#')[0].split('?')[0];
+					console.log(`[${instanceId}] 🎯 使用initialChapterId初始化显示:`, targetChapter.title);
+				}
+			}
+			// 优先级3: 检查savedProgress中的章节ID
+			else if (savedProgress?.position?.chapterId && chapters.length > 0) {
+				const targetChapter = chapters.find(ch => ch.id === savedProgress.position.chapterId);
+				if (targetChapter) {
+					displayTarget = targetChapter.href.split('#')[0].split('?')[0];
+					console.log(`[${instanceId}] 🎯 使用savedProgress初始化显示:`, targetChapter.title);
+				}
+			}
+
+			// 执行显示
+			if (displayTarget) {
+				await rendition.display(displayTarget);
 			} else {
 				await rendition.display();
 			}
@@ -852,12 +884,12 @@
 
 		const progress: ReadingProgress = {
 			novelId: novel.id,
-			chapterIndex: currentChapter.id,
+			chapterIndex: currentChapter.id - 1,  // 章节索引（从0开始，用于计算进度百分比）
 			progress: progressPercent,
 			timestamp: Date.now(),
 			totalChapters: chapters.length,
 			position: {
-				chapterId: currentChapter.id,
+				chapterId: currentChapter.id,  // 章节ID（从1开始，用于恢复阅读位置）
 				chapterTitle: currentChapter.title,
 				cfi: cfi,  // 确保不是undefined
 				percentage: percentage
@@ -1145,6 +1177,10 @@
 		sessionStartTime = null;
 	}
 
+	function toggleOutlinePanel() {
+		showOutlinePanel = !showOutlinePanel;
+	}
+
 	async function jumpToChapter(chapterId: number) {
 		const chapter = chapters.find(ch => ch.id === chapterId);
 		if (chapter) {
@@ -1236,6 +1272,50 @@
 	on:keydown={handleKeyDown}
 	tabindex="0"
 >
+
+	<!-- 满屏目录面板 -->
+	{#if showOutlinePanel}
+		<div class="fullscreen-outline-panel" transition:fade on:click={toggleOutlinePanel}>
+			<div class="outline-modal" on:click|stopPropagation>
+				<div class="outline-modal-header">
+					<h2>目录</h2>
+					<button class="close-button" on:click={toggleOutlinePanel}>✕</button>
+				</div>
+				<div class="outline-modal-content">
+					{#each chapters as chapter}
+						<button
+							class="chapter-item"
+							class:active={currentChapter?.id === chapter.id}
+							on:click={async () => {
+								await jumpToChapter(chapter.id);
+								showOutlinePanel = false;
+							}}
+						>
+							<span class="chapter-title">{chapter.title}</span>
+							<span class="chapter-number">第 {chapter.id} 章</span>
+						</button>
+						{#if chapter.subChapters && chapter.subChapters.length > 0}
+							<div class="sub-chapters">
+								{#each chapter.subChapters as subChapter}
+									<button
+										class="sub-chapter-item"
+										class:active={currentChapter?.id === subChapter.id}
+										on:click={async () => {
+											await jumpToChapter(subChapter.id);
+											showOutlinePanel = false;
+										}}
+									>
+										<span class="sub-chapter-title">{subChapter.title}</span>
+										<span class="chapter-number">第 {subChapter.id} 章</span>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- 悬浮章节模式 -->
 	{#if displayMode === 'hover'}
@@ -1404,11 +1484,7 @@
 			</button>
 			<button
 				class="nav-button toggle-outline"
-				on:click={() => {
-					// 切换outline显示
-					const event = new CustomEvent('toggle-outline');
-					window.dispatchEvent(event);
-				}}
+				on:click={toggleOutlinePanel}
 				title="目录"
 			>
 				目录
@@ -1811,7 +1887,7 @@
 		justify-content: center;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 20px;
+		padding: 12px 20px 6px 20px;
 		background: var(--background-primary);
 		border-top: 1px solid var(--background-modifier-border);
 		z-index: 100;
@@ -1853,5 +1929,150 @@
 		background: var(--interactive-accent-hover);
 	}
 
+	/* 满屏目录面板样式 */
+	.fullscreen-outline-panel {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+
+	.outline-modal {
+		background: var(--background-primary);
+		border-radius: 8px;
+		width: 90%;
+		max-width: 800px;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+	}
+
+	.outline-modal-header {
+		padding: 16px 20px;
+		border-bottom: 1px solid var(--background-modifier-border);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.outline-modal-header h2 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 600;
+		color: var(--text-normal);
+	}
+
+	.close-button {
+		background: none;
+		border: none;
+		font-size: 24px;
+		color: var(--text-muted);
+		cursor: pointer;
+		padding: 0;
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+	}
+
+	.close-button:hover {
+		background: var(--background-modifier-hover);
+		color: var(--text-normal);
+	}
+
+	.outline-modal-content {
+		overflow-y: auto;
+		padding: 12px;
+		flex: 1;
+	}
+
+	.outline-modal-content .chapter-item {
+		width: 100%;
+		padding: 12px 16px;
+		margin-bottom: 4px;
+		background: var(--background-secondary);
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		text-align: left;
+		transition: all 0.2s;
+	}
+
+	.outline-modal-content .chapter-item:hover {
+		background: var(--background-modifier-hover);
+		transform: translateX(4px);
+	}
+
+	.outline-modal-content .chapter-item.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+	}
+
+	.outline-modal-content .chapter-title {
+		flex: 1;
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.outline-modal-content .chapter-number {
+		font-size: 12px;
+		color: var(--text-muted);
+		margin-left: 12px;
+	}
+
+	.outline-modal-content .chapter-item.active .chapter-number {
+		color: var(--text-on-accent);
+	}
+
+	.outline-modal-content .sub-chapters {
+		margin-left: 20px;
+	}
+
+	.outline-modal-content .sub-chapter-item {
+		width: 100%;
+		padding: 8px 12px;
+		margin-bottom: 2px;
+		background: var(--background-primary);
+		border: none;
+		border-left: 2px solid var(--background-modifier-border);
+		cursor: pointer;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		text-align: left;
+		transition: all 0.2s;
+	}
+
+	.outline-modal-content .sub-chapter-item:hover {
+		background: var(--background-modifier-hover);
+		border-left-color: var(--interactive-accent);
+	}
+
+	.outline-modal-content .sub-chapter-item.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		border-left-color: var(--interactive-accent);
+	}
+
+	.outline-modal-content .sub-chapter-title {
+		flex: 1;
+		font-size: 13px;
+	}
+
+	.outline-modal-content .sub-chapter-item .chapter-number {
+		font-size: 11px;
+	}
 
 </style>

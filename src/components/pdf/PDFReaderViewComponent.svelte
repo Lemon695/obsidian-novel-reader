@@ -28,6 +28,7 @@
 	let numPages = 1; //总页数
 	let currentPage: number; //当前页
 	let readerContainer: HTMLElement | null = null;
+	let readerElement: HTMLElement; // PDF阅读器主元素引用
 	let showingCoverPage = true;
 	let pageInputValue = '1';
 	let showPageInput = false;
@@ -40,6 +41,9 @@
 
 	// hover模式相关状态
 	let isMenuVisible = false;
+
+	// 目录面板显示状态
+	let showOutlinePanel = false;
 
 	// PDF 悬浮目录：目录/页码切换功能
 	// 'chapters' = 显示目录，'pages' = 显示页码列表
@@ -307,6 +311,28 @@
 		}
 	}
 
+	function handlePageChange(pageNum: number) {
+		if (pageNum >= 1 && pageNum <= numPages && pageNum !== currentPage) {
+			currentPage = pageNum;
+			showingCoverPage = false;
+			renderPage('handlePageChange');
+
+			// 触发pageChanged事件以记录历史和进度
+			dispatch('pageChanged', { pageNum: pageNum });
+
+			// 设置焦点到阅读器主元素，使键盘事件生效
+			setTimeout(() => {
+				if (readerElement) {
+					readerElement.focus();
+				}
+			}, 50);
+		}
+	}
+
+	function toggleOutlinePanel() {
+		showOutlinePanel = !showOutlinePanel;
+	}
+
 	function handleOutlineClick(pageNumber: number) {
 		if (pageNumber !== currentPage) {
 			console.log('1. handleOutlineClick: changing page to', pageNumber);
@@ -316,6 +342,13 @@
 
 			// 触发pageChanged事件（view层会记录历史并更新chapterHistory）
 			dispatch('pageChanged', { pageNum: pageNumber });
+
+			// 设置焦点到阅读器主元素，使键盘事件生效
+			setTimeout(() => {
+				if (readerElement) {
+					readerElement.focus();
+				}
+			}, 50);
 		}
 	}
 
@@ -347,6 +380,13 @@
 		}
 
 		await initializePDF();
+
+		// 设置初始焦点，使键盘事件生效
+		setTimeout(() => {
+			if (readerElement) {
+				readerElement.focus();
+			}
+		}, 100);
 	});
 
 	onDestroy(() => {
@@ -469,10 +509,55 @@
 </script>
 
 <div class="pdf-reader"
+	 bind:this={readerElement}
 	 tabindex="0"
 	 on:mouseenter={handleFocus}
 	 on:mouseleave={handleBlur}
 	 on:keydown={handleKeyDown}>
+
+	<!-- 满屏目录面板 -->
+	{#if showOutlinePanel}
+		<div class="fullscreen-outline-panel" transition:fade on:click={toggleOutlinePanel}>
+			<div class="outline-modal" on:click|stopPropagation>
+				<div class="outline-modal-header">
+					<h2>目录</h2>
+					<button class="close-button" on:click={toggleOutlinePanel}>✕</button>
+				</div>
+				<div class="outline-modal-content">
+					{#each chapters as chapter}
+						<button
+							class="chapter-item"
+							class:active={currentPage >= chapter.startPage && currentPage <= (chapter.endPage || numPages)}
+							on:click={() => {
+								handleOutlineClick(chapter.startPage);
+								showOutlinePanel = false;
+							}}
+						>
+							<span class="chapter-title">{chapter.title}</span>
+							<span class="page-number">第 {chapter.startPage} 页</span>
+						</button>
+						{#if chapter.subChapters && chapter.subChapters.length > 0}
+							<div class="sub-chapters">
+								{#each chapter.subChapters as subChapter}
+									<button
+										class="sub-chapter-item"
+										class:active={currentPage >= subChapter.startPage && currentPage <= (subChapter.endPage || numPages)}
+										on:click={() => {
+											handleOutlineClick(subChapter.startPage);
+											showOutlinePanel = false;
+										}}
+									>
+										<span class="sub-chapter-title">{subChapter.title}</span>
+										<span class="page-number">第 {subChapter.startPage} 页</span>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					{/each}
+				</div>
+			</div>
+		</div>
+	{/if}
 
 	<!-- 悬浮章节模式 -->
 	{#if displayMode === 'hover'}
@@ -674,11 +759,7 @@
 			</button>
 			<button
 				class="nav-button toggle-outline"
-				on:click={() => {
-					// 切换显示模式
-					const event = new CustomEvent('toggle-outline');
-					window.dispatchEvent(event);
-				}}
+				on:click={toggleOutlinePanel}
 				title="目录"
 			>
 				目录
@@ -1013,7 +1094,7 @@
 		justify-content: center;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 20px;
+		padding: 12px 20px 6px 20px;
 		background: var(--background-primary);
 		border-top: 1px solid var(--background-modifier-border);
 		z-index: 100;
@@ -1053,5 +1134,151 @@
 
 	.nav-button.toggle-outline:hover {
 		background: var(--interactive-accent-hover);
+	}
+
+	/* 满屏目录面板样式 */
+	.fullscreen-outline-panel {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		bottom: 0;
+		background: rgba(0, 0, 0, 0.5);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		z-index: 1000;
+	}
+
+	.outline-modal {
+		background: var(--background-primary);
+		border-radius: 8px;
+		width: 90%;
+		max-width: 800px;
+		max-height: 80vh;
+		display: flex;
+		flex-direction: column;
+		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+	}
+
+	.outline-modal-header {
+		padding: 16px 20px;
+		border-bottom: 1px solid var(--background-modifier-border);
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+	}
+
+	.outline-modal-header h2 {
+		margin: 0;
+		font-size: 18px;
+		font-weight: 600;
+		color: var(--text-normal);
+	}
+
+	.close-button {
+		background: none;
+		border: none;
+		font-size: 24px;
+		color: var(--text-muted);
+		cursor: pointer;
+		padding: 0;
+		width: 32px;
+		height: 32px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		border-radius: 4px;
+	}
+
+	.close-button:hover {
+		background: var(--background-modifier-hover);
+		color: var(--text-normal);
+	}
+
+	.outline-modal-content {
+		overflow-y: auto;
+		padding: 12px;
+		flex: 1;
+	}
+
+	.outline-modal-content .chapter-item {
+		width: 100%;
+		padding: 12px 16px;
+		margin-bottom: 4px;
+		background: var(--background-secondary);
+		border: none;
+		border-radius: 6px;
+		cursor: pointer;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		text-align: left;
+		transition: all 0.2s;
+	}
+
+	.outline-modal-content .chapter-item:hover {
+		background: var(--background-modifier-hover);
+		transform: translateX(4px);
+	}
+
+	.outline-modal-content .chapter-item.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+	}
+
+	.outline-modal-content .chapter-title {
+		flex: 1;
+		font-size: 14px;
+		font-weight: 500;
+	}
+
+	.outline-modal-content .page-number {
+		font-size: 12px;
+		color: var(--text-muted);
+		margin-left: 12px;
+	}
+
+	.outline-modal-content .chapter-item.active .page-number {
+		color: var(--text-on-accent);
+	}
+
+	.outline-modal-content .sub-chapters {
+		margin-left: 20px;
+	}
+
+	.outline-modal-content .sub-chapter-item {
+		width: 100%;
+		padding: 8px 12px;
+		margin-bottom: 2px;
+		background: var(--background-primary);
+		border: none;
+		border-left: 2px solid var(--background-modifier-border);
+		cursor: pointer;
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		text-align: left;
+		transition: all 0.2s;
+	}
+
+	.outline-modal-content .sub-chapter-item:hover {
+		background: var(--background-modifier-hover);
+		border-left-color: var(--interactive-accent);
+	}
+
+	.outline-modal-content .sub-chapter-item.active {
+		background: var(--interactive-accent);
+		color: var(--text-on-accent);
+		border-left-color: var(--interactive-accent);
+	}
+
+	.outline-modal-content .sub-chapter-title {
+		flex: 1;
+		font-size: 13px;
+	}
+
+	.outline-modal-content .sub-chapter-item .page-number {
+		font-size: 11px;
 	}
 </style>
