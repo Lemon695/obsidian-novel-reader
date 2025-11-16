@@ -36,10 +36,30 @@
 		}
 		// 对话框打开时，自动聚焦到textarea
 		setTimeout(() => {
+			console.log('[NoteDialog] Attempting to focus textarea, element exists:', !!textareaElement);
 			if (textareaElement) {
 				textareaElement.focus();
+				console.log('[NoteDialog] After focus(), activeElement is:', document.activeElement?.tagName, document.activeElement?.className);
+				console.log('[NoteDialog] Focus successful:', document.activeElement === textareaElement);
 			}
 		}, 100);
+	}
+
+	// 诊断：监听 textarea 的各种事件
+	function handleKeyDownDebug(event: KeyboardEvent) {
+		console.log('[NoteDialog textarea] keydown event:', {
+			key: event.key,
+			target: (event.target as HTMLElement)?.tagName,
+			currentTarget: (event.currentTarget as HTMLElement)?.tagName,
+			defaultPrevented: event.defaultPrevented,
+			bubbles: event.bubbles,
+			cancelable: event.cancelable
+		});
+		event.stopPropagation();
+	}
+
+	function handleInputEvent(event: Event) {
+		console.log('[NoteDialog textarea] input event, value:', (event.target as HTMLTextAreaElement).value);
 	}
 
 	// 处理文本输入
@@ -82,7 +102,8 @@
 					placeholder="输入笔记内容..."
 					rows="4"
 					class="note-textarea"
-					on:keydown|stopPropagation
+					on:keydown={handleKeyDownDebug}
+				on:input={handleInputEvent}
 				></textarea>
 			</div>
 
