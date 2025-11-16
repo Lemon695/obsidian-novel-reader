@@ -1,13 +1,14 @@
 import {ItemView, Notice, WorkspaceLeaf} from 'obsidian';
 import type {Novel} from '../types';
 import NovelStatsComponent from '../components/NovelStatsComponent.svelte';
+import EnhancedNovelStatsComponent from '../components/EnhancedNovelStatsComponent.svelte';
 import {ReadingStatsService} from '../services/reading-stats-service';
 import {VIEW_TYPE_STATS} from '../types/constants';
 import type NovelReaderPlugin from "../main";
 import type {ComponentType} from "svelte";
 
 export class NovelStatsView extends ItemView {
-	private component: NovelStatsComponent | null = null;
+	private component: any | null = null;
 	private statsService: ReadingStatsService;
 
 	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
@@ -25,53 +26,49 @@ export class NovelStatsView extends ItemView {
 
 	async setNovel(novel: Novel) {
 		try {
-			// 获取统计数据
+			const container = this.contentEl;
+			container.empty();
+
+			// 清理旧组件
+			if (this.component) {
+				this.component.$destroy();
+				this.component = null;
+			}
+
+			// 优先使用增强统计系统
+			if (this.plugin.settings.useEnhancedStats && this.plugin.statsAdapter) {
+				const enhancedStats = await this.plugin.statsAdapter.getEnhancedNovelStats(novel.id);
+
+				if (enhancedStats) {
+					// 使用增强统计组件
+					this.component = new (EnhancedNovelStatsComponent as unknown as ComponentType)({
+						target: container,
+						props: {
+							novel,
+							plugin: this.plugin
+						}
+					});
+
+					await this.app.workspace.revealLeaf(this.leaf);
+					return;
+				}
+			}
+
+			// 回退到旧统计系统
 			const stats = await this.statsService.getNovelStats(novel.id);
 
 			if (!stats) {
 				new Notice('暂无阅读数据');
-
-				//更新组件显示默认数据
-				if (this.component) {
-					this.component.$set({
-						novel,
-						stats: undefined
-					});
-				} else {
-					const container = this.contentEl;
-					container.empty();
-
-					this.component = new (NovelStatsComponent as unknown as ComponentType)({
-						target: container,
-						props: {
-							novel,
-							stats: undefined
-						}
-					});
-				}
-				return;
 			}
 
-			// 如果有统计数据，正常显示
-			if (this.component) {
-				this.component.$set({
+			this.component = new (NovelStatsComponent as unknown as ComponentType)({
+				target: container,
+				props: {
 					novel,
-					stats
-				});
-			} else {
-				const container = this.contentEl;
-				container.empty();
+					stats: stats || undefined
+				}
+			});
 
-				this.component = new (NovelStatsComponent as unknown as ComponentType)({
-					target: container,
-					props: {
-						novel,
-						stats
-					}
-				});
-			}
-
-			// 激活视图
 			await this.app.workspace.revealLeaf(this.leaf);
 		} catch (error) {
 			console.error('Error loading stats:', error);
