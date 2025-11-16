@@ -34,6 +34,12 @@
 			noteContent = '';
 			// 保持传入的selectedText不变
 		}
+		// 对话框打开时，自动聚焦到textarea
+		setTimeout(() => {
+			if (textareaElement) {
+				textareaElement.focus();
+			}
+		}, 100);
 	}
 
 	// 处理文本输入
@@ -55,8 +61,8 @@
 </script>
 
 {#if isOpen}
-	<div class="modal-backdrop" on:click|self={() => dispatch('close')}>
-		<div class="note-dialog" on:click|stopPropagation>
+	<div class="modal-backdrop" on:click|self={() => dispatch('close')} on:keydown|stopPropagation>
+		<div class="note-dialog" on:click|stopPropagation on:keydown|stopPropagation>
 			<div class="note-header">
 				<h3>{existingNote ? '编辑笔记' : '添加笔记'}</h3>
 				<button class="close-button" on:click={() => dispatch('close')}>×</button>
@@ -72,6 +78,7 @@
 
 				<textarea
 					bind:value={noteContent}
+				bind:this={textareaElement}
 					placeholder="输入笔记内容..."
 					rows="4"
 					class="note-textarea"
