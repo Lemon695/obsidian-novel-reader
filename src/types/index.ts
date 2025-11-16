@@ -22,8 +22,8 @@ export interface Novel {
 		// 存储单个自定义正则表达式
 		chapterPattern?: string | undefined;
 		// 存储各个阅读器的视图模式
-		txtViewMode?: 'scroll' | 'chapters';
-		epubViewMode?: 'scroll' | 'chapters';
+		txtViewMode?: 'chapters' | 'pages';
+		epubViewMode?: 'chapters' | 'pages';
 		pdfViewMode?: 'chapters' | 'pages';
 	};
 	pdfMetadata?: {
@@ -101,21 +101,6 @@ export interface Bookmark {
 	note?: string;
 	color?: string;
 	timestamp: number;
-}
-
-// 笔记接口
-export interface Note {
-	id: string;
-	novelId: string;
-	chapterIndex: number;
-	selection: {
-		start: number;
-		end: number;
-		text: string;
-	};
-	content: string;
-	timestamp: number;
-	tags?: string[];
 }
 
 declare module 'obsidian' {

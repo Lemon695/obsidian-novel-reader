@@ -131,8 +131,11 @@
 	function updateCurrentPage() {
 		if (viewMode === 'chapters') {
 			// 章节模式：基于当前章节
-			if (!currentChapter || !currentChapter.id || virtualPages.length === 0) return;
-			const page = virtualPages.find(p => p.chapterId === currentChapter.id);
+			if (!currentChapter || virtualPages.length === 0) return;
+
+			// 提取局部变量解决TypeScript控制流分析问题
+			const chapter = currentChapter;
+			const page = virtualPages.find(p => p.chapterId === chapter.id);
 			if (page) {
 				currentPageNum = page.pageNum;
 			}
@@ -225,7 +228,7 @@
 
 	let menuPosition = {x: 0, y: 0};
 
-	$: if (currentChapter && currentChapter.id !== undefined) {
+	$: if (currentChapter) {
 		console.log('EpubReaderViewComponent--->', JSON.stringify(currentChapter))
 
 		// 注释掉响应式历史保存，避免重复记录（已由view层的chapterChanged事件统一处理）
@@ -632,7 +635,9 @@
 			}
 			// 优先级3: 检查savedProgress中的章节ID
 			else if (savedProgress?.position?.chapterId && chapters.length > 0) {
-				const targetChapter = chapters.find(ch => ch.id === savedProgress.position?.chapterId);
+				// 显式提取以避免TypeScript控制流分析问题
+			const position = savedProgress.position;
+			const targetChapter = position ? chapters.find(ch => ch.id === position.chapterId) : null;
 				if (targetChapter && targetChapter.href) {
 					displayTarget = targetChapter.href.split('#')[0].split('?')[0];
 					console.log(`[${instanceId}] 🎯 使用savedProgress初始化显示:`, targetChapter.title);
@@ -1217,7 +1222,9 @@
 			const relocatedHandler = () => {
 				console.log(`[${instanceId}] ✅ relocated event fired, location updated`);
 				clearTimeout(timeout);
-				rendition?.off('relocated', relocatedHandler);
+				if (rendition && rendition.off) {
+				rendition.off('relocated', relocatedHandler);
+			}
 				resolve();
 			};
 

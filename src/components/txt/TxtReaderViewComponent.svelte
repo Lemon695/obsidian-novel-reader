@@ -153,8 +153,11 @@
 		if (viewMode === 'chapters') {
 			// 章节模式：基于当前章节
 			if (!currentChapter || virtualPages.length === 0) return;
+
+			// 提取局部变量解决TypeScript控制流分析问题
+			const chapter = currentChapter;
 			const page = virtualPages.find(p =>
-				p.chapterId === currentChapter.id && p.startLine === 0
+				p.chapterId === chapter.id && p.startLine === 0
 			);
 			if (page) {
 				currentPageNum = page.pageNum;

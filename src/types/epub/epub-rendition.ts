@@ -33,7 +33,7 @@ interface EpubLocation {
 }
 
 export interface EpubRendition {
-	display: (target?: string) => Promise<void>;
+	display: (target?: string | number) => Promise<void>;
 	on: (event: string, callback: Function) => void;
 	themes: EpubThemes;
 	flow: (flow: string) => void;
