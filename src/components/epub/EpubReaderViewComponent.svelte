@@ -247,14 +247,14 @@
 			*/
 
 			chapterProcessCurrentChapter = {
-				id: chapter.id,
-				title: chapter.title,
+				id: chapter.id!,  // 非空断言：chapter在if块内不为null，id必然存在
+				title: chapter.title!,
 				content: '',
 				startPos: 0,
 				endPos: 0,
 			};
 
-			currentChapterId = chapter.id;
+			currentChapterId = chapter.id!;  // 非空断言：告诉IDE此时id必然存在
 
 			chapters.forEach(c => {
 				const chapterProgress: ChapterProgress = {
