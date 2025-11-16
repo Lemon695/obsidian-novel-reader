@@ -61,8 +61,8 @@
 </script>
 
 {#if isOpen}
-	<div class="modal-backdrop" on:click|self={() => dispatch('close')} on:keydown|stopPropagation>
-		<div class="note-dialog" on:click|stopPropagation on:keydown|stopPropagation>
+	<div class="modal-backdrop" on:click|self={() => dispatch('close')}>
+		<div class="note-dialog" on:click|stopPropagation>
 			<div class="note-header">
 				<h3>{existingNote ? '编辑笔记' : '添加笔记'}</h3>
 				<button class="close-button" on:click={() => dispatch('close')}>×</button>
