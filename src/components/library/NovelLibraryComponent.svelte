@@ -33,7 +33,7 @@
 	let sortOrder: 'asc' | 'desc' = 'desc';
 	let searchQuery = '';
 	let debouncedSearchQuery = ''; // 防抖后的搜索查询
-	let searchDebounceTimer: NodeJS.Timeout | null = null;
+	let searchDebounceTimer: number;
 	let currentView = 'library'; // 当前视图：library, favorites, notes, shelf:id
 	let isComposing = false;
 	let actualSearchQuery = '';

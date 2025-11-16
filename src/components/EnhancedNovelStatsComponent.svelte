@@ -12,8 +12,8 @@
 	let loading = true;
 	let chartCanvas: HTMLCanvasElement;
 	let speedChartCanvas: HTMLCanvasElement;
-	let chart: Chart;
-	let speedChart: Chart;
+	let chart: Chart<string, number[], string> | Chart;
+	let speedChart: Chart<string, number[], string> | Chart;
 
 	onMount(async () => {
 		await loadStats();

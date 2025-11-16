@@ -11,7 +11,7 @@
 	let averageSessionMinutes = 0;
 	let lastReadDate = '';
 	let chartCanvas: HTMLCanvasElement;
-	let chart: Chart;
+	let chart: Chart<string, number[], string> | Chart;
 
 	onMount(() => {
 		if (stats) {
@@ -42,7 +42,7 @@
 		if (!ctx) return;
 
 		const dailyStats = stats?.dailyStats ?
-			Object.entries(stats?.dailyStats).map(([date, stat]: [string, any]) => ({
+			Object.entries(stats.dailyStats).map(([date, stat]: [string, any]) => ({
 				date,
 				duration: Math.round((stat.totalDuration || 0) / (1000 * 60)) // 转换为分钟
 			})) : [];
