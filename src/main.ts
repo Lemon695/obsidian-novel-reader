@@ -31,6 +31,8 @@ import {CoverManagerService} from "./services/cover-manager-service";
 import {NovelNoteService} from "./services/note/novel-note-service";
 import {EpubCoverManager} from "./services/epub/epub-cover-manager-serivce";
 import {PDFCoverManagerService} from "./services/pdf/pdf-cover-manager-service";
+import {StatsStorageAdapter} from "./services/stats-adapter";
+import {StatsMigrationService} from "./services/stats-migration";
 
 export default class NovelReaderPlugin extends Plugin {
 	settings!: NovelSettings;
@@ -50,6 +52,8 @@ export default class NovelReaderPlugin extends Plugin {
 	public noteService!: NovelNoteService;
 	public epubCoverManager!: EpubCoverManager;
 	public pdfCoverManagerService!: PDFCoverManagerService;
+	public statsAdapter!: StatsStorageAdapter;
+	public migrationService!: StatsMigrationService;
 
 	async onload() {
 		try {
@@ -81,7 +85,62 @@ export default class NovelReaderPlugin extends Plugin {
 
 			console.log('Database service and migration initialized');
 
-			// 4. 注册插件功能
+			// 4. 初始化增强统计系统
+			this.statsAdapter = new StatsStorageAdapter(this.app, this);
+			this.migrationService = new StatsMigrationService(this.app, this);
+
+			// 根据设置启用新统计系统
+			if (this.settings.useEnhancedStats) {
+				await this.statsAdapter.initialize();
+
+				// 启用新存储
+				this.statsAdapter.enableNewStorage(true);
+
+				// 根据设置启用双写模式
+				if (this.settings.dualWriteStats) {
+					this.statsAdapter.enableDualWrite(true);
+					console.log('📊 增强统计系统已启用（双写模式）');
+				} else {
+					console.log('📊 增强统计系统已启用（仅新系统）');
+				}
+
+				// 检查是否需要数据迁移
+				const needsMigration = await this.migrationService.needsMigration();
+				if (needsMigration && this.settings.autoMigrateStats) {
+					console.log('🔄 检测到需要数据迁移，开始自动迁移...');
+					try {
+						const result = await this.migrationService.migrate({
+							createBackup: this.settings.backupBeforeMigration,
+							validateSource: true,
+							validateTarget: true,
+							continueOnError: true,
+							onProgress: (progress) => {
+								console.log(`迁移进度: ${progress.percentage.toFixed(0)}% - ${progress.message}`);
+							}
+						});
+
+						if (result.success) {
+							new Notice(`✅ 数据迁移成功！共迁移 ${result.successCount} 本书`);
+							console.log('✅ 数据迁移完成:', result);
+						} else {
+							new Notice(`⚠️ 数据迁移完成，但有 ${result.failedCount} 本书迁移失败`);
+							console.warn('⚠️ 数据迁移部分失败:', result);
+						}
+					} catch (error) {
+						console.error('❌ 数据迁移失败:', error);
+						new Notice('数据迁移失败，将继续使用旧统计系统');
+						// 迁移失败时禁用新系统，继续使用旧系统
+						this.statsAdapter.enableNewStorage(false);
+					}
+				} else if (needsMigration) {
+					console.log('ℹ️ 检测到旧数据，但自动迁移已禁用');
+					new Notice('检测到旧统计数据，请在设置中手动启动迁移');
+				}
+			} else {
+				console.log('📊 使用旧统计系统（Loki）');
+			}
+
+			// 5. 注册插件功能
 			this.addSettingTab(new NovelReaderSettingTab(this.app, this));
 
 			// 注册图书馆视图
@@ -261,6 +320,15 @@ export default class NovelReaderPlugin extends Plugin {
 			id: 'open-global-notes',
 			name: '打开笔记管理',
 			callback: () => this.activateGlobalNotesView()
+		});
+
+		// 统计数据迁移命令
+		this.addCommand({
+			id: 'migrate-stats-data',
+			name: '迁移统计数据到增强系统',
+			callback: async () => {
+				await this.migrateStatsData();
+			}
 		});
 	}
 
@@ -496,6 +564,113 @@ export default class NovelReaderPlugin extends Plugin {
 			const errorMsg = error instanceof Error ? error.message : '未知错误';
 			console.error('Error handling file deletion:', error);
 			new Notice(`文件删除处理失败: ${errorMsg}`);
+		}
+	}
+
+	/**
+	 * 手动迁移统计数据
+	 */
+	private async migrateStatsData() {
+		try {
+			// 检查是否已启用增强统计系统
+			if (!this.settings.useEnhancedStats) {
+				new Notice('请先在设置中启用增强统计系统');
+				return;
+			}
+
+			// 检查是否需要迁移
+			const needsMigration = await this.migrationService.needsMigration();
+			if (!needsMigration) {
+				new Notice('未检测到需要迁移的旧数据');
+				return;
+			}
+
+			// 估算迁移时间
+			const estimate = await this.migrationService.estimateMigrationTime();
+			const estimatedMinutes = Math.ceil(estimate.estimatedTime / 60000);
+			const dataSizeMB = (estimate.dataSize / 1024 / 1024).toFixed(2);
+
+			// 显示确认对话框
+			const confirmed = confirm(
+				`即将迁移 ${estimate.novelCount} 本书的统计数据\n` +
+				`数据大小: ${dataSizeMB} MB\n` +
+				`预计耗时: ${estimatedMinutes} 分钟\n\n` +
+				`迁移前会自动备份原数据。\n` +
+				`是否继续？`
+			);
+
+			if (!confirmed) {
+				new Notice('已取消迁移');
+				return;
+			}
+
+			// 显示进度通知
+			new Notice('开始迁移数据，请勿关闭Obsidian...');
+
+			// 执行迁移
+			const result = await this.migrationService.migrate({
+				createBackup: true,
+				validateSource: true,
+				validateTarget: true,
+				continueOnError: true,
+				deleteOldData: false, // 手动迁移不自动删除旧数据
+				onProgress: (progress) => {
+					console.log(`迁移进度: ${progress.percentage.toFixed(0)}% - ${progress.message}`);
+					if (progress.novelTitle) {
+						console.log(`  当前处理: ${progress.novelTitle}`);
+					}
+				}
+			});
+
+			// 显示结果
+			if (result.success) {
+				const message = `✅ 数据迁移成功！\n` +
+					`成功: ${result.successCount} 本\n` +
+					`耗时: ${(result.duration / 1000).toFixed(1)} 秒\n` +
+					`备份路径: ${result.backupPath}`;
+
+				new Notice(message, 10000);
+				console.log('✅ 迁移完成:', result);
+
+				// 询问是否删除旧数据
+				const deleteOld = confirm(
+					'迁移成功！是否删除旧数据文件？\n\n' +
+					'（建议先验证新数据无误后再删除）'
+				);
+
+				if (deleteOld) {
+					try {
+						const oldDbPath = '.obsidian/plugins/novel-reader/reading-stats.json';
+						await this.app.vault.adapter.remove(oldDbPath);
+						new Notice('✅ 旧数据已删除');
+					} catch (error) {
+						console.error('删除旧数据失败:', error);
+						new Notice('删除旧数据失败，请手动删除');
+					}
+				}
+			} else {
+				const message = `⚠️ 数据迁移部分失败\n` +
+					`成功: ${result.successCount} 本\n` +
+					`失败: ${result.failedCount} 本\n` +
+					`跳过: ${result.skippedCount} 本\n\n` +
+					`详情请查看控制台日志`;
+
+				new Notice(message, 15000);
+				console.warn('⚠️ 迁移部分失败:', result);
+
+				// 显示失败的书籍
+				if (result.failedNovels.length > 0) {
+					console.error('失败的书籍:');
+					result.failedNovels.forEach(novel => {
+						console.error(`  - ${novel.title}: ${novel.error}`);
+					});
+				}
+			}
+
+		} catch (error) {
+			const errorMsg = error instanceof Error ? error.message : '未知错误';
+			console.error('❌ 迁移失败:', error);
+			new Notice(`迁移失败: ${errorMsg}`, 10000);
 		}
 	}
 
