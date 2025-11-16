@@ -551,7 +551,7 @@ export class StatsMigrationService {
     private calculateDerivedData(stats: EnhancedNovelStats): void {
         // 计算已完成章节
         stats.progressTracking.completedChapters = Object.entries(stats.chapterStats)
-            .filter(([_, chapter]) => chapter.completionRate >= 1)
+            .filter(([_, chapter]: [string, any]) => chapter.completionRate >= 1)
             .map(([id, _]) => Number(id));
 
         // 计算进度百分比
@@ -564,8 +564,9 @@ export class StatsMigrationService {
         // 计算最长单日阅读时长
         let maxDailyTime = 0;
         for (const daily of Object.values(stats.timeAnalysis.dailyStats)) {
-            if (daily.totalDuration > maxDailyTime) {
-                maxDailyTime = daily.totalDuration;
+            const dailyStats = daily as any;
+            if (dailyStats.totalDuration > maxDailyTime) {
+                maxDailyTime = dailyStats.totalDuration;
             }
         }
         stats.achievements.timeRecords.singleDay = maxDailyTime;
@@ -574,8 +575,9 @@ export class StatsMigrationService {
         let lastChapter = 0;
         let lastTime = 0;
         for (const [chapterId, chapter] of Object.entries(stats.chapterStats)) {
-            if (chapter.lastRead > lastTime) {
-                lastTime = chapter.lastRead;
+            const chapterStats = chapter as any;
+            if (chapterStats.lastRead > lastTime) {
+                lastTime = chapterStats.lastRead;
                 lastChapter = Number(chapterId);
             }
         }
