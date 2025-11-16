@@ -23,8 +23,13 @@
 		}
 	});
 
-	// 监听打开状态变化
-	$: if (isOpen) {
+	// 用于防止响应式语句重复执行
+	let isInitialized = false;
+
+	// 监听打开状态变化 - 只在对话框打开/关闭时执行
+	$: if (isOpen && !isInitialized) {
+		console.log('[NoteDialog] Dialog opened, initializing content');
+		isInitialized = true;
 		if (existingNote) {
 			// 提取局部常量解决IDE类型推断问题
 			const note = existingNote;
@@ -43,6 +48,10 @@
 				console.log('[NoteDialog] Focus successful:', document.activeElement === textareaElement);
 			}
 		}, 100);
+	} else if (!isOpen && isInitialized) {
+		// 对话框关闭时重置标志
+		console.log('[NoteDialog] Dialog closed, resetting');
+		isInitialized = false;
 	}
 
 	// 诊断：监听 textarea 的各种事件
