@@ -65,6 +65,11 @@
 	// 目录面板显示状态
 	let showOutlinePanel = false;
 
+	// 章节元素容器引用（用于自动滚动到当前章节）
+	let hoverChaptersContainer: HTMLElement;
+	let fullscreenChaptersContainer: HTMLElement;
+	let chapterElements: Map<number, HTMLElement> = new Map();
+
 	// EPUB 悬浮目录：目录/页码切换功能
 	let viewMode: 'chapters' | 'pages' = 'chapters';
 	let virtualPages: Array<{
@@ -251,6 +256,11 @@
 		})
 
 		console.log('EPUB,1---', JSON.stringify(chapterProgressDatas))
+
+		// 根据显示模式滚动到对应位置
+		if (displayMode === 'hover' && hoverChaptersContainer) {
+			setTimeout(() => scrollToActiveChapter(hoverChaptersContainer), 950);
+		}
 
 		if (currentChapterId !== null && chapters.length > 0) {
 			const chapter = chapters.find(c => c.id === currentChapterId);
@@ -1279,6 +1289,41 @@
 		}
 	}
 
+	// 章节元素追踪（用于自动滚动）
+	function setChapterElement(node: HTMLElement, id: number) {
+		chapterElements.set(id, node);
+		return {
+			destroy() {
+				chapterElements.delete(id);
+			}
+		};
+	}
+
+	// 滚动到当前激活章节
+	function scrollToActiveChapter(container: HTMLElement) {
+		if (!container || currentChapter === null) return;
+
+		const activeElement = chapterElements.get(currentChapter.id);
+		if (!activeElement) return;
+
+		const containerHeight = container.clientHeight;
+		const elementOffset = activeElement.offsetTop;
+		const elementHeight = activeElement.clientHeight;
+
+		// 计算滚动位置，将当前章节居中显示
+		const scrollPosition = elementOffset - (containerHeight / 2) + (elementHeight / 2);
+
+		container.scrollTo({
+			top: scrollPosition,
+			behavior: 'smooth'
+		});
+	}
+
+	// 当打开全屏目录时，自动滚动到当前章节
+	$: if (showOutlinePanel && fullscreenChaptersContainer && currentChapter) {
+		setTimeout(() => scrollToActiveChapter(fullscreenChaptersContainer), 150);
+	}
+
 </script>
 
 <div
@@ -1307,11 +1352,13 @@
 					<h2>目录</h2>
 					<button class="close-button" on:click={toggleOutlinePanel}>✕</button>
 				</div>
-				<div class="outline-modal-content">
+				<div class="outline-modal-content"
+					 bind:this={fullscreenChaptersContainer}>
 					{#each chapters as chapter}
 						<button
 							class="chapter-item"
 							class:active={currentChapter?.id === chapter.id}
+							use:setChapterElement={chapter.id}
 							on:click={async () => {
 								await jumpToChapter(chapter.id);
 								showOutlinePanel = false;
@@ -1326,6 +1373,7 @@
 									<button
 										class="sub-chapter-item"
 										class:active={currentChapter?.id === subChapter.id}
+										use:setChapterElement={subChapter.id}
 										on:click={async () => {
 											await jumpToChapter(subChapter.id);
 											showOutlinePanel = false;
@@ -1364,7 +1412,8 @@
 						{/if}
 					</div>
 				</div>
-				<div class="chapters-scroll">
+				<div class="chapters-scroll"
+					 bind:this={hoverChaptersContainer}>
 					{#if viewMode === 'chapters'}
 						<!-- 目录视图 -->
 						{#each chapters as chapter}
@@ -1373,6 +1422,7 @@
 								class:active={currentChapter?.href === chapter.href}
 								class:level-0={chapter.level === 0}
 								class:level-1={chapter.level === 1}
+								use:setChapterElement={chapter.id}
 								style="margin-left: {chapter.level === 1 ? '20px' : '0'}"
 								on:click={async () => {
 									// 使用统一的jumpToChapter函数，确保逻辑一致

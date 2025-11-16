@@ -45,6 +45,11 @@
 	// 目录面板显示状态
 	let showOutlinePanel = false;
 
+	// 章节元素容器引用（用于自动滚动到当前章节）
+	let hoverChaptersContainer: HTMLElement;
+	let fullscreenChaptersContainer: HTMLElement;
+	let chapterElements: Map<number, HTMLElement> = new Map();
+
 	// PDF 悬浮目录：目录/页码切换功能
 	// 'chapters' = 显示目录，'pages' = 显示页码列表
 	let viewMode: 'chapters' | 'pages' = 'chapters';
@@ -73,6 +78,13 @@
 	};
 
 	$: currentChapterIndex = getCurrentChapter(currentPage);
+
+	// 当页码变化时，根据显示模式滚动到对应位置
+	$: if (currentPage && chapters.length > 0) {
+		if (displayMode === 'hover' && hoverChaptersContainer) {
+			setTimeout(() => scrollToActiveChapter(hoverChaptersContainer), 950);
+		}
+	}
 
 	// 为每个章节创建一个活动状态的映射
 	$: chapterActiveStates = chapters.map((chapter, index) => {
@@ -506,6 +518,46 @@
 		await plugin.libraryService.updateNovel(novel);
 	}
 
+	// 章节元素追踪（用于自动滚动）
+	function setChapterElement(node: HTMLElement, startPage: number) {
+		chapterElements.set(startPage, node);
+		return {
+			destroy() {
+				chapterElements.delete(startPage);
+			}
+		};
+	}
+
+	// 滚动到当前激活章节（基于页码）
+	function scrollToActiveChapter(container: HTMLElement) {
+		if (!container || chapters.length === 0) return;
+
+		// 找到当前页所在的章节
+		const currentChapterIndex = getCurrentChapter(currentPage);
+		if (currentChapterIndex === -1) return;
+
+		const activeChapter = chapters[currentChapterIndex];
+		const activeElement = chapterElements.get(activeChapter.startPage);
+		if (!activeElement) return;
+
+		const containerHeight = container.clientHeight;
+		const elementOffset = activeElement.offsetTop;
+		const elementHeight = activeElement.clientHeight;
+
+		// 计算滚动位置，将当前章节居中显示
+		const scrollPosition = elementOffset - (containerHeight / 2) + (elementHeight / 2);
+
+		container.scrollTo({
+			top: scrollPosition,
+			behavior: 'smooth'
+		});
+	}
+
+	// 当打开全屏目录时，自动滚动到当前章节
+	$: if (showOutlinePanel && fullscreenChaptersContainer && chapters.length > 0) {
+		setTimeout(() => scrollToActiveChapter(fullscreenChaptersContainer), 150);
+	}
+
 </script>
 
 <div class="pdf-reader"
@@ -523,11 +575,13 @@
 					<h2>目录</h2>
 					<button class="close-button" on:click={toggleOutlinePanel}>✕</button>
 				</div>
-				<div class="outline-modal-content">
+				<div class="outline-modal-content"
+					 bind:this={fullscreenChaptersContainer}>
 					{#each chapters as chapter}
 						<button
 							class="chapter-item"
 							class:active={currentPage >= chapter.startPage && currentPage <= (chapter.endPage || numPages)}
+							use:setChapterElement={chapter.startPage}
 							on:click={() => {
 								handleOutlineClick(chapter.startPage);
 								showOutlinePanel = false;
@@ -542,6 +596,7 @@
 									<button
 										class="sub-chapter-item"
 										class:active={currentPage >= subChapter.startPage && currentPage <= (subChapter.endPage || numPages)}
+										use:setChapterElement={subChapter.startPage}
 										on:click={() => {
 											handleOutlineClick(subChapter.startPage);
 											showOutlinePanel = false;
@@ -580,13 +635,15 @@
 						{/if}
 					</div>
 				</div>
-				<div class="chapters-scroll">
+				<div class="chapters-scroll"
+					 bind:this={hoverChaptersContainer}>
 					{#if viewMode === 'chapters'}
 						<!-- 目录视图 -->
 						{#each chapters as chapter, index}
 							<button
 								class="chapter-item"
 								class:active={chapterActiveStates[index]}
+								use:setChapterElement={chapter.startPage}
 								on:click={() => handleOutlineClick(chapter.startPage)}
 							>
 								<span class="chapter-title">{chapter.title}</span>
@@ -601,6 +658,7 @@
 										<button
 											class="sub-chapter-item"
 											class:active={isSubActive}
+											use:setChapterElement={subChapter.startPage}
 											on:click={() => handleOutlineClick(subChapter.startPage)}
 										>
 											{subChapter.title} ({subChapter.startPage})

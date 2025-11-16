@@ -55,6 +55,7 @@
 	let hoverChaptersContainer: HTMLElement;
 	let outlineChaptersContainer: HTMLElement;
 	let sidebarChaptersContainer: HTMLElement;
+	let fullscreenChaptersContainer: HTMLElement;
 	let chapterElements: Map<number, HTMLElement> = new Map();
 	let isSidebarCollapsed = false; // sidebar折叠状态
 
@@ -502,6 +503,11 @@
 
 		// 使用防抖渲染章节内容，减少高频DOM操作
 		debouncedRenderChapter(currentChapter);
+	}
+
+	// 当打开全屏目录时，自动滚动到当前章节
+	$: if (showOutlinePanel && fullscreenChaptersContainer) {
+		debouncedScrollToChapter(fullscreenChaptersContainer);
 	}
 
 	function parseAndSetChapters() {
@@ -1048,13 +1054,15 @@
 					<h2>目录</h2>
 					<button class="close-button" on:click={toggleOutlinePanel}>✕</button>
 				</div>
-				<div class="outline-modal-content">
+				<div class="outline-modal-content"
+					 bind:this={fullscreenChaptersContainer}>
 					{#if viewMode === 'chapters'}
 						<!-- 章节视图 -->
 						{#each chapters as chapter}
 							<button
 								class="chapter-item"
 								class:active={currentChapter?.id === chapter.id}
+								use:setChapterElement={chapter.id}
 								on:click={() => {
 									selectChapter(chapter);
 									showOutlinePanel = false;
