@@ -4,6 +4,7 @@
 	import type { Novel } from '../types';
 	import type NovelReaderPlugin from '../main';
 	import type { EnhancedGlobalStats, EnhancedNovelStats } from '../types/enhanced-stats';
+	import { icons } from './library/icons';
 
 	export let plugin: NovelReaderPlugin;
 
@@ -11,11 +12,11 @@
 	let allNovelStats: EnhancedNovelStats[] = [];
 	let loading = true;
 
-	// 图表实例
-	let readingTimeChart: Chart | null = null;
-	let speedDistributionChart: Chart | null = null;
-	let timeSlotChart: Chart | null = null;
-	let weekdayChart: Chart | null = null;
+	// 图表实例 (使用 any 避免 Chart.js 类型冲突)
+	let readingTimeChart: any = null;
+	let speedDistributionChart: any = null;
+	let timeSlotChart: any = null;
+	let weekdayChart: any = null;
 
 	// Canvas 元素
 	let readingTimeCanvas: HTMLCanvasElement;
@@ -512,14 +513,14 @@ ${yearGoal ? `## 🎯 阅读目标
 	{:else}
 		<!-- 标题和导出按钮 -->
 		<div class="header">
-			<h1>📊 全局阅读统计</h1>
+			<h1><span class="header-icon">{@html icons.barChart}</span> 全局阅读统计</h1>
 			<div class="export-buttons">
 				<button class="export-btn" on:click={exportAsMarkdown}>
-					<span class="icon">📝</span>
+					<span class="icon">{@html icons.note}</span>
 					Markdown
 				</button>
 				<button class="export-btn" on:click={exportAsJSON}>
-					<span class="icon">📋</span>
+					<span class="icon">{@html icons.list}</span>
 					JSON
 				</button>
 			</div>
@@ -528,53 +529,53 @@ ${yearGoal ? `## 🎯 阅读目标
 		<!-- 核心统计卡片 -->
 		<div class="stats-grid">
 			<div class="stat-card">
-				<div class="stat-icon">📚</div>
+				<div class="stat-icon">{@html icons.library}</div>
 				<h3>统计书籍</h3>
 				<p class="stat-value">{globalStats.library?.totalBooks || 0}</p>
 				<p class="stat-label">本</p>
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-icon">⏱️</div>
+				<div class="stat-icon">{@html icons.clock}</div>
 				<h3>总阅读时间</h3>
 				<p class="stat-value">{formatDuration(getTotalTime())}</p>
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-icon">📖</div>
+				<div class="stat-icon">{@html icons.bookOpen}</div>
 				<h3>总会话数</h3>
 				<p class="stat-value">{getTotalSessions()}</p>
 				<p class="stat-label">次</p>
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-icon">📝</div>
+				<div class="stat-icon">{@html icons.note}</div>
 				<h3>总笔记数</h3>
 				<p class="stat-value">{getTotalNotes()}</p>
 				<p class="stat-label">条</p>
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-icon">🚀</div>
+				<div class="stat-icon">{@html icons.barChart}</div>
 				<h3>平均速度</h3>
 				<p class="stat-value">{formatSpeed(getAverageSpeed())}</p>
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-icon">⚡</div>
+				<div class="stat-icon" style="color: var(--text-success)">{@html icons.barChart}</div>
 				<h3>最快速度</h3>
 				<p class="stat-value">{formatSpeed(getMaxSpeed())}</p>
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-icon">🔥</div>
+				<div class="stat-icon" style="color: var(--text-warning)">{@html icons.calendar}</div>
 				<h3>连续阅读</h3>
 				<p class="stat-value">{globalStats.streaks?.currentStreak || 0}</p>
 				<p class="stat-label">天（最长 {globalStats.streaks?.longestStreak || 0} 天）</p>
 			</div>
 
 			<div class="stat-card">
-				<div class="stat-icon">📅</div>
+				<div class="stat-icon">{@html icons.calendar}</div>
 				<h3>总阅读天数</h3>
 				<p class="stat-value">{getTotalReadingDays()}</p>
 				<p class="stat-label">天</p>
@@ -585,7 +586,7 @@ ${yearGoal ? `## 🎯 阅读目标
 		{#if globalStats.yearlyGoals && globalStats.yearlyGoals[new Date().getFullYear()]}
 			{@const yearGoal = globalStats.yearlyGoals[new Date().getFullYear()]}
 			<div class="goal-section">
-				<h2>🎯 年度阅读目标</h2>
+				<h2><span class="section-icon">{@html icons.calendar}</span> 年度阅读目标</h2>
 				<div class="goal-content">
 					<div class="goal-progress-bar">
 						<div
@@ -605,14 +606,14 @@ ${yearGoal ? `## 🎯 阅读目标
 		<!-- 图表区域 -->
 		<div class="charts-row">
 			<div class="chart-card">
-				<h3>📈 阅读时长趋势（最近30天）</h3>
+				<h3><span class="chart-icon">{@html icons.barChart}</span> 阅读时长趋势（最近30天）</h3>
 				<div class="chart-wrapper">
 					<canvas bind:this={readingTimeCanvas}></canvas>
 				</div>
 			</div>
 
 			<div class="chart-card">
-				<h3>🚀 阅读速度分布</h3>
+				<h3><span class="chart-icon">{@html icons.barChart}</span> 阅读速度分布</h3>
 				<div class="chart-wrapper">
 					<canvas bind:this={speedDistributionCanvas}></canvas>
 				</div>
@@ -621,14 +622,14 @@ ${yearGoal ? `## 🎯 阅读目标
 
 		<div class="charts-row">
 			<div class="chart-card">
-				<h3>🕐 时段偏好分析</h3>
+				<h3><span class="chart-icon">{@html icons.clock}</span> 时段偏好分析</h3>
 				<div class="chart-wrapper">
 					<canvas bind:this={timeSlotCanvas}></canvas>
 				</div>
 			</div>
 
 			<div class="chart-card">
-				<h3>📅 星期分布</h3>
+				<h3><span class="chart-icon">{@html icons.calendar}</span> 星期分布</h3>
 				<div class="chart-wrapper">
 					<canvas bind:this={weekdayCanvas}></canvas>
 				</div>
@@ -637,12 +638,12 @@ ${yearGoal ? `## 🎯 阅读目标
 
 		<!-- 排行榜区域 -->
 		<div class="rankings-section">
-			<h2>🏆 排行榜</h2>
+			<h2><span class="section-icon">{@html icons.barChart}</span> 排行榜</h2>
 
 			<div class="rankings-grid">
 				<!-- 阅读时长排行 -->
 				<div class="ranking-card">
-					<h3>⏱️ 阅读时长 Top 10</h3>
+					<h3><span class="ranking-icon">{@html icons.clock}</span> 阅读时长 Top 10</h3>
 					<div class="ranking-list">
 						{#each getTopBooksByTime() as book, index}
 							<div class="ranking-item">
@@ -656,7 +657,7 @@ ${yearGoal ? `## 🎯 阅读目标
 
 				<!-- 阅读速度排行 -->
 				<div class="ranking-card">
-					<h3>🚀 阅读速度 Top 10</h3>
+					<h3><span class="ranking-icon">{@html icons.barChart}</span> 阅读速度 Top 10</h3>
 					<div class="ranking-list">
 						{#each getTopBooksBySpeed() as book, index}
 							<div class="ranking-item">
@@ -670,7 +671,7 @@ ${yearGoal ? `## 🎯 阅读目标
 
 				<!-- 会话数排行 -->
 				<div class="ranking-card">
-					<h3>📖 会话次数 Top 10</h3>
+					<h3><span class="ranking-icon">{@html icons.bookOpen}</span> 会话次数 Top 10</h3>
 					<div class="ranking-list">
 						{#each getTopBooksBySessions() as book, index}
 							<div class="ranking-item">
@@ -772,8 +773,39 @@ ${yearGoal ? `## 🎯 阅读目标
 	}
 
 	.stat-icon {
-		font-size: 28px;
+		font-size: 24px;
 		margin-bottom: var(--size-4-2);
+		color: var(--interactive-accent);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.stat-icon :global(svg) {
+		width: 24px;
+		height: 24px;
+	}
+
+	.header-icon :global(svg) {
+		width: 20px;
+		height: 20px;
+		vertical-align: middle;
+		margin-right: var(--size-4-1);
+	}
+
+	.section-icon :global(svg) {
+		width: 18px;
+		height: 18px;
+		vertical-align: middle;
+		margin-right: var(--size-4-1);
+	}
+
+	.chart-icon :global(svg),
+	.ranking-icon :global(svg) {
+		width: 16px;
+		height: 16px;
+		vertical-align: middle;
+		margin-right: var(--size-4-1);
 	}
 
 	.stat-card h3 {

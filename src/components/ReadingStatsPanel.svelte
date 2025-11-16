@@ -2,6 +2,7 @@
 	import {createEventDispatcher} from 'svelte';
 	import {onMount} from 'svelte';
 	import type {Novel} from "../types";
+	import { icons } from './library/icons';
 
 	const dispatch = createEventDispatcher();
 
@@ -143,6 +144,7 @@
 		<!-- 基础统计卡片 -->
 		<div class="stats-cards">
 			<div class="stat-card">
+				<div class="card-icon">{@html icons.clock}</div>
 				<h3>今日阅读</h3>
 				{#if processedData?.todayTime}
 					<p class="stat-value">{formatTime(processedData.todayTime)}</p>
@@ -152,6 +154,7 @@
 			</div>
 
 			<div class="stat-card">
+				<div class="card-icon">{@html icons.barChart}</div>
 				<h3>累计阅读</h3>
 				{#if processedData?.totalTime}
 					<p class="stat-value">{formatTime(processedData.totalTime)}</p>
@@ -161,6 +164,7 @@
 			</div>
 
 			<div class="stat-card">
+				<div class="card-icon">{@html icons.bookOpen}</div>
 				<h3>平均时长</h3>
 				{#if processedData?.avgSessionTime}
 					<p class="stat-value">{formatTime(processedData.avgSessionTime)}</p>
@@ -170,6 +174,7 @@
 			</div>
 
 			<div class="stat-card">
+				<div class="card-icon">{@html icons.calendar}</div>
 				<h3>阅读天数</h3>
 				{#if processedData?.readingDays}
 					<p class="stat-value">{processedData.readingDays}天</p>
@@ -179,6 +184,7 @@
 			</div>
 
 			<div class="stat-card">
+				<div class="card-icon">{@html icons.history}</div>
 				<h3>首次阅读</h3>
 				{#if processedData?.firstReadTime}
 					<p class="stat-value">{processedData.firstReadTime}</p>
@@ -188,6 +194,7 @@
 			</div>
 
 			<div class="stat-card">
+				<div class="card-icon" style="color: var(--text-warning)">{@html icons.calendar}</div>
 				<h3>连续阅读</h3>
 				{#if processedData?.readingStreak}
 					<p class="stat-value">{processedData.readingStreak}天</p>
@@ -287,6 +294,25 @@
 		padding: 16px;
 		border-radius: 8px;
 		text-align: center;
+		transition: all 0.2s;
+	}
+
+	.stat-card:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+	}
+
+	.card-icon {
+		color: var(--interactive-accent);
+		margin-bottom: 8px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.card-icon :global(svg) {
+		width: 20px;
+		height: 20px;
 	}
 
 	.stat-value {
