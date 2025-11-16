@@ -49,6 +49,12 @@ export interface NovelSettings {
 	syncMethod: 'local' | 'obsidian' | 'custom';
 	syncInterval: number;
 
+	// 统计系统设置（新增）
+	useEnhancedStats: boolean;       // 是否启用增强统计系统
+	dualWriteStats: boolean;          // 是否双写（新旧系统同时写入）
+	autoMigrateStats: boolean;        // 是否自动迁移旧数据
+	backupBeforeMigration: boolean;   // 迁移前是否备份
+
 	// 界面设置
 	showToolbar: boolean;
 	showStatusBar: boolean;
@@ -115,6 +121,11 @@ export const DEFAULT_SETTINGS: NovelSettings = {
 	enableSync: false,
 	syncMethod: 'local',
 	syncInterval: 30 * 60 * 1000, // 30分钟
+
+	useEnhancedStats: true,          // 默认启用新统计系统
+	dualWriteStats: true,            // 默认启用双写
+	autoMigrateStats: false,         // 不自动迁移，需用户确认
+	backupBeforeMigration: true,     // 迁移前必须备份
 
 	showToolbar: true,
 	showStatusBar: true,
