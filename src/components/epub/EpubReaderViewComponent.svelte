@@ -254,7 +254,9 @@
 				endPos: 0,
 			};
 
-			currentChapterId = chapter.id!;  // 非空断言：告诉IDE此时id必然存在
+			//无视警告,正常数据,可打印
+			currentChapterId = chapter.id;
+			console.log('EPUB,currentChapterId---', currentChapterId)
 
 			chapters.forEach(c => {
 				const chapterProgress: ChapterProgress = {

@@ -31,10 +31,14 @@
 		console.log('[NoteDialog] Dialog opened, initializing content');
 		isInitialized = true;
 		if (existingNote) {
-			// 提取局部常量解决IDE类型推断问题
 			const note = existingNote;
+
+			//无视警告,正常数据,可打印
 			noteContent = note.content;
 			selectedText = note.selectedText;
+
+			console.log('NoteDialog,noteContent---', noteContent)
+			console.log('NoteDialog,selectedText---', selectedText)
 		} else {
 			noteContent = '';
 			// 保持传入的selectedText不变
