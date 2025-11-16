@@ -663,8 +663,8 @@
 				event.preventDefault();
 			});
 			// 处理键盘事件（来自iframe内部）- 方法1: rendition.on
-			rendition.on('keyup', (event: KeyboardEvent) => {
-				console.log(`[${instanceId}] 📥 rendition.on('keyup') triggered:`, event.key);
+			rendition.on('keydown', (event: KeyboardEvent) => {
+				console.log(`[${instanceId}] 📥 rendition.on('keydown') triggered:`, event.key);
 				// 标记事件来自rendition（iframe内部），跳过严格的焦点检查
 				handleKeyDown(event, true);
 			});
@@ -679,8 +679,8 @@
 					const iframeDoc = iframe.contentWindow.document;
 
 					// 在iframe document上添加键盘监听
-					iframeDoc.addEventListener('keyup', (event: KeyboardEvent) => {
-						console.log(`[${instanceId}] 📥 iframe contentDocument keyup triggered:`, event.key);
+					iframeDoc.addEventListener('keydown', (event: KeyboardEvent) => {
+						console.log(`[${instanceId}] 📥 iframe contentDocument keydown triggered:`, event.key);
 						handleKeyDown(event, true);
 					});
 
@@ -1040,6 +1040,22 @@
 		// 允许系统快捷键（CMD/Ctrl组合键）通过，不拦截
 		if (event.metaKey || event.ctrlKey) {
 			console.log(`[${instanceId}] ✅ ALLOWED: system shortcut (${event.key}), letting event pass through`);
+			// 如果事件来自iframe（fromRendition=true），需要在父窗口重新dispatch，
+			// 因为iframe内的事件无法跨越边界到达父窗口的全局监听器（Obsidian的命令面板）
+			if (fromRendition) {
+				console.log(`[${instanceId}] 🔄 Re-dispatching system shortcut to parent window for Obsidian to handle`);
+				const newEvent = new KeyboardEvent(event.type, {
+					key: event.key,
+					code: event.code,
+					ctrlKey: event.ctrlKey,
+					shiftKey: event.shiftKey,
+					altKey: event.altKey,
+					metaKey: event.metaKey,
+					bubbles: true,
+					cancelable: true
+				});
+				window.dispatchEvent(newEvent);
+			}
 			return;
 		}
 

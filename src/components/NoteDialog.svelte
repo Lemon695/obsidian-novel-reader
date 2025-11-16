@@ -75,6 +75,7 @@
 					placeholder="输入笔记内容..."
 					rows="4"
 					class="note-textarea"
+					on:keydown|stopPropagation
 				></textarea>
 			</div>
 
