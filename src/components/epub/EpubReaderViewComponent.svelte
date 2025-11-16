@@ -131,7 +131,7 @@
 	function updateCurrentPage() {
 		if (viewMode === 'chapters') {
 			// 章节模式：基于当前章节
-			if (!currentChapter || virtualPages.length === 0) return;
+			if (!currentChapter || !currentChapter.id || virtualPages.length === 0) return;
 			const page = virtualPages.find(p => p.chapterId === currentChapter.id);
 			if (page) {
 				currentPageNum = page.pageNum;
@@ -225,7 +225,7 @@
 
 	let menuPosition = {x: 0, y: 0};
 
-	$: if (currentChapter) {
+	$: if (currentChapter && currentChapter.id !== undefined) {
 		console.log('EpubReaderViewComponent--->', JSON.stringify(currentChapter))
 
 		// 注释掉响应式历史保存，避免重复记录（已由view层的chapterChanged事件统一处理）
@@ -414,7 +414,7 @@
 		// 在spine中查找匹配的项
 		for (let i = 0; i < book.spine.items.length; i++) {
 			const spineItem = book.spine.items[i];
-			const spineHref = spineItem.href.split('#')[0].split('?')[0];
+			const spineHref = spineItem.href?.split('#')[0].split('?')[0] || '';
 
 			// 比较清理后的href，支持相对路径和绝对路径
 			if (spineHref === cleanHref || spineHref.endsWith('/' + cleanHref) || cleanHref.endsWith('/' + spineHref)) {
@@ -427,7 +427,7 @@
 
 	// 辅助函数：显示章节内容（带回退机制）
 	async function displayChapter(chapter: EpubChapter): Promise<boolean> {
-		if (!rendition || !book) return false;
+		if (!rendition || !book || !chapter.href) return false;
 
 		try {
 			// 方法1：尝试使用清理后的href
@@ -625,15 +625,15 @@
 			// 优先级2: 检查是否有要恢复的章节ID
 			else if (initialChapterId !== null && chapters.length > 0) {
 				const targetChapter = chapters.find(ch => ch.id === initialChapterId);
-				if (targetChapter) {
+				if (targetChapter && targetChapter.href) {
 					displayTarget = targetChapter.href.split('#')[0].split('?')[0];
 					console.log(`[${instanceId}] 🎯 使用initialChapterId初始化显示:`, targetChapter.title);
 				}
 			}
 			// 优先级3: 检查savedProgress中的章节ID
 			else if (savedProgress?.position?.chapterId && chapters.length > 0) {
-				const targetChapter = chapters.find(ch => ch.id === savedProgress.position.chapterId);
-				if (targetChapter) {
+				const targetChapter = chapters.find(ch => ch.id === savedProgress.position?.chapterId);
+				if (targetChapter && targetChapter.href) {
 					displayTarget = targetChapter.href.split('#')[0].split('?')[0];
 					console.log(`[${instanceId}] 🎯 使用savedProgress初始化显示:`, targetChapter.title);
 				}
@@ -971,8 +971,8 @@
 		}
 
 		// 4. 检查元数据中的标题关键词
-		const titleHasMangaKeyword = book.package?.metadata?.title?.toLowerCase().includes('卷') ||
-			book.package?.metadata?.title?.toLowerCase().includes('vol');
+		const titleHasMangaKeyword = !!(book.package?.metadata?.title?.toLowerCase().includes('卷') ||
+			book.package?.metadata?.title?.toLowerCase().includes('vol'));
 
 		// 综合判断
 		console.log('Manga detection results:', {
@@ -983,7 +983,7 @@
 			spineChapterRatio
 		});
 
-		return pathHasMangaKeyword || hasHighSpineRatio || hasImageDominance || titleHasMangaKeyword;
+		return !!(pathHasMangaKeyword || hasHighSpineRatio || hasImageDominance || titleHasMangaKeyword);
 	}
 
 	function handleFocus() {
@@ -1204,6 +1204,11 @@
 	// 确保在保存进度前，rendition.location已经更新为新章节的位置
 	async function waitForRelocated(): Promise<void> {
 		return new Promise<void>((resolve) => {
+			if (!rendition) {
+				resolve();
+				return;
+			}
+
 			const timeout = setTimeout(() => {
 				console.warn(`[${instanceId}] ⚠️ relocated event timeout, continuing anyway`);
 				resolve();
@@ -1212,7 +1217,7 @@
 			const relocatedHandler = () => {
 				console.log(`[${instanceId}] ✅ relocated event fired, location updated`);
 				clearTimeout(timeout);
-				rendition.off('relocated', relocatedHandler);
+				rendition?.off('relocated', relocatedHandler);
 				resolve();
 			};
 

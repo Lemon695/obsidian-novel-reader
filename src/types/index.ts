@@ -21,6 +21,10 @@ export interface Novel {
 	customSettings?: {
 		// 存储单个自定义正则表达式
 		chapterPattern?: string | undefined;
+		// 存储各个阅读器的视图模式
+		txtViewMode?: 'scroll' | 'chapters';
+		epubViewMode?: 'scroll' | 'chapters';
+		pdfViewMode?: 'chapters' | 'pages';
 	};
 	pdfMetadata?: {
 		numPages?: number;

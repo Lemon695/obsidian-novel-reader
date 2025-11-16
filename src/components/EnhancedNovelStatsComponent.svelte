@@ -265,7 +265,7 @@ ${getTopChapters(stats.chapterStats).map(([id, chapter]) =>
 ## 🏆 成就记录
 
 ### 里程碑
-${stats.achievements.milestonesReached.map(m => `- ${m.name} (${formatDate(m.achievedAt)})`).join('\n') || '暂无成就'}
+${stats.achievements.milestonesReached.length > 0 ? stats.achievements.milestonesReached.map(m => `- ${m}`).join('\n') : '暂无成就'}
 
 ### 连续阅读
 - **当前连续天数**: ${stats.achievements.streakRecords.current} 天
