@@ -1894,7 +1894,7 @@
 
 	/* 章节导航栏样式 */
 	.chapter-navigation {
-		position: absolute;
+		position: fixed;
 		bottom: 0;
 		left: 0;
 		right: 0;
@@ -1902,7 +1902,7 @@
 		justify-content: center;
 		align-items: center;
 		gap: 12px;
-		padding: 4px 20px 2px 20px;
+		padding: 10px 20px 10px 20px;
 		background: var(--background-primary);
 		border-top: 1px solid var(--background-modifier-border);
 		z-index: 100;
