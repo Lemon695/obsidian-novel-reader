@@ -228,67 +228,69 @@
 
 	let menuPosition = {x: 0, y: 0};
 
-	$: if (currentChapter) {
-		// 提取局部常量解决TypeScript在响应式语句中的控制流分析问题
+	$: {
+		// 使用块作用域+局部变量检查，让TypeScript正确推断类型
 		const chapter = currentChapter;
-		console.log('EpubReaderViewComponent--->', JSON.stringify(chapter))
+		if (chapter) {
+			console.log('EpubReaderViewComponent--->', JSON.stringify(chapter))
 
-		// 注释掉响应式历史保存，避免重复记录（已由view层的chapterChanged事件统一处理）
-		/*
-		handleChapterChangeEPUB(
-			chapter,
-			novel,
-			plugin.chapterHistoryService,
-			(newHistory) => {
-				chapterHistory = newHistory;
-			}
-		);
-		*/
+			// 注释掉响应式历史保存，避免重复记录（已由view层的chapterChanged事件统一处理）
+			/*
+			handleChapterChangeEPUB(
+				chapter,
+				novel,
+				plugin.chapterHistoryService,
+				(newHistory) => {
+					chapterHistory = newHistory;
+				}
+			);
+			*/
 
-		chapterProcessCurrentChapter = {
-			id: chapter.id,
-			title: chapter.title,
-			content: '',
-			startPos: 0,
-			endPos: 0,
-		};
-
-		currentChapterId = chapter.id;
-
-		chapters.forEach(c => {
-			const chapterProgress: ChapterProgress = {
-				id: c.id,
-				title: c.title,
+			chapterProcessCurrentChapter = {
+				id: chapter.id,
+				title: chapter.title,
 				content: '',
 				startPos: 0,
 				endPos: 0,
 			};
-			chapterProgressDatas.push(chapterProgress);
-		})
 
-		console.log('EPUB,1---', JSON.stringify(chapterProgressDatas))
+			currentChapterId = chapter.id;
 
-		// 根据显示模式滚动到对应位置（使用防抖优化）
-		if (displayMode === 'hover' && hoverChaptersContainer) {
-			debouncedScrollToChapter(hoverChaptersContainer);
-		}
-
-		if (currentChapterId !== null && chapters.length > 0) {
-			const chapter = chapters.find(c => c.id === currentChapterId);
-			if (chapter) {
-				console.log('EPUB,准备保存进度.')
+			chapters.forEach(c => {
 				const chapterProgress: ChapterProgress = {
-					id: chapter.id,
-					title: chapter.title,
+					id: c.id,
+					title: c.title,
 					content: '',
 					startPos: 0,
 					endPos: 0,
 				};
-				// 无论是通过大纲还是切换章节，只要章节ID变化就保存进度
-				saveReadingProgress(novel, chapterProgress, chapterProgressDatas);
+				chapterProgressDatas.push(chapterProgress);
+			})
+
+			console.log('EPUB,1---', JSON.stringify(chapterProgressDatas))
+
+			// 根据显示模式滚动到对应位置（使用防抖优化）
+			if (displayMode === 'hover' && hoverChaptersContainer) {
+				debouncedScrollToChapter(hoverChaptersContainer);
+			}
+
+			if (currentChapterId !== null && chapters.length > 0) {
+				const foundChapter = chapters.find(c => c.id === currentChapterId);
+				if (foundChapter) {
+					console.log('EPUB,准备保存进度.')
+					const chapterProgress: ChapterProgress = {
+						id: foundChapter.id,
+						title: foundChapter.title,
+						content: '',
+						startPos: 0,
+						endPos: 0,
+					};
+					// 无论是通过大纲还是切换章节，只要章节ID变化就保存进度
+					saveReadingProgress(novel, chapterProgress, chapterProgressDatas);
+				}
 			}
 		}
-	}
+}
 
 	onMount(async () => {
 		console.log("Component mounting...");
