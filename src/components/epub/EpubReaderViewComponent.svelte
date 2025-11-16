@@ -14,6 +14,7 @@
 	import type{ChapterProgress} from "../../types/txt/txt-reader";
 	import type {Note} from "../../types/notes";
 	import LoadingSpinner from '../LoadingSpinner.svelte';
+	import { debounce } from '../../utils/debounce';
 
 	const dispatch = createEventDispatcher();
 
@@ -69,6 +70,11 @@
 	let hoverChaptersContainer: HTMLElement;
 	let fullscreenChaptersContainer: HTMLElement;
 	let chapterElements: Map<number, HTMLElement> = new Map();
+
+	// 防抖函数：用于优化滚动性能
+	const debouncedScrollToChapter = debounce((container: HTMLElement) => {
+		scrollToActiveChapter(container);
+	}, 300);
 
 	// EPUB 悬浮目录：目录/页码切换功能
 	let viewMode: 'chapters' | 'pages' = 'chapters';
@@ -257,9 +263,9 @@
 
 		console.log('EPUB,1---', JSON.stringify(chapterProgressDatas))
 
-		// 根据显示模式滚动到对应位置
+		// 根据显示模式滚动到对应位置（使用防抖优化）
 		if (displayMode === 'hover' && hoverChaptersContainer) {
-			setTimeout(() => scrollToActiveChapter(hoverChaptersContainer), 950);
+			debouncedScrollToChapter(hoverChaptersContainer);
 		}
 
 		if (currentChapterId !== null && chapters.length > 0) {
@@ -1419,7 +1425,7 @@
 						{#each chapters as chapter}
 							<button
 								class="chapter-item"
-								class:active={currentChapter?.href === chapter.href}
+								class:active={currentChapter?.id === chapter.id}
 								class:level-0={chapter.level === 0}
 								class:level-1={chapter.level === 1}
 								use:setChapterElement={chapter.id}
@@ -1471,7 +1477,7 @@
 				{#each chapters as chapter}
 					<button
 						class="chapter-item"
-						class:active={currentChapter?.href === chapter.href}
+						class:active={currentChapter?.id === chapter.id}
 						class:level-0={chapter.level === 0}
 						class:level-1={chapter.level === 1}
 						style="margin-left: {chapter.level === 1 ? '20px' : '0'}"

@@ -11,6 +11,7 @@
 	import {handleChapterChange} from "../../lib/txt.reader/chapter-logic";
 	import { icons } from '../library/icons';
 	import LoadingSpinner from '../LoadingSpinner.svelte';
+	import { debounce } from '../../utils/debounce';
 
 	const dispatch = createEventDispatcher();
 
@@ -50,6 +51,11 @@
 	let fullscreenChaptersContainer: HTMLElement;
 	let chapterElements: Map<number, HTMLElement> = new Map();
 
+	// 防抖函数：用于优化滚动性能
+	const debouncedScrollToChapter = debounce((container: HTMLElement) => {
+		scrollToActiveChapter(container);
+	}, 200);
+
 	// PDF 悬浮目录：目录/页码切换功能
 	// 'chapters' = 显示目录，'pages' = 显示页码列表
 	let viewMode: 'chapters' | 'pages' = 'chapters';
@@ -79,10 +85,10 @@
 
 	$: currentChapterIndex = getCurrentChapter(currentPage);
 
-	// 当页码变化时，根据显示模式滚动到对应位置
+	// 当页码变化时，根据显示模式滚动到对应位置（使用防抖优化）
 	$: if (currentPage && chapters.length > 0) {
 		if (displayMode === 'hover' && hoverChaptersContainer) {
-			setTimeout(() => scrollToActiveChapter(hoverChaptersContainer), 950);
+			debouncedScrollToChapter(hoverChaptersContainer);
 		}
 	}
 
