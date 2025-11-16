@@ -1096,14 +1096,17 @@
 			// 使用辅助函数显示章节
 			await displayChapter(nextChapter);
 
-			// 保存阅读进度（左右键切换时也需要保存）
-			saveProgress();
+			// 等待rendition.location更新后再保存进度
+			await waitForRelocated();
 
 			// 触发章节更改事件
 			dispatch('chapterChanged', {
 				chapterId: nextChapter.id,
 				chapterTitle: nextChapter.title
 			});
+
+			// 保存阅读进度（左右键切换时也需要保存）
+			saveProgress();
 		}
 	}
 
@@ -1181,6 +1184,26 @@
 		showOutlinePanel = !showOutlinePanel;
 	}
 
+	// 等待rendition.location更新的辅助函数
+	// 确保在保存进度前，rendition.location已经更新为新章节的位置
+	async function waitForRelocated(): Promise<void> {
+		return new Promise<void>((resolve) => {
+			const timeout = setTimeout(() => {
+				console.warn(`[${instanceId}] ⚠️ relocated event timeout, continuing anyway`);
+				resolve();
+			}, 2000); // 最多等待2秒
+
+			const relocatedHandler = () => {
+				console.log(`[${instanceId}] ✅ relocated event fired, location updated`);
+				clearTimeout(timeout);
+				rendition.off('relocated', relocatedHandler);
+				resolve();
+			};
+
+			rendition.on('relocated', relocatedHandler);
+		});
+	}
+
 	async function jumpToChapter(chapterId: number) {
 		const chapter = chapters.find(ch => ch.id === chapterId);
 		if (chapter) {
@@ -1191,13 +1214,16 @@
 			// 使用辅助函数显示章节
 			await displayChapter(chapter);
 
+			// 等待rendition.location更新后再保存进度
+			await waitForRelocated();
+
 			// 触发章节切换事件
 			dispatch('chapterChanged', {
 				chapterId: chapter.id,
 				chapterTitle: chapter.title
 			});
 
-			// 保存阅读进度
+			// 保存阅读进度（此时rendition.location已更新）
 			saveProgress();
 		}
 	}
@@ -1349,21 +1375,10 @@
 								class:level-1={chapter.level === 1}
 								style="margin-left: {chapter.level === 1 ? '20px' : '0'}"
 								on:click={async () => {
-									const success = await displayChapter(chapter);
-									if (success) {
-										currentChapter = chapter;
-										currentChapterId = chapter.id;
-										saveProgress();
-
-										// 触发事件以记录历史
-										dispatch('chapterChanged', {
-											chapterId: chapter.id,
-											chapterTitle: chapter.title
-										});
-
-										// 重新激活键盘导航
-										isActive = true;
-									}
+									// 使用统一的jumpToChapter函数，确保逻辑一致
+									await jumpToChapter(chapter.id);
+									// 重新激活键盘导航
+									isActive = true;
 								}}
 							>
 								<span class="chapter-indent">
@@ -1887,14 +1902,14 @@
 		justify-content: center;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 20px 6px 20px;
+		padding: 4px 20px 2px 20px;
 		background: var(--background-primary);
 		border-top: 1px solid var(--background-modifier-border);
 		z-index: 100;
 	}
 
 	.nav-button {
-		padding: 8px 16px;
+		padding: 4px 16px;
 		background: var(--interactive-normal);
 		border: 1px solid var(--background-modifier-border);
 		border-radius: 6px;

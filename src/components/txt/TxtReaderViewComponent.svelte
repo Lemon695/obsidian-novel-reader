@@ -1631,7 +1631,7 @@
 	.content-area {
 		flex: 1;
 		overflow-y: auto;
-		padding: 16px 32px 80px 32px;
+		padding: 16px 32px 35px 32px;
 		min-width: 0;
 	}
 
@@ -2055,14 +2055,14 @@
 		justify-content: center;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 20px 6px 20px;
+		padding: 4px 20px 2px 20px;
 		background: var(--background-primary);
 		border-top: 1px solid var(--background-modifier-border);
 		z-index: 100;
 	}
 
 	.chapter-navigation .nav-button {
-		padding: 8px 16px;
+		padding: 4px 16px;
 		background: var(--interactive-normal);
 		border: 1px solid var(--background-modifier-border);
 		border-radius: 6px;
