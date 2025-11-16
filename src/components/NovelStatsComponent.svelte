@@ -68,9 +68,14 @@
 				maintainAspectRatio: false,
 				plugins: {
 					tooltip: {
+						backgroundColor: getComputedStyle(document.body).getPropertyValue('--background-secondary'),
+						titleColor: getComputedStyle(document.body).getPropertyValue('--text-normal'),
+						bodyColor: getComputedStyle(document.body).getPropertyValue('--text-normal'),
+						borderColor: getComputedStyle(document.body).getPropertyValue('--background-modifier-border'),
+						borderWidth: 1,
 						callbacks: {
 							label: (context) => {
-								return formatDuration(context.parsed.y);
+								return `阅读时长: ${formatDuration(context.parsed.y)}`;
 							}
 						}
 					},

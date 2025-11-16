@@ -3,11 +3,12 @@
 	import Chart from 'chart.js/auto';
 	import type { Novel } from '../types';
 	import type NovelReaderPlugin from '../main';
-	import type { EnhancedGlobalStats } from '../types/enhanced-stats';
+	import type { EnhancedGlobalStats, EnhancedNovelStats } from '../types/enhanced-stats';
 
 	export let plugin: NovelReaderPlugin;
 
 	let globalStats: EnhancedGlobalStats | null = null;
+	let allNovelStats: EnhancedNovelStats[] = [];
 	let loading = true;
 
 	// 图表实例
@@ -46,7 +47,9 @@
 					globalStats = await plugin.statsAdapter.newStorage?.recalculateGlobalStats() || null;
 				}
 
+				// 加载所有小说的统计数据（用于图表）
 				if (globalStats) {
+					await loadAllNovelStats();
 					await initCharts();
 				}
 			}
@@ -54,6 +57,24 @@
 			console.error('加载全局统计失败:', error);
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function loadAllNovelStats() {
+		try {
+			const novels = await plugin.libraryService.getAllNovels();
+			const statsPromises = novels.map(async (novel) => {
+				try {
+					return await plugin.statsAdapter?.newStorage?.getNovelStats(novel.id);
+				} catch {
+					return null;
+				}
+			});
+			const results = await Promise.all(statsPromises);
+			allNovelStats = results.filter((s): s is EnhancedNovelStats => s !== null);
+		} catch (error) {
+			console.error('加载小说统计失败:', error);
+			allNovelStats = [];
 		}
 	}
 
@@ -73,11 +94,22 @@
 		const ctx = readingTimeCanvas?.getContext('2d');
 		if (!ctx || !globalStats) return;
 
-		// 获取最近30天的数据
-		const dailyData = Object.entries(globalStats.timeAnalysis.dailyStats)
-			.map(([date, stats]) => ({
+		// 从个别小说统计聚合最近30天数据
+		const dailyMap: { [date: string]: number } = {};
+
+		allNovelStats.forEach(novelStats => {
+			if (novelStats.timeAnalysis?.dailyStats) {
+				Object.entries(novelStats.timeAnalysis.dailyStats).forEach(([date, stats]) => {
+					if (!dailyMap[date]) dailyMap[date] = 0;
+					dailyMap[date] += stats.totalDuration || 0;
+				});
+			}
+		});
+
+		const dailyData = Object.entries(dailyMap)
+			.map(([date, duration]) => ({
 				date,
-				duration: stats.totalDuration / (1000 * 60) // 转换为分钟
+				duration: duration / (1000 * 60) // 转换为分钟
 			}))
 			.sort((a, b) => a.date.localeCompare(b.date))
 			.slice(-30);
@@ -103,10 +135,13 @@
 
 	function initSpeedDistributionChart() {
 		const ctx = speedDistributionCanvas?.getContext('2d');
-		if (!ctx || !globalStats) return;
+		if (!ctx) return;
 
 		// 速度分布数据（分成6个区间）
-		const speeds = Object.values(globalStats.bookStats).map(book => book.averageReadingSpeed);
+		const speeds = allNovelStats
+			.map(stats => stats.speedAnalysis?.averageSpeed || 0)
+			.filter(speed => speed > 0);
+
 		const bins = [
 			{ label: '0-100', min: 0, max: 100, count: 0 },
 			{ label: '100-200', min: 100, max: 200, count: 0 },
@@ -141,10 +176,19 @@
 
 	function initTimeSlotChart() {
 		const ctx = timeSlotCanvas?.getContext('2d');
-		if (!ctx || !globalStats) return;
+		if (!ctx) return;
 
-		// 时段分布（根据小时分布合并）
-		const hourly = globalStats.timeAnalysis.hourlyDistribution;
+		// 聚合所有小说的时段数据
+		const hourly = new Array(24).fill(0);
+
+		allNovelStats.forEach(novelStats => {
+			if (novelStats.timeAnalysis?.hourlyDistribution) {
+				novelStats.timeAnalysis.hourlyDistribution.forEach((duration, hour) => {
+					hourly[hour] += duration || 0;
+				});
+			}
+		});
+
 		const timeSlots = {
 			'凌晨 (0-6)': hourly.slice(0, 6).reduce((a, b) => a + b, 0),
 			'上午 (6-12)': hourly.slice(6, 12).reduce((a, b) => a + b, 0),
@@ -190,10 +234,21 @@
 
 	function initWeekdayChart() {
 		const ctx = weekdayCanvas?.getContext('2d');
-		if (!ctx || !globalStats) return;
+		if (!ctx) return;
+
+		// 聚合所有小说的星期数据
+		const weekdayData = new Array(7).fill(0);
+
+		allNovelStats.forEach(novelStats => {
+			if (novelStats.timeAnalysis?.weekdayDistribution) {
+				novelStats.timeAnalysis.weekdayDistribution.forEach((duration, day) => {
+					weekdayData[day] += duration || 0;
+				});
+			}
+		});
 
 		const weekdayNames = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-		const weekdayData = globalStats.timeAnalysis.weekdayDistribution.map(v => v / (1000 * 60));
+		const weekdayMinutes = weekdayData.map(v => v / (1000 * 60));
 
 		const accentColor = getComputedStyle(document.body).getPropertyValue('--interactive-accent');
 
@@ -203,7 +258,7 @@
 				labels: weekdayNames,
 				datasets: [{
 					label: '阅读时长（分钟）',
-					data: weekdayData,
+					data: weekdayMinutes,
 					backgroundColor: `${accentColor}99`,
 					borderColor: accentColor,
 					borderWidth: 1
@@ -277,28 +332,75 @@
 		return speed > 0 ? `${Math.round(speed)} 字/分钟` : '无数据';
 	}
 
+	// 辅助计算函数
+	function getTotalTime() {
+		return allNovelStats.reduce((sum, s) => sum + s.basicStats.totalReadingTime, 0);
+	}
+
+	function getTotalSessions() {
+		return allNovelStats.reduce((sum, s) => sum + s.basicStats.sessionsCount, 0);
+	}
+
+	function getTotalNotes() {
+		return allNovelStats.reduce((sum, s) => sum + (s.notesCorrelation?.totalNotes || 0), 0);
+	}
+
+	function getAverageSpeed() {
+		const speeds = allNovelStats.map(s => s.speedAnalysis?.averageSpeed || 0).filter(s => s > 0);
+		return speeds.length > 0 ? speeds.reduce((a, b) => a + b, 0) / speeds.length : 0;
+	}
+
+	function getMaxSpeed() {
+		const speeds = allNovelStats.map(s => s.speedAnalysis?.averageSpeed || 0).filter(s => s > 0);
+		return speeds.length > 0 ? Math.max(...speeds) : 0;
+	}
+
+	function getTotalReadingDays() {
+		const allDays = new Set();
+		allNovelStats.forEach(s => {
+			if (s.timeAnalysis?.dailyStats) {
+				Object.keys(s.timeAnalysis.dailyStats).forEach(day => allDays.add(day));
+			}
+		});
+		return allDays.size;
+	}
+
 	// 获取排行榜数据
 	function getTopBooksByTime() {
-		if (!globalStats) return [];
-		return Object.entries(globalStats.bookStats)
-			.map(([id, stats]) => ({ id, ...stats }))
+		return allNovelStats
+			.map(stats => ({
+				id: stats.novelId,
+				title: stats.novelId,
+				totalReadingTime: stats.basicStats.totalReadingTime,
+				sessionsCount: stats.basicStats.sessionsCount,
+				averageReadingSpeed: stats.speedAnalysis?.averageSpeed || 0
+			}))
 			.sort((a, b) => b.totalReadingTime - a.totalReadingTime)
 			.slice(0, 10);
 	}
 
 	function getTopBooksBySpeed() {
-		if (!globalStats) return [];
-		return Object.entries(globalStats.bookStats)
-			.map(([id, stats]) => ({ id, ...stats }))
+		return allNovelStats
+			.map(stats => ({
+				id: stats.novelId,
+				title: stats.novelId,
+				averageReadingSpeed: stats.speedAnalysis?.averageSpeed || 0,
+				totalReadingTime: stats.basicStats.totalReadingTime,
+				progress: stats.progressStats.completionRate
+			}))
 			.filter(book => book.averageReadingSpeed > 0)
 			.sort((a, b) => b.averageReadingSpeed - a.averageReadingSpeed)
 			.slice(0, 10);
 	}
 
 	function getTopBooksBySessions() {
-		if (!globalStats) return [];
-		return Object.entries(globalStats.bookStats)
-			.map(([id, stats]) => ({ id, ...stats }))
+		return allNovelStats
+			.map(stats => ({
+				id: stats.novelId,
+				title: stats.novelId,
+				sessionsCount: stats.basicStats.sessionsCount,
+				totalReadingTime: stats.basicStats.totalReadingTime
+			}))
 			.sort((a, b) => b.sessionsCount - a.sessionsCount)
 			.slice(0, 10);
 	}
@@ -325,18 +427,29 @@
 	}
 
 	function generateGlobalMarkdownReport(stats: EnhancedGlobalStats): string {
+		const currentYear = new Date().getFullYear();
+		const yearGoal = stats.yearlyGoals?.[currentYear];
+
+		// 聚合星期分布
+		const weekdayDist = new Array(7).fill(0);
+		allNovelStats.forEach(s => {
+			s.timeAnalysis?.weekdayDistribution?.forEach((d, i) => {
+				weekdayDist[i] += d || 0;
+			});
+		});
+
 		return `# 全局阅读统计报告
 
 > 生成时间: ${formatDate(Date.now())}
 
 ## 📊 总体概览
 
-- **统计书籍数**: ${stats.totalBooks} 本
-- **总阅读时间**: ${formatDuration(stats.totalReadingTime)}
-- **总阅读会话**: ${stats.totalSessions} 次
-- **总笔记数**: ${stats.totalNotes} 条
-- **平均阅读速度**: ${formatSpeed(stats.averageReadingSpeed)}
-- **最快阅读速度**: ${formatSpeed(stats.fastestReadingSpeed)}
+- **统计书籍数**: ${stats.library.totalBooks} 本
+- **总阅读时间**: ${formatDuration(getTotalTime())}
+- **总阅读会话**: ${getTotalSessions()} 次
+- **总笔记数**: ${getTotalNotes()} 条
+- **平均阅读速度**: ${formatSpeed(getAverageSpeed())}
+- **最快阅读速度**: ${formatSpeed(getMaxSpeed())}
 
 ## 🏆 阅读时长排行榜 (Top 10)
 
@@ -364,25 +477,22 @@ ${getTopBooksBySessions().map((book, i) =>
 
 ## ⏰ 时间分析
 
-### 偏好时段
-- **最常阅读时段**: ${stats.timeAnalysis.preferredTimeSlot}
-
 ### 星期分布
-${stats.timeAnalysis.weekdayDistribution.map((duration, day) =>
+${weekdayDist.map((duration, day) =>
 	`- **${['周日', '周一', '周二', '周三', '周四', '周五', '周六'][day]}**: ${formatDuration(duration)}`
 ).join('\n')}
 
 ## 📖 阅读习惯
 
-- **连续阅读天数（当前）**: ${stats.readingHabits.currentStreak} 天
-- **最长连续阅读**: ${stats.readingHabits.longestStreak} 天
-- **总阅读天数**: ${stats.readingHabits.totalReadingDays} 天
+- **连续阅读天数（当前）**: ${stats.streaks?.currentStreak || 0} 天
+- **最长连续阅读**: ${stats.streaks?.longestStreak || 0} 天
 
-## 🎯 阅读目标
+${yearGoal ? `## 🎯 阅读目标
 
-- **年度目标**: ${stats.readingGoals.yearlyTarget} 本
-- **已完成**: ${stats.readingGoals.currentProgress} 本
-- **完成率**: ${((stats.readingGoals.currentProgress / stats.readingGoals.yearlyTarget) * 100).toFixed(1)}%
+- **年度目标**: ${yearGoal.targetBooks} 本
+- **已完成**: ${yearGoal.currentBooks} 本
+- **完成率**: ${yearGoal.progress.toFixed(1)}%
+` : ''}
 
 ---
 
@@ -420,74 +530,77 @@ ${stats.timeAnalysis.weekdayDistribution.map((duration, day) =>
 			<div class="stat-card">
 				<div class="stat-icon">📚</div>
 				<h3>统计书籍</h3>
-				<p class="stat-value">{globalStats.totalBooks}</p>
+				<p class="stat-value">{globalStats.library?.totalBooks || 0}</p>
 				<p class="stat-label">本</p>
 			</div>
 
 			<div class="stat-card">
 				<div class="stat-icon">⏱️</div>
 				<h3>总阅读时间</h3>
-				<p class="stat-value">{formatDuration(globalStats.totalReadingTime)}</p>
+				<p class="stat-value">{formatDuration(getTotalTime())}</p>
 			</div>
 
 			<div class="stat-card">
 				<div class="stat-icon">📖</div>
 				<h3>总会话数</h3>
-				<p class="stat-value">{globalStats.totalSessions}</p>
+				<p class="stat-value">{getTotalSessions()}</p>
 				<p class="stat-label">次</p>
 			</div>
 
 			<div class="stat-card">
 				<div class="stat-icon">📝</div>
 				<h3>总笔记数</h3>
-				<p class="stat-value">{globalStats.totalNotes}</p>
+				<p class="stat-value">{getTotalNotes()}</p>
 				<p class="stat-label">条</p>
 			</div>
 
 			<div class="stat-card">
 				<div class="stat-icon">🚀</div>
 				<h3>平均速度</h3>
-				<p class="stat-value">{formatSpeed(globalStats.averageReadingSpeed)}</p>
+				<p class="stat-value">{formatSpeed(getAverageSpeed())}</p>
 			</div>
 
 			<div class="stat-card">
 				<div class="stat-icon">⚡</div>
 				<h3>最快速度</h3>
-				<p class="stat-value">{formatSpeed(globalStats.fastestReadingSpeed)}</p>
+				<p class="stat-value">{formatSpeed(getMaxSpeed())}</p>
 			</div>
 
 			<div class="stat-card">
 				<div class="stat-icon">🔥</div>
 				<h3>连续阅读</h3>
-				<p class="stat-value">{globalStats.readingHabits.currentStreak}</p>
-				<p class="stat-label">天（最长 {globalStats.readingHabits.longestStreak} 天）</p>
+				<p class="stat-value">{globalStats.streaks?.currentStreak || 0}</p>
+				<p class="stat-label">天（最长 {globalStats.streaks?.longestStreak || 0} 天）</p>
 			</div>
 
 			<div class="stat-card">
 				<div class="stat-icon">📅</div>
 				<h3>总阅读天数</h3>
-				<p class="stat-value">{globalStats.readingHabits.totalReadingDays}</p>
+				<p class="stat-value">{getTotalReadingDays()}</p>
 				<p class="stat-label">天</p>
 			</div>
 		</div>
 
 		<!-- 年度阅读目标 -->
-		<div class="goal-section">
-			<h2>🎯 年度阅读目标</h2>
-			<div class="goal-content">
-				<div class="goal-progress-bar">
-					<div
-						class="goal-progress-fill"
-						style="width: {(globalStats.readingGoals.currentProgress / globalStats.readingGoals.yearlyTarget) * 100}%"
-					></div>
+		{#if globalStats.yearlyGoals && globalStats.yearlyGoals[new Date().getFullYear()]}
+			{@const yearGoal = globalStats.yearlyGoals[new Date().getFullYear()]}
+			<div class="goal-section">
+				<h2>🎯 年度阅读目标</h2>
+				<div class="goal-content">
+					<div class="goal-progress-bar">
+						<div
+							class="goal-progress-fill"
+							style="width: {yearGoal.progress}%"
+						></div>
+					</div>
+					<p class="goal-text">
+						已完成 <span class="accent">{yearGoal.currentBooks}</span> 本，
+						目标 <span class="accent">{yearGoal.targetBooks}</span> 本
+						（{yearGoal.progress.toFixed(1)}%）
+					</p>
 				</div>
-				<p class="goal-text">
-					已完成 <span class="accent">{globalStats.readingGoals.currentProgress}</span> 本，
-					目标 <span class="accent">{globalStats.readingGoals.yearlyTarget}</span> 本
-					（{((globalStats.readingGoals.currentProgress / globalStats.readingGoals.yearlyTarget) * 100).toFixed(1)}%）
-				</p>
 			</div>
-		</div>
+		{/if}
 
 		<!-- 图表区域 -->
 		<div class="charts-row">

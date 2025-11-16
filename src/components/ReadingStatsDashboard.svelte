@@ -141,6 +141,8 @@
 
 		const ctx = chartCanvas.getContext('2d');
 		if (ctx && (window as any).Chart) {
+			const accentColor = getComputedStyle(document.body).getPropertyValue('--interactive-accent');
+
 			chartInstance = new (window as any).Chart(ctx, {
 				type: 'bar',
 				data: {
@@ -148,14 +150,8 @@
 					datasets: [{
 						label: '完成书籍数',
 						data: statsData.monthlyStats.map(stat => stat.value),
-						backgroundColor: getComputedStyle(document.body)
-							.getPropertyValue('--interactive-accent-rgb')
-							.split(',')
-							.map(n => parseInt(n.trim()))
-							.concat([0.5])
-							.join(', '),
-						borderColor: getComputedStyle(document.body)
-							.getPropertyValue('--interactive-accent'),
+						backgroundColor: `${accentColor}99`,
+						borderColor: accentColor,
 						borderWidth: 1
 					}]
 				},
@@ -164,7 +160,16 @@
 					maintainAspectRatio: false,
 					plugins: {
 						legend: {
-							display: false
+							labels: {
+								color: getComputedStyle(document.body).getPropertyValue('--text-normal')
+							}
+						},
+						tooltip: {
+							backgroundColor: getComputedStyle(document.body).getPropertyValue('--background-secondary'),
+							titleColor: getComputedStyle(document.body).getPropertyValue('--text-normal'),
+							bodyColor: getComputedStyle(document.body).getPropertyValue('--text-normal'),
+							borderColor: getComputedStyle(document.body).getPropertyValue('--background-modifier-border'),
+							borderWidth: 1
 						}
 					},
 					scales: {
@@ -172,22 +177,18 @@
 							beginAtZero: true,
 							ticks: {
 								stepSize: 1,
-								color: getComputedStyle(document.body)
-									.getPropertyValue('--text-normal')
+								color: getComputedStyle(document.body).getPropertyValue('--text-muted')
 							},
 							grid: {
-								color: getComputedStyle(document.body)
-									.getPropertyValue('--background-modifier-border')
+								color: getComputedStyle(document.body).getPropertyValue('--background-modifier-border')
 							}
 						},
 						x: {
 							ticks: {
-								color: getComputedStyle(document.body)
-									.getPropertyValue('--text-normal')
+								color: getComputedStyle(document.body).getPropertyValue('--text-muted')
 							},
 							grid: {
-								color: getComputedStyle(document.body)
-									.getPropertyValue('--background-modifier-border')
+								color: getComputedStyle(document.body).getPropertyValue('--background-modifier-border')
 							}
 						}
 					}
