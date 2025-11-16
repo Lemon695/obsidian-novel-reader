@@ -27,13 +27,20 @@ import type {
  */
 export class StatsStorageAdapter {
     private legacyService: DatabaseService;     // 旧Loki系统
-    private newStorage: MultiFileStatsStorage;  // 新多文件系统
+    private _newStorage: MultiFileStatsStorage;  // 新多文件系统
     private useNewStorage: boolean = true;      // 是否启用新系统
     private dualWrite: boolean = true;          // 是否双写
 
     constructor(private app: App, private plugin: NovelReaderPlugin) {
         this.legacyService = new DatabaseService(app, plugin);
-        this.newStorage = new MultiFileStatsStorage(app, plugin);
+        this._newStorage = new MultiFileStatsStorage(app, plugin);
+    }
+
+    /**
+     * 获取新存储系统实例（用于直接访问高级功能）
+     */
+    get newStorage(): MultiFileStatsStorage {
+        return this._newStorage;
     }
 
     /**
@@ -44,7 +51,7 @@ export class StatsStorageAdapter {
 
         try {
             // 初始化新系统
-            await this.newStorage.initialize();
+            await this._newStorage.initialize();
 
             // 检查是否需要启用新系统
             this.useNewStorage = this.plugin.settings.useEnhancedStats !== false;
@@ -84,7 +91,7 @@ export class StatsStorageAdapter {
         try {
             if (this.useNewStorage) {
                 // 优先使用新系统
-                await this.newStorage.saveSession(enhancedSession);
+                await this._newStorage.saveSession(enhancedSession);
             }
 
             if (this.dualWrite || !this.useNewStorage) {
@@ -129,7 +136,7 @@ export class StatsStorageAdapter {
     ): Promise<void> {
         if (!this.useNewStorage) return;
 
-        const stats = await this.newStorage.getNovelStats(novelId);
+        const stats = await this._newStorage.getNovelStats(novelId);
         if (!stats) return;
 
         // 更新基础统计
@@ -180,7 +187,7 @@ export class StatsStorageAdapter {
         chapterStat.lastRead = session.endTime || Date.now();
 
         // 保存更新后的统计
-        await this.newStorage.saveNovelStats(novelId, stats);
+        await this._newStorage.saveNovelStats(novelId, stats);
     }
 
     // ============================================
@@ -194,7 +201,7 @@ export class StatsStorageAdapter {
         try {
             if (this.useNewStorage) {
                 // 尝试从新系统读取
-                const enhancedStats = await this.newStorage.getNovelStats(novelId);
+                const enhancedStats = await this._newStorage.getNovelStats(novelId);
 
                 if (enhancedStats) {
                     // 转换为旧格式（向后兼容）
@@ -223,7 +230,7 @@ export class StatsStorageAdapter {
             return null;
         }
 
-        return await this.newStorage.getNovelStats(novelId);
+        return await this._newStorage.getNovelStats(novelId);
     }
 
     /**
@@ -240,7 +247,7 @@ export class StatsStorageAdapter {
         if (!stats) {
             // 创建新统计
             if (this.useNewStorage) {
-                stats = await this.newStorage.createNovelStats(novelId, title, type, author);
+                stats = await this._newStorage.createNovelStats(novelId, title, type, author);
             } else {
                 // 使用旧系统的默认结构
                 const legacyStats = await this.legacyService.getNovelStats(novelId);
@@ -465,7 +472,7 @@ export class StatsStorageAdapter {
      * 获取新存储服务实例（用于高级功能）
      */
     getNewStorage(): MultiFileStatsStorage {
-        return this.newStorage;
+        return this._newStorage;
     }
 
     /**
