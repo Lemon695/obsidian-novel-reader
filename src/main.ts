@@ -279,26 +279,6 @@ export default class NovelReaderPlugin extends Plugin {
 		});
 
 		this.addCommand({
-			id: 'open-novel-stats',
-			name: '打开当前图书统计',
-			checkCallback: (checking: boolean) => {
-				const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_LIBRARY)[0];
-				if (leaf) {
-					const view = leaf.view as NovelLibraryView;
-					const recentNovel = view.getRecentNovel();
-
-					if (!checking && recentNovel) {
-						view.openNovelStats(recentNovel);
-						return true;
-					}
-
-					return recentNovel != null;
-				}
-				return false;
-			}
-		});
-
-		this.addCommand({
 			id: 'open-completed-view',
 			name: '打开已读完视图',
 			callback: () => this.activateCompletedView()
