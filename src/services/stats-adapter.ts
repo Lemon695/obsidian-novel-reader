@@ -129,7 +129,7 @@ export class StatsStorageAdapter {
     ): Promise<void> {
         if (!this.useNewStorage) return;
 
-        const stats = await this.getNovelStats(novelId);
+        const stats = await this.newStorage.getNovelStats(novelId);
         if (!stats) return;
 
         // 更新基础统计
@@ -280,8 +280,15 @@ export class StatsStorageAdapter {
                 averageSessionTime: enhanced.behaviorStats.averageReadingSpeed,
                 dailyStats: this.convertDailyStatsToLegacy(enhanced.timeAnalysis.dailyStats),
                 chapterStats: this.convertChapterStatsToLegacy(enhanced.chapterStats)
+            },
+            // Loki 必需字段（这些字段会被 Loki 自动管理）
+            $loki: 0,  // 临时值，Loki 会在插入时重新分配
+            meta: {
+                revision: 0,
+                created: Date.now(),
+                version: 0
             }
-        };
+        } as NovelReadingStats;
     }
 
     /**
