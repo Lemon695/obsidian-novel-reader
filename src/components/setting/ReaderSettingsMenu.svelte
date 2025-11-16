@@ -249,7 +249,7 @@
 				class="dropdown-item"
 				on:click={() => handleMenuSelect('stats')}
 			>
-				<span class="icon">📊</span>
+				<span class="icon">{@html icons.barChart}</span>
 				阅读统计
 			</button>
 		</div>
