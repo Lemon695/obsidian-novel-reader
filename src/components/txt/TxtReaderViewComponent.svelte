@@ -555,9 +555,34 @@
 			eventPhase: event.eventPhase
 		});
 
-		// 严格检查：只有当前元素真正具有焦点时才处理键盘事件
+		// 检查是否是输入元素获得焦点（TEXTAREA、INPUT、contenteditable）
+		// 如果是，让键盘事件正常传递，允许用户输入
+		const activeEl = document.activeElement;
+		if (activeEl) {
+			const tagName = activeEl.tagName;
+			const isContentEditable = (activeEl as HTMLElement).isContentEditable;
+			if (tagName === 'TEXTAREA' || tagName === 'INPUT' || isContentEditable) {
+				console.log(`[${instanceId}] ✅ ALLOWED: input element has focus, letting event pass through`);
+				return;
+			}
+		}
+
+		// 允许系统快捷键（CMD/Ctrl组合键）通过，不拦截
+		if (event.metaKey || event.ctrlKey) {
+			console.log(`[${instanceId}] ✅ ALLOWED: system shortcut (${event.key}), letting event pass through`);
+			return;
+		}
+
+		// 只拦截箭头键用于导航，其他按键一律放行
+		const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key);
+		if (!isArrowKey) {
+			console.log(`[${instanceId}] ✅ ALLOWED: non-arrow key (${event.key}), letting event pass through`);
+			return;
+		}
+
+		// 对于箭头键，检查阅读器是否处于激活状态
 		if (!isActive) {
-			console.log(`[${instanceId}] ❌ REJECTED: not active`);
+			console.log(`[${instanceId}] ❌ REJECTED: arrow key but reader not active`);
 			return;
 		}
 
@@ -571,8 +596,9 @@
 			return;
 		}
 
-		console.log(`[${instanceId}] ✅ PROCESSING keyboard event: ${event.key}`);
+		console.log(`[${instanceId}] ✅ PROCESSING arrow key navigation: ${event.key}`);
 
+		// 处理箭头键导航
 		if (event.key === 'ArrowLeft') {
 			// 根据模式选择切换方式
 			if (viewMode === 'pages') {

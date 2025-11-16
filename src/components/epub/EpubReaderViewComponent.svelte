@@ -1025,22 +1025,47 @@
 			return;
 		}
 
+		// 检查是否是输入元素获得焦点（TEXTAREA、INPUT、contenteditable）
+		// 如果是，让键盘事件正常传递，允许用户输入
+		const activeEl = document.activeElement;
+		if (activeEl) {
+			const tagName = activeEl.tagName;
+			const isContentEditable = (activeEl as HTMLElement).isContentEditable;
+			if (tagName === 'TEXTAREA' || tagName === 'INPUT' || isContentEditable) {
+				console.log(`[${instanceId}] ✅ ALLOWED: input element has focus, letting event pass through`);
+				return;
+			}
+		}
+
+		// 允许系统快捷键（CMD/Ctrl组合键）通过，不拦截
+		if (event.metaKey || event.ctrlKey) {
+			console.log(`[${instanceId}] ✅ ALLOWED: system shortcut (${event.key}), letting event pass through`);
+			return;
+		}
+
+		// 只拦截箭头键用于导航，其他按键一律放行
+		const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key);
+		if (!isArrowKey) {
+			console.log(`[${instanceId}] ✅ ALLOWED: non-arrow key (${event.key}), letting event pass through`);
+			return;
+		}
+
 		// 焦点检查：区分两种情况
 		// 1. 如果事件来自rendition（iframe内部），跳过isActive检查，因为iframe内的键盘事件总是有效的
 		// 2. 如果事件来自主div，需要检查isActive
 		if (!fromRendition) {
 			// 只有来自主div的事件才需要检查isActive
 			if (!isActive) {
-				console.log(`[${instanceId}] ❌ REJECTED: not active`);
+				console.log(`[${instanceId}] ❌ REJECTED: arrow key but reader not active`);
 				return;
 			}
 
 			// 额外检查：确保事件目标是当前阅读器元素或其子元素
 			if (readerElement) {
-				const activeEl = document.activeElement;
-				const isIframe = activeEl?.tagName === 'IFRAME';
-				const iframeInReader = isIframe && readerElement.contains(activeEl);
-				const activeInReader = readerElement.contains(activeEl);
+				const activeElCheck = document.activeElement;
+				const isIframe = activeElCheck?.tagName === 'IFRAME';
+				const iframeInReader = isIframe && readerElement.contains(activeElCheck);
+				const activeInReader = readerElement.contains(activeElCheck);
 
 				console.log(`[${instanceId}] Focus check:`, {
 					isIframe: isIframe,
@@ -1059,8 +1084,9 @@
 			console.log(`[${instanceId}] ⚡ Event from rendition, skipping focus checks`);
 		}
 
-		console.log(`[${instanceId}] ✅ PROCESSING keyboard event: ${event.key}`);
+		console.log(`[${instanceId}] ✅ PROCESSING arrow key navigation: ${event.key}`);
 
+		// 处理箭头键导航
 		if (event.key === 'ArrowLeft') {
 			if (viewMode === 'pages') {
 				// 页码模式：切换到上一页
