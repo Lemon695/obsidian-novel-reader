@@ -15,17 +15,21 @@
 	// 在组件挂载时设置初始内容
 	onMount(() => {
 		if (existingNote) {
-			noteContent = existingNote.content;
+			// 提取局部常量解决IDE类型推断问题
+			const note = existingNote;
+			noteContent = note.content;
 			// 确保显示正确的选中文本
-			selectedText = existingNote.selectedText;
+			selectedText = note.selectedText;
 		}
 	});
 
 	// 监听打开状态变化
 	$: if (isOpen) {
 		if (existingNote) {
-			noteContent = existingNote.content;
-			selectedText = existingNote.selectedText;
+			// 提取局部常量解决IDE类型推断问题
+			const note = existingNote;
+			noteContent = note.content;
+			selectedText = note.selectedText;
 		} else {
 			noteContent = '';
 			// 保持传入的selectedText不变

@@ -229,12 +229,14 @@
 	let menuPosition = {x: 0, y: 0};
 
 	$: if (currentChapter) {
-		console.log('EpubReaderViewComponent--->', JSON.stringify(currentChapter))
+		// 提取局部常量解决TypeScript在响应式语句中的控制流分析问题
+		const chapter = currentChapter;
+		console.log('EpubReaderViewComponent--->', JSON.stringify(chapter))
 
 		// 注释掉响应式历史保存，避免重复记录（已由view层的chapterChanged事件统一处理）
 		/*
 		handleChapterChangeEPUB(
-			currentChapter,
+			chapter,
 			novel,
 			plugin.chapterHistoryService,
 			(newHistory) => {
@@ -244,14 +246,14 @@
 		*/
 
 		chapterProcessCurrentChapter = {
-			id: currentChapter.id,
-			title: currentChapter.title,
+			id: chapter.id,
+			title: chapter.title,
 			content: '',
 			startPos: 0,
 			endPos: 0,
 		};
 
-		currentChapterId = currentChapter.id;
+		currentChapterId = chapter.id;
 
 		chapters.forEach(c => {
 			const chapterProgress: ChapterProgress = {
