@@ -1765,7 +1765,10 @@
 		color: var(--text-normal);
 	}
 
+	/* 确保active状态的蓝色优先级最高，覆盖level-0和level-1的默认颜色 */
+	.chapter-item.level-0.active,
 	.chapter-item.level-1.active {
+		color: var(--text-accent);
 		font-weight: 500;
 	}
 
