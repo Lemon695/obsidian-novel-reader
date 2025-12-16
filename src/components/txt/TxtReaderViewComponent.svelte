@@ -1,6 +1,5 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
-  import { fade } from 'svelte/transition';
   import type { Novel, ReadingProgress } from '../../types';
   import type NovelReaderPlugin from '../../main';
   import type { ChapterHistory } from '../../types/reading-stats';
@@ -10,7 +9,6 @@
     parseChapters,
     switchChapter,
   } from '../../lib/txt.reader/chapter-logic';
-  // saveReadingProgress removed - now using ReaderProgressManager
   import ReaderProgressManager from '../reader/ReaderProgressManager.svelte';
   import { scrollPage } from '../../lib/txt.reader/scroll-control';
   import type { Note } from '../../types/notes';
@@ -23,7 +21,6 @@
   import { NotesService } from '../../services/note/notes-service';
   import { icons } from '../library/icons';
   import { debounce, throttle } from '../../utils/debounce';
-  import BookmarkButton from '../BookmarkButton.svelte';
   import BookmarkPanelWrapper from '../reader/BookmarkPanelWrapper.svelte';
   import type { Bookmark } from '../../types/bookmark';
   import { ReadingStatsService } from '../../services/reading-stats-service';
@@ -34,7 +31,6 @@
   import ReadingSessionManager from '../reader/ReadingSessionManager.svelte';
   // 统一渲染器
   import { TxtRenderer, ReaderStyleManager, ReaderBookmarkManager } from '../../services/renderer';
-  import type { BookmarkPosition } from '../../services/renderer';
 
   const dispatch = createEventDispatcher();
 
@@ -246,12 +242,12 @@
       selectChapter(chapter);
     }
 
-    if (typeof note.lineNumber === 'number' && note.lineNumber >= 0) {
+    if (note.lineNumber >= 0) {
       await jumpToLineNumber(note.lineNumber);
       return;
     }
 
-    if (typeof note.textIndex === 'number' && note.textIndex >= 0) {
+    if (note.textIndex >= 0) {
       const approxLine = Math.max(0, Math.floor(note.textIndex / 80));
       await jumpToLineNumber(approxLine);
     }
@@ -306,7 +302,7 @@
         // 页码模式下，设置一个默认章节以避免空指针
         currentChapter = chapters[0];
       }
-      // savePageProgress removed - now handled by ReaderProgressManager
+
       // 记录页码历史
       recordPageHistory(pageNum);
     } else {
@@ -318,12 +314,9 @@
 
         // 记录章节历史和保存进度
         recordChapterHistory(targetChapter);
-        // saveChapterProgress removed - now handled by ReaderProgressManager
       }
     }
   }
-
-  // savePageProgress function removed - now using ReaderProgressManager
 
   // 切换到上一页/下一页
   function switchPage(direction: 'prev' | 'next') {
@@ -408,11 +401,7 @@
   // 合并所有 onMount 逻辑，避免重复的事件监听器
   onMount(() => {
     let noteFileModifyHandler: any;
-    // let handleVisibilityHandler: () => void; // Removed
-    // let activityTimeout: ReturnType<typeof setTimeout> | null = null; // Removed
     let noteIconClickListener: EventListener;
-    // const activityEvents: Array<'keydown' | 'scroll' | 'click'> = ['keydown', 'scroll', 'click']; // Removed
-    // const throttledUpdateActivity = ... // Removed
 
     // 1. 初始化笔记服务
     notesService = new NotesService(plugin.app, plugin);
@@ -512,13 +501,9 @@
 
       // 初始化时滚动到当前章节
       if (currentChapter) {
-        // Legacy scroll logic removed
       }
 
-      // 3. 初始化阅读会话 - Handled by ReadingSessionManager
-      // initializeReadingSession();
-
-      // 4. 添加笔记图标点击事件监听
+      // 添加笔记图标点击事件监听
       const handleNoteIconClick = async (event: CustomEvent) => {
         const noteId = event.detail.noteId;
 
@@ -541,45 +526,16 @@
         }
       };
 
-      // 5. 页面可见性变化处理 - Handled by ReadingSessionManager
-      /*
-      handleVisibilityHandler = () => {
-        isActive = !document.hidden;
-        handleVisibilityChange();
-      };
-      */
-
-      // 7. 添加所有事件监听器（确保每个事件只监听一次）
+      // 添加所有事件监听器（确保每个事件只监听一次）
       // 键盘事件已改为主div的on:keydown，不再使用全局window监听
       noteIconClickListener = (evt: Event) => {
         void handleNoteIconClick(evt as CustomEvent);
       };
       window.addEventListener('noteIconClick', noteIconClickListener);
-      // document.addEventListener('visibilitychange', handleVisibilityHandler);
-
-      // 用户活动监听（移除 mousemove 以提高性能，使用节流）- Handled by ReadingSessionManager
-      /*
-      activityEvents.forEach((eventName) => {
-        window.addEventListener(eventName, throttledUpdateActivity);
-      });
-      */
-
-      // 滚动监听 - 已移除，书签由 bookmarkManager 管理
-      // 不再需要 throttledCheckBookmark
     })();
 
     // 8. 返回清理函数，移除所有事件监听器
     return () => {
-      // 清理定时器
-      /*
-      if (readingSessionInterval) {
-        clearInterval(readingSessionInterval);
-      }
-      if (activityTimeout) {
-        clearTimeout(activityTimeout);
-      }
-      */
-
       // 清理渲染器
       try {
         if (renderer) {
@@ -592,11 +548,6 @@
         console.error(`[${instanceId}] 渲染器清理失败:`, error);
       }
 
-      // 结束当前会话 - Handled by ReadingSessionManager on destroy
-      // if (isReadingActive) {
-      //   endCurrentSession();
-      // }
-
       // 清理防抖函数，防止内存泄漏
       debouncedRenderChapter.cancel();
       debouncedScrollToChapter.cancel();
@@ -606,20 +557,10 @@
       if (noteIconClickListener) {
         window.removeEventListener('noteIconClick', noteIconClickListener);
       }
-      // if (handleVisibilityHandler) {
-      //   document.removeEventListener('visibilitychange', handleVisibilityHandler);
-      // }
+
       if (noteFileModifyHandler) {
         plugin.app.vault.offref(noteFileModifyHandler);
       }
-
-      // activityEvents.forEach((event) => {
-      //   window.removeEventListener(event, throttledUpdateActivity);
-      // });
-
-      // if (readerElement && throttledCheckBookmark) {
-      //   readerElement.removeEventListener('scroll', throttledCheckBookmark);
-      // }
     };
   });
 
@@ -641,7 +582,6 @@
     if (chapter) {
       currentChapter = chapter;
       // 只在章节模式下保存章节进度，页码模式下由switchPage单独处理
-      // Progress saving now handled by ReaderProgressManager
     }
   }
 
@@ -657,11 +597,6 @@
 
   // 章节切换时更新会话
   $: if (currentChapter) {
-    // if (isReadingActive) {
-    //   endCurrentSession();
-    // }
-
-    // startNewSession();
 
     // 只在章节模式下记录章节历史，页码模式下由recordPageHistory单独处理
     if (viewMode === 'chapters') {
@@ -811,9 +746,6 @@
     // 记录章节历史
     recordChapterHistory(chapter);
 
-    // 保存阅读进度
-    // saveChapterProgress removed - now handled by ReaderProgressManager
-
     // 更新书签管理器的当前位置
     bookmarkManager?.updateCurrentPosition({
       novelId: novel.id,
@@ -822,9 +754,6 @@
       chapterTitle: chapter.title,
       progress: 0,
     });
-
-    // 检查当前章节的书签状态
-    // 书签状态由 bookmarkManager 自动管理
 
     // 滚动到顶部
     setTimeout(() => {
@@ -857,79 +786,6 @@
       console.error('Failed to record chapter history:', error);
     }
   }
-
-  // saveChapterProgress function removed - now using ReaderProgressManager
-
-  // 初始化阅读会话
-  // function initializeReadingSession() {
-  //   if (!currentChapter) return;
-
-  //   startNewSession();
-
-  //   // 每分钟检查用户活动
-  //   if (readingSessionInterval) clearInterval(readingSessionInterval);
-  //   readingSessionInterval = setInterval(() => {
-  //     const now = Date.now();
-  //     if (now - lastActivityTime > INACTIVITY_THRESHOLD) {
-  //       // 用户不活跃，暂停会话
-  //       if (isReadingActive) {
-  //         endCurrentSession();
-  //       }
-  //     }
-  //   }, 60000); // 每分钟检查一次
-  // }
-
-  // 开始新会话
-  // function startNewSession() {
-  //   if (!currentChapter) return;
-
-  //   sessionStartTime = Date.now();
-  //   isReadingActive = true;
-  //   lastActivityTime = Date.now();
-
-  //   dispatch('startReading', {
-  //     chapterId: currentChapter.id,
-  //     chapterTitle: currentChapter.title,
-  //     startTime: sessionStartTime,
-  //   });
-  // }
-
-  // 结束当前会话
-  // function endCurrentSession() {
-  //   if (!isReadingActive || !sessionStartTime) return;
-
-  //   const sessionEndTime = Date.now();
-  //   const sessionDuration = sessionEndTime - sessionStartTime;
-
-  //   dispatch('endReading', {
-  //     endTime: sessionEndTime,
-  //     duration: sessionDuration,
-  //   });
-
-  //   isReadingActive = false;
-  //   sessionStartTime = null;
-  // }
-
-  // 更新用户活动时间
-  // function updateActivity() {
-  //   lastActivityTime = Date.now();
-
-  //   // 如果之前不活跃，重新开始会话
-  //   if (!isReadingActive) {
-  //     startNewSession();
-  //   }
-  // }
-
-  // 处理焦点变化
-  // function handleVisibilityChange() {
-  //   if (document.hidden) {
-  //     if (isReadingActive) {
-  //       endCurrentSession();
-  //     }
-  //   } else {
-  //     updateActivity();
-  //   }
-  // }
 
   // 统一的滚动处理函数
   function scrollToActiveChapter(container: HTMLElement) {

@@ -1,6 +1,5 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount } from 'svelte';
-  import { fade } from 'svelte/transition';
   import { v4 as uuidv4 } from 'uuid';
   import type NovelReaderPlugin from '../../main';
   import type { Novel, ReadingProgress } from '../../types';
@@ -28,25 +27,14 @@
     scrollPosition?: number;
     timestamp?: number;
   }
-  import {
-    handleChapterChangeEPUB,
-    parseChapters,
-    switchChapter,
-  } from '../../lib/txt.reader/chapter-logic';
-  import type { ChapterHistory } from '../../types/reading-stats';
 
+  import type { ChapterHistory } from '../../types/reading-stats';
   import ReaderProgressManager from '../reader/ReaderProgressManager.svelte';
-  // import type { ProgressPosition } from '../reader/ReaderProgressManager.svelte';
-  import type { ChapterProgress } from '../../types/txt/txt-reader';
   import type { Note } from '../../types/notes';
   import LoadingSpinner from '../LoadingSpinner.svelte';
-  import { debounce } from '../../utils/debounce';
   import BookmarkPanelWrapper from '../reader/BookmarkPanelWrapper.svelte';
   import type { Bookmark } from '../../types/bookmark';
-  import { Notice } from 'obsidian';
-  // 统一渲染器
   import { EpubRenderer, ReaderStyleManager, ReaderBookmarkManager } from '../../services/renderer';
-  import type { BookmarkPosition } from '../../services/renderer';
 
   const dispatch = createEventDispatcher();
 
@@ -297,18 +285,6 @@
     if (chapter) {
       console.log('EpubReaderViewComponent--->', JSON.stringify(chapter));
 
-      // 注释掉响应式历史保存，避免重复记录（已由view层的chapterChanged事件统一处理）
-      /*
-			handleChapterChangeEPUB(
-				chapter,
-				novel,
-				plugin.chapterHistoryService,
-				(newHistory) => {
-					chapterHistory = newHistory;
-				}
-			);
-			*/
-
       //无视警告,正常数据,可打印
       currentChapterId = chapter.id;
       console.log('EPUB,currentChapterId---', currentChapterId);
@@ -363,7 +339,6 @@
 
   onMount(async () => {
     if (chapters) {
-      //parseAndSetChapters();
       contentLoaded = true;
 
       // 书签由 bookmarkManager 管理
@@ -1284,11 +1259,6 @@
           },
         });
       }
-
-      // 保存进度
-      // 注意：这里不需要调用 saveProgress，因为 saveProgress 主要用于手动保存或卸载时
-      // 但如果需要实时保存，也可以调用，不过要注意性能
-      // 这里我们选择不频繁调用 saveProgress，依靠 ReaderProgressManager 自动管理
     }
   }
 
@@ -1340,16 +1310,12 @@
 
       // 保存阅读进度（此时rendition.location已更新）
       saveProgress();
-
-      // 检查书签状态
-      // checkCurrentBookmark(); // Removed as per instruction
     }
   }
 
   // ==================== 书签功能 ====================
   // 书签功能现在由 ReaderBookmarkManager 统一管理
 
-  // 跳转到书签
   // 跳转到书签
   async function handleJumpToBookmark(bookmark: Bookmark) {
     // 优先使用 CFI 跳转
@@ -1672,15 +1638,6 @@
     padding-bottom: 56px; /* 为底部导航栏留出空间 */
   }
 
-  .loading {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    height: 100%;
-    color: var(--text-muted);
-    font-size: 1.2em;
-  }
-
   .toolbar {
     position: fixed;
     top: 16px;
@@ -1801,9 +1758,4 @@
     margin-top: 2px;
   }
 
-  /* 章节导航栏样式 - 已由 ReaderNavigation 组件提供 */
-
-  /* 满屏目录面板样式 - 已由 ReaderSidebar 组件提供 */
-
-  /* ==================== 书签样式 ==================== */
 </style>

@@ -1,10 +1,8 @@
 <script lang="ts">
   import { onMount, createEventDispatcher, onDestroy } from 'svelte';
-  import { fade } from 'svelte/transition';
   import * as pdfjs from 'pdfjs-dist';
   import type { PDFDocumentProxy, PDFPageProxy } from 'pdfjs-dist';
   import { TextLayer } from 'pdfjs-dist';
-  import * as pdfjsViewer from 'pdfjs-dist/web/pdf_viewer';
   import type NovelReaderPlugin from '../../main';
   import type { Novel } from '../../types';
   import { TFile, Notice } from 'obsidian';
@@ -13,14 +11,11 @@
   import ReaderNavigation from '../reader/ReaderNavigation.svelte';
   import HoverTOC from '../reader/HoverTOC.svelte';
   import KeyboardNavigationHandler from '../reader/KeyboardNavigationHandler.svelte';
-  // already imported locally: import ReaderProgressManager from '../reader/ReaderProgressManager.svelte';
+  import BookmarkPanelWrapper from '../reader/BookmarkPanelWrapper.svelte';
   import type { ProgressPosition } from '../reader/ReaderProgressManager.svelte';
   import type { ChapterHistory } from '../../types/reading-stats';
-  import { handleChapterChange } from '../../lib/txt.reader/chapter-logic';
   import { icons } from '../library/icons';
   import LoadingSpinner from '../LoadingSpinner.svelte';
-  import { debounce } from '../../utils/debounce';
-  import BookmarkPanelWrapper from '../reader/BookmarkPanelWrapper.svelte';
   import type { Bookmark } from '../../types/bookmark';
   import { NotesService } from '../../services/note/notes-service';
   import NoteDialog from '../NoteDialog.svelte';
@@ -43,7 +38,6 @@
   import { getPDFWorkerPath } from '../../constants/app-config';
   // 统一渲染器
   import { PdfRenderer, ReaderStyleManager, ReaderBookmarkManager } from '../../services/renderer';
-  import type { BookmarkPosition } from '../../services/renderer';
 
   const dispatch = createEventDispatcher();
 
@@ -53,7 +47,6 @@
   export let initialPage: number;
   export let initialNoteId: string | undefined = undefined;
 
-  // 为每个PDF实例生成唯一ID，避免多个PDF视图冲突
   // 为每个PDF实例生成唯一ID，避免多个PDF视图冲突
   const pdfInstanceId = `pdf-${novel.id}-${Date.now()}`;
   let pdfContainerElement: HTMLElement;
@@ -68,7 +61,7 @@
   let showingCoverPage = true;
 
   import type { PDFOutline } from '../../types';
-  import type {Note} from "../../types/notes";
+  import type { Note } from '../../types/notes';
   let outlines: PDFOutline[] = []; //PDF大纲数据
   let isActive = false;
   export let chapterHistory: ChapterHistory[] = []; //章节历史记录（export让view层可以更新）
@@ -109,10 +102,6 @@
       pageNum: currentPage,
     };
   }
-
-  // 章节元素容器引用（用于自动滚动到当前章节）
-
-  // 防抖函数：用于优化滚动性能
 
   // PDF 悬浮目录：目录/页码切换功能
   // 'chapters' = 显示目录，'pages' = 显示页码列表
@@ -986,10 +975,6 @@
       console.error(`[${pdfInstanceId}] 渲染器清理失败:`, error);
     }
 
-    // 在组件销毁前保存最后的阅读进度
-
-    // saveReadingProgress removed - handled by ReaderProgressManager
-
     // 清理工作
     if (readerContainer) {
       readerContainer.innerHTML = '';
@@ -1156,9 +1141,6 @@
   >
     <!-- Sidebar handled by manager -->
 
-    <!-- <div slot="sidebar">...</div>  Sidebar is standard? No, need customized sidebar or pass props -->
-    <!-- ReadingSessionManager has built-in sidebar if chapters are passed -->
-
     <div class="content-area">
       <!-- 内容区域 -->
       <div class="toolbar">
@@ -1311,6 +1293,41 @@
       <!-- 底部导航栏已移至 ReadingSessionManager -->
     </div>
   </ReadingSessionManager>
+
+  <!-- 悬浮目录 -->
+  <HoverTOC
+    show={displayMode === 'hover'}
+    chapters={chapters.map((ch) => ({
+      id: ch.startPage,
+      title: ch.title,
+      level: 0,
+      subChapters:
+        ch.subChapters?.map((sub) => ({
+          id: sub.startPage,
+          title: sub.title,
+          level: 1,
+        })) || [],
+    }))}
+    currentChapterId={currentPage}
+    viewMode="chapters"
+    virtualPages={[]}
+    currentPageNum={currentPage}
+    canToggleView={false}
+    on:chapterSelect={(e) => handleOutlineClick(e.detail.chapter.id)}
+    on:pageSelect={(e) => handlePageChange(e.detail.page.pageNum)}
+  />
+
+  <!-- 键盘导航 -->
+  <KeyboardNavigationHandler
+    enabled={isActive}
+    readerType="pdf"
+    canGoPrev={currentPage > 1}
+    canGoNext={currentPage < (numPages || 0)}
+    on:prevChapter={() => handlePageChange(currentPage - 1)}
+    on:nextChapter={() => handlePageChange(currentPage + 1)}
+    on:toggleTOC={toggleOutlinePanel}
+    on:closePanel={() => (showOutlinePanel = false)}
+  />
 
   <!-- 进度管理组件 -->
   <ReaderProgressManager

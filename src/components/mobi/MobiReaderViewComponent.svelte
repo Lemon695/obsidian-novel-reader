@@ -1,6 +1,5 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
-  import { fade } from 'svelte/transition';
   import type NovelReaderPlugin from '../../main';
   import type { Novel, ReadingProgress } from '../../types';
   import { Notice } from 'obsidian';
@@ -24,7 +23,6 @@
   import type { ChapterProgress } from '../../types/txt/txt-reader';
 
   import ReaderProgressManager from '../reader/ReaderProgressManager.svelte';
-  // import type { ProgressPosition } from '../reader/ReaderProgressManager.svelte';
   import BookmarkPanelWrapper from '../reader/BookmarkPanelWrapper.svelte';
   import TextSelectionMenu from '../TextSelectionMenu.svelte';
   import NoteDialog from '../NoteDialog.svelte';
@@ -32,7 +30,6 @@
   import type { Bookmark } from '../../types/bookmark';
   // 统一渲染器
   import { MobiRenderer, ReaderStyleManager, ReaderBookmarkManager } from '../../services/renderer';
-  import type { BookmarkPosition } from '../../services/renderer';
 
   const dispatch = createEventDispatcher();
 
@@ -211,8 +208,6 @@
       startPos: scrollPosition,
       endPos: scrollPosition,
     };
-
-    // Progress auto-saved by ReaderProgressManager
 
     // 同时保存滚动位置
     const contentArea = viewElement?.querySelector('.mobi-content');
@@ -960,6 +955,25 @@
     </ReadingSessionManager>
   {/if}
 
+  <!-- 悬浮目录 -->
+  <HoverTOC
+    show={displayMode === 'hover'}
+    chapters={(toc || []).map((item, index) => ({
+      id: index,
+      title: item.title,
+      level: item.level || 0,
+      subChapters: [],
+    }))}
+    currentChapterId={currentSection}
+    viewMode="chapters"
+    virtualPages={[]}
+    currentPageNum={currentSection + 1}
+    canToggleView={false}
+    on:chapterSelect={(e) => {
+      goToSection(e.detail.chapter.id);
+    }}
+  />
+
   <!-- 键盘导航处理组件 -->
   <KeyboardNavigationHandler
     enabled={isActive}
@@ -1063,59 +1077,6 @@
     z-index: 1000;
   }
 
-  .mobi-controls {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.5rem 1rem;
-    background: var(--background-primary);
-    border-top: 1px solid var(--background-modifier-border);
-    gap: 1rem;
-  }
-
-  .control-btn {
-    padding: 0.5rem 1rem;
-    background: var(--interactive-normal);
-    border: 1px solid var(--background-modifier-border);
-    border-radius: 4px;
-    color: var(--text-normal);
-    cursor: pointer;
-    font-size: 1.2rem;
-    transition: all 0.2s;
-  }
-
-  .control-btn:hover {
-    background: var(--interactive-hover);
-  }
-
-  .control-btn:active {
-    background: var(--interactive-accent);
-    color: var(--text-on-accent);
-  }
-
-  .progress-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.25rem;
-  }
-
-  .section-title {
-    font-size: 0.9rem;
-    color: var(--text-normal);
-    font-weight: 500;
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .section-counter {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-  }
-
   /* 书签面板样式 - 侧边栏模式 */
 
   @keyframes slideInRight {
@@ -1125,22 +1086,5 @@
     to {
       transform: translateX(0);
     }
-  }
-
-  /* 左侧悬浮触发区域 */
-  .hover-trigger {
-    position: fixed;
-    left: 0;
-    top: 0;
-    bottom: 0;
-    width: 20px;
-    z-index: 50;
-    cursor: pointer;
-    background: transparent;
-    transition: background 0.2s ease;
-  }
-
-  .hover-trigger:hover {
-    background: linear-gradient(to right, rgba(var(--interactive-accent-rgb), 0.1), transparent);
   }
 </style>
