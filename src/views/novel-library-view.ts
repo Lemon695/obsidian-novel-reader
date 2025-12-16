@@ -28,6 +28,7 @@ export class NovelLibraryView extends ItemView {
   private libraryService: LibraryService;
   private noteService: NovelNoteService;
   private eventUnsubscribers: Array<() => void> = [];
+  private isInitialized = false; // 添加初始化标志
 
   constructor(
     leaf: WorkspaceLeaf,
@@ -105,9 +106,9 @@ export class NovelLibraryView extends ItemView {
   }
 
   private handleFocus = async () => {
-    // 检查组件是否存在
-    if (!this.component) {
-      console.warn('Cannot handle focus: component is null');
+    // 检查组件是否存在和是否已初始化
+    if (!this.component || !this.isInitialized) {
+      console.warn('Cannot handle focus: component is null or not initialized');
       return;
     }
 
@@ -441,6 +442,10 @@ export class NovelLibraryView extends ItemView {
           }
         })
       );
+
+      // 标记为已初始化
+      this.isInitialized = true;
+      console.log('NovelLibraryView initialized successfully');
     } catch (error) {
       console.error('Error in onOpen:', error);
       new Notice('Failed to open library view');
