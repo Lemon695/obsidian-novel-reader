@@ -64,7 +64,7 @@
 
 {#if show}
   <div
-    class="filter-modal-overlay"
+    class="novel-modal-overlay"
     on:click={handleOverlayClick}
     on:keydown={(e) => e.key === 'Escape' && handleClose()}
     transition:fade={{ duration: 200 }}
@@ -72,17 +72,17 @@
     aria-modal="true"
     aria-labelledby="filter-modal-title"
   >
-    <div class="filter-modal" transition:scale={{ duration: 200, start: 0.95 }}>
+    <div class="novel-modal filter-modal" transition:scale={{ duration: 200, start: 0.95 }}>
       <!-- 标题栏 -->
-      <div class="filter-modal-header">
-        <h3 id="filter-modal-title">高级筛选</h3>
-        <button class="close-button" on:click={handleClose} aria-label="关闭">
+      <div class="novel-modal-header">
+        <h3 id="filter-modal-title" class="novel-modal-title">高级筛选</h3>
+        <button class="novel-modal-close" on:click={handleClose} aria-label="关闭">
           {@html icons.close || '×'}
         </button>
       </div>
 
       <!-- 筛选内容 -->
-      <div class="filter-modal-body">
+      <div class="novel-modal-content filter-modal-body">
         <!-- 书架筛选 -->
         <div class="filter-section">
           <div class="filter-section-title">
@@ -91,7 +91,7 @@
           </div>
           <div class="filter-options">
             <button
-              class="filter-option-button"
+              class="filter-option"
               class:active={localFilters.shelfId === 'all'}
               on:click={() => (localFilters.shelfId = 'all')}
             >
@@ -99,7 +99,7 @@
             </button>
             {#each shelves as shelf}
               <button
-                class="filter-option-button"
+                class="filter-option"
                 class:active={localFilters.shelfId === shelf.id}
                 on:click={() => (localFilters.shelfId = shelf.id)}
               >
@@ -118,7 +118,7 @@
             <span class="icon">📂</span>
             <span>分类筛选</span>
           </div>
-          <select bind:value={localFilters.categoryId} class="filter-select">
+          <select bind:value={localFilters.categoryId} class="novel-select filter-select">
             <option value="">全部分类</option>
             {#each categories as category}
               <option value={category.id}>{category.name}</option>
@@ -132,25 +132,25 @@
             <span class="icon">🏷️</span>
             <span>标签筛选</span>
             {#if localFilters.tagIds.length > 0}
-              <span class="selected-count">({localFilters.tagIds.length})</span>
+              <span class="selected-count">已选 {localFilters.tagIds.length}</span>
             {/if}
           </div>
-          <div class="filter-tags">
-            {#if tags.length === 0}
-              <div class="empty-state">暂无标签</div>
-            {:else}
+          {#if tags.length > 0}
+            <div class="filter-tags">
               {#each tags as tag}
                 <button
-                  class="filter-tag-button"
-                  class:selected={localFilters.tagIds.includes(tag.id)}
-                  style="--tag-color: {tag.color || 'var(--interactive-accent)'}"
+                  class="filter-tag"
+                  class:active={localFilters.tagIds.includes(tag.id)}
+                  style="background-color: {tag.color}"
                   on:click={() => toggleTag(tag.id)}
                 >
                   {tag.name}
                 </button>
               {/each}
-            {/if}
-          </div>
+            </div>
+          {:else}
+            <div class="empty-state">暂无标签</div>
+          {/if}
         </div>
 
         <!-- 阅读进度 -->
@@ -161,28 +161,28 @@
           </div>
           <div class="filter-options">
             <button
-              class="filter-option-button"
+              class="filter-option"
               class:active={localFilters.progressStatus === 'all'}
               on:click={() => (localFilters.progressStatus = 'all')}
             >
               全部
             </button>
             <button
-              class="filter-option-button"
-              class:active={localFilters.progressStatus === 'new'}
-              on:click={() => (localFilters.progressStatus = 'new')}
+              class="filter-option"
+              class:active={localFilters.progressStatus === 'unread'}
+              on:click={() => (localFilters.progressStatus = 'unread')}
             >
               未开始
             </button>
             <button
-              class="filter-option-button"
+              class="filter-option"
               class:active={localFilters.progressStatus === 'reading'}
               on:click={() => (localFilters.progressStatus = 'reading')}
             >
               阅读中
             </button>
             <button
-              class="filter-option-button"
+              class="filter-option"
               class:active={localFilters.progressStatus === 'finished'}
               on:click={() => (localFilters.progressStatus = 'finished')}
             >
@@ -199,21 +199,21 @@
           </div>
           <div class="filter-options">
             <button
-              class="filter-option-button"
+              class="filter-option"
               class:active={localFilters.addTimeRange === 'all'}
               on:click={() => (localFilters.addTimeRange = 'all')}
             >
-              全部
+              全部时间
             </button>
             <button
-              class="filter-option-button"
+              class="filter-option"
               class:active={localFilters.addTimeRange === 'week'}
               on:click={() => (localFilters.addTimeRange = 'week')}
             >
               最近7天
             </button>
             <button
-              class="filter-option-button"
+              class="filter-option"
               class:active={localFilters.addTimeRange === 'month'}
               on:click={() => (localFilters.addTimeRange = 'month')}
             >
@@ -224,9 +224,9 @@
       </div>
 
       <!-- 底部操作栏 -->
-      <div class="filter-modal-footer">
-        <button class="reset-button" on:click={handleReset}>重置</button>
-        <button class="apply-button" on:click={handleApply}>应用筛选</button>
+      <div class="novel-modal-footer">
+        <button class="novel-btn novel-btn-secondary" on:click={handleReset}>重置</button>
+        <button class="novel-btn novel-btn-primary" on:click={handleApply}>应用筛选</button>
       </div>
     </div>
   </div>
