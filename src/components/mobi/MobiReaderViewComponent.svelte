@@ -53,7 +53,7 @@
   let renderer: MobiRenderer | null = null;
   let styleManager: ReaderStyleManager | null = null;
   let mobiContentElement: HTMLElement; // MOBI 内容容器
-  let displayMode: 'hover' | 'none' = 'none'; // 悬浮目录显示模式
+  let displayMode: 'hover' | 'none' = 'hover'; // 悬浮目录显示模式
   let isActive = false;
 
   // 阅读器设置
