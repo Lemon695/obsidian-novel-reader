@@ -16,9 +16,12 @@ export class CustomShelfService {
 		this.initialize();
 	}
 
-	private async initialize() {
-		await this.loadCustomShelves();
-		await this.loadFavorites();
+	private async initialize(): Promise<void> {
+		// 并行加载
+		await Promise.all([
+			this.loadCustomShelves(),
+			this.loadFavorites()
+		]);
 	}
 
 	// 加载自定义书架
@@ -93,10 +96,25 @@ export class CustomShelfService {
 		return newShelf;
 	}
 
-	// 删除自定义书架
-	async deleteCustomShelf(shelfId: string) {
-		this.customShelves = this.customShelves.filter(shelf => shelf.id !== shelfId);
+	// 删除自定义书架（带图书检查）
+	async deleteCustomShelf(shelfId: string): Promise<boolean> {
+		const shelf = this.customShelves.find(s => s.id === shelfId);
+		if (!shelf) {
+			console.warn(`Shelf not found: ${shelfId}`);
+			return false;
+		}
+
+		// 检查是否有图书
+		if (shelf.novels && shelf.novels.length > 0) {
+			new Notice(`书架"${shelf.name}"中还有 ${shelf.novels.length} 本书，请先移除图书`);
+			return false;
+		}
+
+		this.customShelves = this.customShelves.filter(s => s.id !== shelfId);
 		await this.saveCustomShelves();
+		
+		new Notice(`已删除书架"${shelf.name}"`);
+		return true;
 	}
 
 	// 添加图书到自定义书架

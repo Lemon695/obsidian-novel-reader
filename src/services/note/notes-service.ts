@@ -30,12 +30,13 @@ export class NotesService {
 				await this.app.vault.adapter.mkdir(notesDir);
 			}
 
+			console.log('NotesService 保存笔记:', notesPath, '笔记数量:', notes.length);
 			await this.app.vault.adapter.write(
 				notesPath,
 				JSON.stringify(notesData, null, 2)
 			);
 
-			console.log('Notes saved successfully');
+			console.log('✓ NotesService 笔记保存成功');
 		} catch (error) {
 			console.error('Failed to save notes:', error);
 			throw error;
@@ -48,9 +49,11 @@ export class NotesService {
 			const notesPath = this.pathsService.getNotesPath(novelId);
 
 			if (await this.app.vault.adapter.exists(notesPath)) {
+				// 直接读取文件内容（Obsidian 的 adapter.read 应该是最新的）
 				const data = await this.app.vault.adapter.read(notesPath);
 				const notesData = JSON.parse(data);
-				return notesData.notes;
+				console.log(`✓ 加载笔记: ${novelId}, 共 ${notesData.notes?.length || 0} 条`);
+				return notesData.notes || [];
 			}
 			return [];
 		} catch (error) {

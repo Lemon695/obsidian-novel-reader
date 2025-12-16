@@ -150,34 +150,51 @@
 	.selection-menu {
 		position: fixed;
 		z-index: 1000;
-		background: var(--background-primary);
-		border: 1px solid var(--background-modifier-border);
-		border-radius: var(--novel-radius-sm);
-		box-shadow: var(--novel-shadow-sm);
-		padding: var(--novel-spacing-xs);
+		background: linear-gradient(135deg, var(--background-primary) 0%, var(--background-secondary) 100%);
+		border: 2px solid var(--interactive-accent);
+		border-radius: 10px;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+		padding: 6px;
 		transform: translate(-50%, -50%);
+		animation: popIn 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+
+	@keyframes popIn {
+		from {
+			opacity: 0;
+			transform: translate(-50%, -50%) scale(0.9);
+		}
+		to {
+			opacity: 1;
+			transform: translate(-50%, -50%) scale(1);
+		}
 	}
 
 	.menu-item {
 		display: block;
-		padding: var(--novel-spacing-sm);
-		min-width: 100px;
+		padding: 10px 16px;
+		min-width: 120px;
 		background: none;
 		border: none;
 		cursor: pointer;
 		color: var(--text-normal);
-		font-size: var(--novel-font-size-base);
-		border-radius: var(--novel-radius-sm);
+		font-size: 14px;
+		font-weight: 500;
+		border-radius: 6px;
 		text-align: left;
 		width: 100%;
-		transition: var(--novel-transition-base);
+		transition: all 0.2s ease;
+		border-left: 3px solid transparent;
 	}
 
 	.menu-item:hover {
-		background-color: var(--background-modifier-hover);
+		background: var(--background-modifier-hover);
+		border-left-color: var(--interactive-accent);
+		color: var(--interactive-accent);
+		transform: translateX(2px);
 	}
 
 	.menu-item + .menu-item {
-		margin-top: var(--novel-spacing-xs);
+		margin-top: 4px;
 	}
 </style>

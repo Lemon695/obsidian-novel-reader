@@ -1,4 +1,4 @@
-import type {ViewMode, ReadingMode, Theme} from './index';
+import type { ViewMode, ReadingMode, Theme } from './index';
 
 export interface NovelSettings {
 	// 库设置
@@ -70,6 +70,19 @@ export interface NovelSettings {
 		addBookmark: string;
 		addNote: string;
 	};
+
+	// 渲染器样式设置（每本书独立）
+	readerStyles?: Record<string, {
+		fontSize: number;
+		fontFamily: string;
+		textColor: string;
+		backgroundColor: string;
+		lineHeight: number;
+		fontWeight: number;
+		letterSpacing?: number;
+		wordSpacing?: number;
+		textAlign?: 'left' | 'center' | 'right' | 'justify';
+	}>;
 }
 
 // 默认设置

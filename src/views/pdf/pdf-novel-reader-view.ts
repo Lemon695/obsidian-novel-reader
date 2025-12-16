@@ -20,10 +20,11 @@ export class PDFNovelReaderView extends ItemView {
 	private dataReady = false;
 	private currentSessionId: string | undefined;
 	private libraryService: LibraryService;
+	private eventUnsubscribers: Array<() => void> = [];
 
 	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
 		super(leaf);
-		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
+		this.libraryService = plugin.libraryService;
 	}
 
 	getViewType(): string {
@@ -34,7 +35,7 @@ export class PDFNovelReaderView extends ItemView {
 		return this.novel?.title || "PDF Reader";
 	}
 
-	async setNovelData(novel: Novel, options?: { initialPage?: number }) {
+	async setNovelData(novel: Novel, options?: { initialPage?: number; initialNoteId?: string }) {
 		this.novel = novel;
 		this.dataReady = true;
 
@@ -42,16 +43,17 @@ export class PDFNovelReaderView extends ItemView {
 			type: VIEW_TYPE_PDF_READER,
 			state: {
 				title: novel.title,
-				initialPage: options?.initialPage
+				initialPage: options?.initialPage,
+				initialNoteId: options?.initialNoteId
 			}
 		});
 
 		if (this.contentEl) {
-			await this.initializeComponent(options?.initialPage);
+			await this.initializeComponent(options?.initialPage, options?.initialNoteId);
 		}
 	}
 
-	private async initializeComponent(initialPage: number | null = null) {
+	private async initializeComponent(initialPage: number | null = null, initialNoteId?: string) {
 		if (!this.dataReady || !this.novel) {
 			console.log("Data not ready yet");
 			return;
@@ -70,7 +72,7 @@ export class PDFNovelReaderView extends ItemView {
 
 		try {
 			// 开始新的阅读会话
-			this.currentSessionId = await this.plugin.dbService?.startReadingSession(
+			this.currentSessionId = await this.plugin.statsService?.startReadingSession(
 				this.novel.id,
 				selectPage,
 				`Page ${selectPage}`
@@ -89,6 +91,7 @@ export class PDFNovelReaderView extends ItemView {
 				novel: this.novel,
 				displayMode: this.plugin.settings.chapterDisplayMode,
 				initialPage: selectPage,
+				initialNoteId,
 				plugin: this.plugin,
 				chapterHistory: initialHistory
 			}
@@ -98,83 +101,105 @@ export class PDFNovelReaderView extends ItemView {
 		this.registerReadingEventListeners();
 	}
 
-	private registerReadingEventListeners() {
+	private registerReadingEventListeners(): void {
 		if (!this.component) return;
 
-		this.component.$on('startReading', async (event) => {
-			if (this.novel) {
-				console.log('Reading session started:', event.detail);
-				this.currentSessionId = await this.plugin.dbService?.startReadingSession(
+		const startReadingHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
+
+			console.log('Reading session started:', event.detail);
+			this.currentSessionId = await this.plugin.statsService?.startReadingSession(
+				this.novel.id,
+				event.detail.pageNum,
+				`Page ${event.detail.pageNum}`
+			);
+		};
+
+		const endReadingHandler = async () => {
+			if (this.currentSessionId) {
+				await this.plugin.statsService?.endReadingSession(this.currentSessionId);
+				this.currentSessionId = undefined;
+			}
+		};
+
+		const pageChangedHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
+
+			console.log('Page changed:', event.detail);
+
+			try {
+				await this.plugin.chapterHistoryService.addHistory(
+					this.novel.id,
+					event.detail.pageNum,
+					`第 ${event.detail.pageNum} 页`
+				);
+
+				const newHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
+				if (this.component) {
+					this.component.$set({ chapterHistory: newHistory });
+				}
+			} catch (error) {
+				console.error('Failed to record page history:', error);
+			}
+
+			try {
+				if (this.currentSessionId) {
+					await this.plugin.statsService?.endReadingSession(this.currentSessionId);
+				}
+
+				this.currentSessionId = await this.plugin.statsService?.startReadingSession(
 					this.novel.id,
 					event.detail.pageNum,
 					`Page ${event.detail.pageNum}`
 				);
+			} catch (error) {
+				console.error('Failed to manage reading session:', error);
 			}
-		});
+		};
 
-		this.component.$on('endReading', async () => {
-			if (this.currentSessionId) {
-				await this.plugin.dbService?.endReadingSession(this.currentSessionId);
-				this.currentSessionId = undefined;
+		const saveProgressHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
+
+			try {
+				await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
+			} catch (error) {
+				console.error('Failed to save progress:', error);
 			}
-		});
+		};
 
-		this.component.$on('pageChanged', async (event) => {
-			if (this.novel) {
-				console.log('Page changed:', event.detail);
+		// 使用 $on 的返回值来取消订阅（更安全）
+		const unsubStartReading = this.component.$on('startReading', startReadingHandler);
+		const unsubEndReading = this.component.$on('endReading', endReadingHandler);
+		const unsubPageChanged = this.component.$on('pageChanged', pageChangedHandler);
+		const unsubSaveProgress = this.component.$on('saveProgress', saveProgressHandler);
 
-				// 记录页码历史（优先执行，不依赖session）
-				try {
-					await this.plugin.chapterHistoryService.addHistory(
-						this.novel.id,
-						event.detail.pageNum,
-						`第 ${event.detail.pageNum} 页`
-					);
-
-					// 刷新历史显示
-					const newHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
-					if (this.component) {
-						this.component.$set({ chapterHistory: newHistory });
-					}
-				} catch (error) {
-					console.error('Failed to record page history:', error);
-				}
-
-				// 结束当前会话（放在try-catch中，避免阻塞）
-				try {
-					if (this.currentSessionId) {
-						await this.plugin.dbService?.endReadingSession(this.currentSessionId);
-					}
-					// 开始新会话
-					this.currentSessionId = await this.plugin.dbService?.startReadingSession(
-						this.novel.id,
-						event.detail.pageNum,
-						`Page ${event.detail.pageNum}`
-					);
-				} catch (error) {
-					console.error('Failed to manage reading session:', error);
-				}
-			}
-		});
-
-		// 监听进度保存事件（使用组件事件而不是全局window事件）
-		this.component.$on('saveProgress', async (event) => {
-			if (this.novel) {
-				try {
-					await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
-				} catch (error) {
-					console.error('Failed to save progress:', error);
-				}
-			}
-		});
+		this.eventUnsubscribers.push(
+			unsubStartReading,
+			unsubEndReading,
+			unsubPageChanged,
+			unsubSaveProgress
+		);
 	}
 
-	async onClose() {
+	async onClose(): Promise<void> {
 		if (this.currentSessionId) {
-			await this.plugin.dbService?.endReadingSession(this.currentSessionId);
+			await this.plugin.statsService?.endReadingSession(this.currentSessionId);
 			this.currentSessionId = undefined;
 		}
 
+		// 先取消事件订阅（在组件销毁前）
+		if (this.component) {
+			this.eventUnsubscribers.forEach(unsub => {
+				try {
+					unsub();
+				} catch (error) {
+					console.error('Error unsubscribing event:', error);
+				}
+			});
+			this.eventUnsubscribers = [];
+		}
+
+		// 再销毁组件
 		if (this.component) {
 			this.component.$destroy();
 			this.component = null;

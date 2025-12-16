@@ -12,30 +12,37 @@ import {parseChapters} from "../../lib/txt.reader/chapter-logic";
 import type {CustomProgressEvent} from "../../types/read-progress";
 import {ReadingProgressService} from "../../services/progress/reading-progress-service";
 
+interface ChaptersUpdatedEvent extends CustomEvent {
+	detail: {
+		chapters: ChapterProgress[];
+	};
+}
+
 export class TxtNovelReaderView extends ItemView {
 	public component: TxtReaderViewComponent | null = null;
 	public novel: Novel | null = null;
 	public content: string | null = null;
 	private dataReady = false;
 	private plugin: NovelReaderPlugin;
-	private chaptersUpdateHandler: (event: CustomEvent) => void;
+	private chaptersUpdateHandler: (event: Event) => void;
 	private libraryService: LibraryService;
 	private currentSessionId: string | undefined;
 	private chapterHistoryService: ChapterHistoryService;
 	private readingProgressService: ReadingProgressService;
+	private eventUnsubscribers: Array<() => void> = [];
 
 	constructor(leaf: WorkspaceLeaf, plugin: NovelReaderPlugin) {
 		super(leaf);
 		this.plugin = plugin;
-		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
-		this.chapterHistoryService = new ChapterHistoryService(this.app, plugin);
+		this.libraryService = plugin.libraryService;
+		this.chapterHistoryService = plugin.chapterHistoryService;
 		this.readingProgressService = new ReadingProgressService(this.app, plugin);
 
-		// 章节更新Handler
-		this.chaptersUpdateHandler = async (event: CustomEvent) => {
+		this.chaptersUpdateHandler = async (event: Event) => {
+			const customEvent = event as ChaptersUpdatedEvent;
 			const outlineView = this.app.workspace.getLeavesOfType(VIEW_TYPE_OUTLINE)[0]?.view as TxtNovelOutlineView;
-			if (outlineView) {
-				await outlineView.setNovelData(this.novel, event.detail.chapters);
+			if (outlineView && this.novel) {
+				await outlineView.setNovelData(this.novel, customEvent.detail.chapters);
 			}
 		};
 	}
@@ -50,6 +57,7 @@ export class TxtNovelReaderView extends ItemView {
 
 	async setNovelData(novel: Novel, content: string, options?: {
 		initialChapterId?: number,
+		initialNoteId?: string,
 		chapters?: ChapterProgress[]
 	}) {
 		this.novel = novel;
@@ -63,18 +71,20 @@ export class TxtNovelReaderView extends ItemView {
 			type: VIEW_TYPE_TXT_READER,
 			state: {
 				title: novel.title,
-				initialChapterId: options?.initialChapterId // 初始章节ID
+				initialChapterId: options?.initialChapterId, // 初始章节ID
+				initialNoteId: options?.initialNoteId
 			}
 		});
 
 		if (this.contentEl) {
 			console.log("Initializing reader component");
-			await this.initializeComponent(options?.initialChapterId, options?.chapters);
+			await this.initializeComponent(options?.initialChapterId, options?.chapters, options?.initialNoteId);
 		}
 	}
 
 	private async initializeComponent(initialChapterId: number | null = null,
-									  chapters?: ChapterProgress[]) {
+									  chapters?: ChapterProgress[],
+									  initialNoteId?: string) {
 		if (!this.dataReady || !this.novel || !this.content) {
 			console.log("Data not ready yet");
 			return;
@@ -102,6 +112,7 @@ export class TxtNovelReaderView extends ItemView {
 				content: this.content,
 				displayMode: this.plugin.settings.chapterDisplayMode,
 				initialChapterId: selectChapterId, // 优先使用指定的章节ID，如果未指定则使用历史阅读进度
+				initialNoteId,
 				savedProgress: initialChapterId != null ? initialChapterId : progress,
 				chapterHistoryService: this.chapterHistoryService,
 				chapters: txtChapterProgress,
@@ -124,105 +135,121 @@ export class TxtNovelReaderView extends ItemView {
 		}
 	}
 
-	async onOpen() {
+	async onOpen(): Promise<void> {
 		console.log("[onOpen]TxtNovelReaderView onOpen");
+		
 		if (this.novel) {
-			// 确保打开时也设置正确的标题
-			await this.leaf.setViewState({type: VIEW_TYPE_TXT_READER, state: {title: this.novel.title}});
+			await this.leaf.setViewState({
+				type: VIEW_TYPE_TXT_READER, 
+				state: { title: this.novel.title }
+			});
 		}
 
 		if (this.dataReady) {
 			await this.initializeComponent();
 		}
-		// 添加章节更新事件监听
-		window.addEventListener('chaptersUpdated', this.chaptersUpdateHandler as EventListener);
+
+		window.addEventListener('chaptersUpdated', this.chaptersUpdateHandler);
 	}
 
-	async onClose() {
+	async onClose(): Promise<void> {
 		if (this.currentSessionId) {
-			// 结束阅读会话
-			await this.plugin.dbService?.endReadingSession(this.currentSessionId);
+			await this.plugin.statsService?.endReadingSession(this.currentSessionId);
 			this.currentSessionId = undefined;
 		}
 
+		// 先取消事件订阅（在组件销毁前）
+		if (this.component) {
+			this.eventUnsubscribers.forEach(unsub => {
+				try {
+					unsub();
+				} catch (error) {
+					console.error('Error unsubscribing event:', error);
+				}
+			});
+			this.eventUnsubscribers = [];
+		}
+
+		window.removeEventListener('chaptersUpdated', this.chaptersUpdateHandler);
+
+		// 再销毁组件
 		if (this.component) {
 			this.component.$destroy();
 			this.component = null;
 		}
-
-		// 移除事件监听
-		window.removeEventListener('chaptersUpdated',
-			this.chaptersUpdateHandler as EventListener);
 	}
 
-	async setCurrentChapter(chapterId: number) {
-		if (this.component) {
-			this.component.$set({
-				currentChapterId: chapterId
-			});
+	async setCurrentChapter(chapterId: number): Promise<void> {
+		if (!this.component) return;
 
-			// 触发大纲视图的更新
-			const outlineView = this.app.workspace.getLeavesOfType(VIEW_TYPE_OUTLINE)[0]?.view as TxtNovelOutlineView;
-			if (outlineView) {
-				await outlineView.updateChapter(chapterId);
-			}
+		this.component.$set({ currentChapterId: chapterId });
+
+		const outlineView = this.app.workspace.getLeavesOfType(VIEW_TYPE_OUTLINE)[0]?.view as TxtNovelOutlineView;
+		if (outlineView) {
+			await outlineView.updateChapter(chapterId);
 		}
 	}
 
-	private registerReadingEventListeners() {
+	private registerReadingEventListeners(): void {
 		if (!this.component) return;
 
-		this.component.$on('startReading', async (event) => {
+		const startReadingHandler = async (event: CustomEvent) => {
 			if (this.novel) {
 				console.log('Reading session started:', event.detail);
-				this.currentSessionId = await this.plugin.dbService?.startReadingSession(
+				this.currentSessionId = await this.plugin.statsService?.startReadingSession(
 					this.novel.id,
 					event.detail.chapterId,
 					event.detail.chapterTitle
 				);
 			}
-		});
+		};
 
-		this.component.$on('endReading', async () => {
+		const endReadingHandler = async () => {
 			if (this.currentSessionId) {
-				//console.log('Reading session ended:', this.currentSessionId);
-				await this.plugin.dbService?.endReadingSession(this.currentSessionId);
+				await this.plugin.statsService?.endReadingSession(this.currentSessionId);
 				this.currentSessionId = undefined;
 			}
-		});
+		};
 
-		this.component.$on('chapterChanged', async (event) => {
-			if (this.novel) {
-				console.log('Chapter changed:', event.detail);
+		const chapterChangedHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
 
-				// 结束当前会话
-				if (this.currentSessionId) {
-					await this.plugin.dbService?.endReadingSession(this.currentSessionId);
-				}
-				// 开始新会话
-				this.currentSessionId = await this.plugin.dbService?.startReadingSession(
-					this.novel.id,
-					event.detail.chapterId,
-					event.detail.chapterTitle
-				);
+			console.log('Chapter changed:', event.detail);
 
-				// ❌ 删除全局事件触发，避免影响其他打开的书籍
-				// 键盘切换章节时不需要通知其他视图，只有outline点击时才需要
-				// this.app.workspace.trigger('novel-chapter-selected', event.detail.chapterId);
+			if (this.currentSessionId) {
+				await this.plugin.statsService?.endReadingSession(this.currentSessionId);
 			}
-		});
 
-		// 监听进度保存事件（使用组件事件而不是全局window事件）
-		this.component.$on('saveProgress', async (event) => {
-			if (this.novel) {
-				console.log('TxtView,监听"saveProgress"---', JSON.stringify(event.detail?.progress));
-				try {
-					await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
-				} catch (error) {
-					console.error('Failed to save progress:', error);
-				}
+			this.currentSessionId = await this.plugin.statsService?.startReadingSession(
+				this.novel.id,
+				event.detail.chapterId,
+				event.detail.chapterTitle
+			);
+		};
+
+		const saveProgressHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
+
+			console.log('TxtView,监听"saveProgress"---', JSON.stringify(event.detail?.progress));
+			try {
+				await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
+			} catch (error) {
+				console.error('Failed to save progress:', error);
 			}
-		});
+		};
+
+		// 使用 $on 的返回值来取消订阅（更安全）
+		const unsubStartReading = this.component.$on('startReading', startReadingHandler);
+		const unsubEndReading = this.component.$on('endReading', endReadingHandler);
+		const unsubChapterChanged = this.component.$on('chapterChanged', chapterChangedHandler);
+		const unsubSaveProgress = this.component.$on('saveProgress', saveProgressHandler);
+
+		this.eventUnsubscribers.push(
+			unsubStartReading,
+			unsubEndReading,
+			unsubChapterChanged,
+			unsubSaveProgress
+		);
 	}
 
 	// 查找已存在的阅读视图

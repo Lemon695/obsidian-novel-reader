@@ -1,105 +1,97 @@
-import {ItemView, Notice, WorkspaceLeaf} from 'obsidian';
-import type {Novel} from '../types';
+import { ItemView, Notice, WorkspaceLeaf } from 'obsidian';
+import type { Novel } from '../types';
 import NovelStatsComponent from '../components/NovelStatsComponent.svelte';
 import EnhancedNovelStatsComponent from '../components/EnhancedNovelStatsComponent.svelte';
-import {ReadingStatsService} from '../services/reading-stats-service';
-import {VIEW_TYPE_STATS} from '../types/constants';
-import type NovelReaderPlugin from "../main";
-import type {ComponentType} from "svelte";
+import { ReadingStatsService } from '../services/reading-stats-service';
+import { VIEW_TYPE_STATS } from '../types/constants';
+import type NovelReaderPlugin from '../main';
+import type { ComponentType } from 'svelte';
 
 export class NovelStatsView extends ItemView {
-	private component: any | null = null;
-	private statsService: ReadingStatsService;
+  private component: { $destroy: () => void } | null = null;
 
-	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
-		super(leaf);
-		this.statsService = new ReadingStatsService(this.app, plugin);
-	}
+  constructor(
+    leaf: WorkspaceLeaf,
+    private plugin: NovelReaderPlugin
+  ) {
+    super(leaf);
+  }
 
-	getViewType(): string {
-		return VIEW_TYPE_STATS;
-	}
+  getViewType(): string {
+    return VIEW_TYPE_STATS;
+  }
 
-	getDisplayText(): string {
-		return '阅读统计';
-	}
+  getDisplayText(): string {
+    return '阅读统计';
+  }
 
-	async setNovel(novel: Novel) {
-		try {
-			const container = this.contentEl;
-			container.empty();
+  async setNovel(novel: Novel) {
+    try {
+      const container = this.contentEl;
+      container.empty();
 
-			// 清理旧组件
-			if (this.component) {
-				this.component.$destroy();
-				this.component = null;
-			}
+      // 清理旧组件
+      if (this.component) {
+        this.component.$destroy();
+        this.component = null;
+      }
 
-			// 优先使用增强统计系统
-			if (this.plugin.settings.useEnhancedStats && this.plugin.statsAdapter) {
-				const enhancedStats = await this.plugin.statsAdapter.getEnhancedNovelStats(novel.id);
+      // 使用统计服务获取数据
+      const statsService = new ReadingStatsService(this.app, this.plugin);
+      const stats = await statsService.getNovelStats(novel.id);
 
-				if (enhancedStats) {
-					// 使用增强统计组件
-					this.component = new (EnhancedNovelStatsComponent as unknown as ComponentType)({
-						target: container,
-						props: {
-							novel,
-							plugin: this.plugin
-						}
-					});
+      if (!stats) {
+        new Notice('暂无阅读数据');
+      }
 
-					await this.app.workspace.revealLeaf(this.leaf);
-					return;
-				}
-			}
+      this.component = new (NovelStatsComponent as unknown as ComponentType)({
+        target: container,
+        props: {
+          novel,
+          stats: stats || undefined,
+        },
+      });
 
-			// 回退到旧统计系统
-			const stats = await this.statsService.getNovelStats(novel.id);
+      await this.app.workspace.revealLeaf(this.leaf);
+    } catch (error) {
+      console.error('Error loading stats:', error);
+      new Notice('加载统计数据失败');
+    }
+  }
 
-			if (!stats) {
-				new Notice('暂无阅读数据');
-			}
+  async onClose(): Promise<void> {
+    if (this.component) {
+      this.component.$destroy();
+      this.component = null;
+    }
+  }
 
-			this.component = new (NovelStatsComponent as unknown as ComponentType)({
-				target: container,
-				props: {
-					novel,
-					stats: stats || undefined
-				}
-			});
+  private formatStats(stats: Record<string, unknown>) {
+    // 格式化统计数据以适应组件显示
+    const dailyStats = Array.isArray(stats.dailyStats) ? stats.dailyStats : [];
+    const chapterStats = Array.isArray(stats.chapterStats) ? stats.chapterStats : [];
+    const totalStats = (stats.totalStats as Record<string, unknown>) || {};
 
-			await this.app.workspace.revealLeaf(this.leaf);
-		} catch (error) {
-			console.error('Error loading stats:', error);
-			new Notice('加载统计数据失败');
-		}
-	}
-
-
-	async onClose() {
-		if (this.component) {
-			this.component.$destroy();
-			this.component = null;
-		}
-	}
-
-	private formatStats(stats: any) {
-		// 格式化统计数据以适应组件显示
-		return {
-			dailyReadTime: stats.dailyStats.map((day: any) => ({
-				date: day.date,
-				duration: day.read_time
-			})),
-			chapterStats: stats.chapterStats.map((chapter: any) => ({
-				id: chapter.chapter_id,
-				timeSpent: chapter.total_time,
-				readCount: chapter.read_count
-			})),
-			totalStats: {
-				totalTime: stats.totalStats.total_time,
-				sessionsCount: stats.totalStats.total_sessions
-			}
-		};
-	}
+    return {
+      dailyReadTime: dailyStats.map((day: unknown) => {
+        const dayObj = day as Record<string, unknown>;
+        return {
+          date: dayObj.date,
+          duration: dayObj.read_time,
+        };
+      }),
+      chapterStats: chapterStats.map((chapter: unknown) => {
+        const chapterObj = chapter as Record<string, unknown>;
+        return {
+          id: chapterObj.chapter_id,
+          timeSpent: chapterObj.total_time,
+          readCount: chapterObj.read_count,
+        };
+      }),
+      totalStats: {
+        totalTime: totalStats.total_time,
+        sessionsCount: totalStats.total_sessions,
+      },
+    };
+  }
 }

@@ -1,986 +1,1064 @@
 <script lang="ts">
-	import {createEventDispatcher, onDestroy, onMount} from 'svelte';
-	import {fade} from 'svelte/transition';
-	import type {Novel, ReadingProgress} from '../../types';
-	import type NovelReaderPlugin from "../../main";
-	import type {ChapterHistory} from "../../types/reading-stats";
-	import type { ChapterProgress} from "../../types/txt/txt-reader";
-	import {handleChapterChange, parseChapters, switchChapter} from "../../lib/txt.reader/chapter-logic";
-	import {saveReadingProgress} from "../../lib/txt.reader/progress-logic";
-	import {scrollPage} from "../../lib/txt.reader/scroll-control";
-	import type{Note} from "../../types/notes";
-	import NoteDialog from "../NoteDialog.svelte";
-	import {v4 as uuidv4} from 'uuid';
-	import NoteViewer from "../NoteViewer.svelte";
-	import ReaderSettingsMenu from "../setting/ReaderSettingsMenu.svelte";
-	import {Notice} from "obsidian";
-	import TextSelectionMenu from "../TextSelectionMenu.svelte";
-	import {NotesService} from "../../services/note/notes-service";
-	import { icons } from '../library/icons';
-	import { debounce, throttle } from '../../utils/debounce';
-
-	const dispatch = createEventDispatcher();
-
-	export let plugin: NovelReaderPlugin;
-	export let novel: Novel;
-	export let content: string = '';
-	export let displayMode: 'hover' | 'outline' | 'sidebar' = 'sidebar';
-	export let currentChapterId: number | null = null;
-	export let initialChapterId: number | null = null; //初始打开图书选择的章节ID
-	export let savedProgress: ReadingProgress | null = null;
-	export let chapters: ChapterProgress[] = [];
-
-	// 唯一实例ID用于调试
-	const instanceId = `TXT-${novel.id.substring(0, 8)}-${Date.now()}`;
-	console.log(`[${instanceId}] Component created for novel: ${novel.title}`);
-
-	let notesService: NotesService; //笔记
-
-	let isActive = false;
-	let readerElement: HTMLElement; // 阅读器主元素引用
-
-	let currentChapter: ChapterProgress | null = null;
-	let contentLoaded = false;
-	let isMenuVisible = false;
-
-	// 目录面板显示状态
-	let showOutlinePanel = false;
-
-	let readingSessionInterval: ReturnType<typeof setInterval> | null = null;
-	let isReadingActive = false;
-	const INACTIVITY_THRESHOLD = 5 * 60 * 1000; // 5分钟无操作视为暂停
-	let lastActivityTime = Date.now();
-	let sessionStartTime: number | null = null;
-
-	let hoverChaptersContainer: HTMLElement;
-	let outlineChaptersContainer: HTMLElement;
-	let sidebarChaptersContainer: HTMLElement;
-	let fullscreenChaptersContainer: HTMLElement;
-	let chapterElements: Map<number, HTMLElement> = new Map();
-	let isSidebarCollapsed = false; // sidebar折叠状态
-
-	let notes: Note[] = [];
-	let noteViewerPosition = {x: 0, y: 0};
-
-	let showNoteDialog = false;      // 控制笔记对话框显示
-	let noteViewerVisible = false;   // 控制笔记查看器显示
-	let selectedNote: Note | null = null;
-	let selectedTextForNote = '';
-	let selectedTextIndex = 0;
-	let currentLineNumber = 0;
-
-	let readingStats: any = null;
-
-	let processedContent: { notes: Note[]; text: string; lineNumber: number }[];
-	let chapterHistory: ChapterHistory[] = [];
-	let selectedTextChapterId = 0;
-	let showNoteList = false;
-
-	// TXT 悬浮目录：目录/页码切换功能
-	const LINES_PER_PAGE = 160; // 每页显示160行
-	let viewMode: 'chapters' | 'pages' = 'chapters';
-	let virtualPages: Array<{
-		pageNum: number,
-		chapterId: number,
-		chapterTitle: string,
-		startLine: number,
-		endLine: number,
-		absoluteStartLine: number,  // 原始文本绝对行号
-		absoluteEndLine: number     // 原始文本绝对行号
-	}> = [];
-	let currentPageNum = 1;
-	let currentVirtualPage: typeof virtualPages[0] | null = null;
-
-	// 计算基于行数的虚拟页码
-	function calculateVirtualPages() {
-		virtualPages = [];
-		let pageNum = 1;
-
-		// 页码模式：直接按原始文本160行分页，不考虑章节
-		if (viewMode === 'pages' || chapters.length === 0) {
-			const lines = content.split('\n');
-			const totalLines = lines.length;
-
-			for (let startLine = 0; startLine < totalLines; startLine += LINES_PER_PAGE) {
-				const endLine = Math.min(startLine + LINES_PER_PAGE - 1, totalLines - 1);
-
-				virtualPages.push({
-					pageNum: pageNum++,
-					chapterId: 0,  // 页码模式不关联章节
-					chapterTitle: '',
-					startLine: startLine,
-					endLine: endLine,
-					absoluteStartLine: startLine,
-					absoluteEndLine: endLine
-				});
-			}
-		} else {
-			// 章节模式：基于章节分页
-			let absoluteLineOffset = 0;
-
-			chapters.forEach(chapter => {
-				const lines = chapter.content.split('\n');
-				const totalLines = lines.length;
-
-				// 为每个章节按行数分页
-				for (let startLine = 0; startLine < totalLines; startLine += LINES_PER_PAGE) {
-					const endLine = Math.min(startLine + LINES_PER_PAGE - 1, totalLines - 1);
-
-					virtualPages.push({
-						pageNum: pageNum++,
-						chapterId: chapter.id,
-						chapterTitle: chapter.title,
-						startLine: startLine,
-						endLine: endLine,
-						absoluteStartLine: absoluteLineOffset + startLine,
-						absoluteEndLine: absoluteLineOffset + endLine
-					});
-				}
-
-				absoluteLineOffset += totalLines;
-			});
-		}
-
-		// 初始化第一页
-		if (virtualPages.length > 0) {
-			currentVirtualPage = virtualPages[0];
-			currentPageNum = 1;
-		}
-	}
-
-	// 根据当前章节计算当前页码
-	function updateCurrentPage() {
-		if (viewMode === 'chapters') {
-			// 章节模式：基于当前章节
-			if (!currentChapter || virtualPages.length === 0) return;
-
-			// 提取局部变量解决TypeScript控制流分析问题
-			const chapter = currentChapter;
-			const page = virtualPages.find(p =>
-				p.chapterId === chapter.id && p.startLine === 0
-			);
-			if (page) {
-				currentPageNum = page.pageNum;
-			}
-		} else {
-			// 页码模式：基于当前虚拟页
-			if (currentVirtualPage) {
-				currentPageNum = currentVirtualPage.pageNum;
-			}
-		}
-	}
-
-	// 跳转到指定页码
-	function jumpToPage(pageNum: number) {
-		const page = virtualPages.find(p => p.pageNum === pageNum);
-		if (!page) return;
-
-		currentVirtualPage = page;
-		currentPageNum = pageNum;
-
-		if (viewMode === 'pages') {
-			// 页码模式：不依赖章节，直接保存页码进度
-			// 如果有章节信息，设置一个有效的currentChapter以避免空指针
-			if (page.chapterId > 0) {
-				const targetChapter = chapters.find(ch => ch.id === page.chapterId);
-				if (targetChapter && (!currentChapter || currentChapter.id !== targetChapter.id)) {
-					currentChapter = targetChapter;
-				}
-			} else if (chapters.length > 0 && !currentChapter) {
-				// 页码模式下，设置一个默认章节以避免空指针
-				currentChapter = chapters[0];
-			}
-			savePageProgress();
-			// 记录页码历史
-			recordPageHistory(pageNum);
-		} else {
-			// 章节模式：在跨章节时更新currentChapter
-			const targetChapter = chapters.find(ch => ch.id === page.chapterId);
-			if (targetChapter && (!currentChapter || currentChapter.id !== targetChapter.id)) {
-				currentChapter = targetChapter;
-				currentChapterId = targetChapter.id;
-
-				// 记录章节历史和保存进度
-				recordChapterHistory(targetChapter);
-				saveChapterProgress();
-			}
-		}
-	}
-
-	// 保存页码进度
-	function savePageProgress() {
-		if (!currentVirtualPage) return;
-
-		const progress = {
-			novelId: novel.id,
-			chapterIndex: currentVirtualPage.pageNum - 1, // 使用页码作为索引
-			progress: (currentVirtualPage.pageNum / virtualPages.length) * 100,
-			timestamp: Date.now(),
-			totalChapters: virtualPages.length, // 使用总页数
-			position: {
-				chapterId: currentVirtualPage.chapterId || 0,  // 页码模式下chapterId为0
-				chapterTitle: `第 ${currentVirtualPage.pageNum} 页`,
-			}
-		};
-
-		// 使用组件事件而不是全局window事件，避免多视图互相干扰
-		dispatch('saveProgress', {progress});
-	}
-
-	// 切换到上一页/下一页
-	function switchPage(direction: 'prev' | 'next') {
-		const currentIndex = virtualPages.findIndex(p => p.pageNum === currentPageNum);
-		if (currentIndex === -1) return;
-
-		let nextIndex: number;
-		if (direction === 'prev') {
-			nextIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
-		} else {
-			nextIndex = currentIndex < virtualPages.length - 1 ? currentIndex + 1 : currentIndex;
-		}
-
-		if (nextIndex !== currentIndex) {
-			jumpToPage(virtualPages[nextIndex].pageNum);
-		}
-	}
-
-	// 记录页码历史
-	async function recordPageHistory(pageNum: number) {
-		const pageTitle = `第 ${pageNum} 页`;
-		try {
-			await plugin.chapterHistoryService.addHistory(novel.id, pageNum, pageTitle);
-			const newHistory = await plugin.chapterHistoryService.getHistory(novel.id);
-			chapterHistory = newHistory;
-		} catch (error) {
-			console.error('Failed to record page history:', error);
-		}
-	}
-
-	// 获取当前虚拟页的内容
-	function getCurrentPageContent(): string[] {
-		if (!currentVirtualPage) return [];
-
-		if (viewMode === 'pages') {
-			// 页码模式：使用原始文本，完全不考虑章节
-			const lines = content.split('\n');
-			return lines.slice(currentVirtualPage.absoluteStartLine, currentVirtualPage.absoluteEndLine + 1);
-		} else {
-			// 章节模式：使用章节内容
-			if (!currentChapter) return [];
-			const lines = currentChapter.content.split('\n');
-			return lines.slice(currentVirtualPage.startLine, currentVirtualPage.endLine + 1);
-		}
-	}
-
-	// 从 novel.customSettings 读取用户偏好
-	$: {
-		if (novel?.customSettings?.txtViewMode) {
-			viewMode = novel.customSettings.txtViewMode;
-		} else {
-			// 优先显示目录，如果没有目录则显示页码
-			viewMode = chapters.length > 0 ? 'chapters' : 'pages';
-		}
-	}
-
-	// 当章节变化时更新页码
-	$: if (currentChapter && virtualPages.length > 0) {
-		updateCurrentPage();
-	}
-
-	// 切换目录/页码显示模式
-	async function toggleViewMode() {
-		viewMode = viewMode === 'chapters' ? 'pages' : 'chapters';
-
-		// 保存用户选择到 novel.customSettings
-		if (!novel.customSettings) {
-			novel.customSettings = {};
-		}
-		novel.customSettings.txtViewMode = viewMode;
-
-		// 重新计算虚拟页（因为页码模式和章节模式的分页逻辑不同）
-		calculateVirtualPages();
-
-		// 更新到数据库
-		await plugin.libraryService.updateNovel(novel);
-	}
-
-	// 合并所有 onMount 逻辑，避免重复的事件监听器
-	onMount(async () => {
-		// 1. 初始化笔记服务
-		notesService = new NotesService(plugin.app, plugin);
-		notes = await notesService.loadNotes(novel.id);
-		await loadReadingStats();
-
-		// 2. 解析章节和恢复阅读进度
-		if (content) {
-			parseAndSetChapters();
-			contentLoaded = true;
-
-			// 恢复上次阅读进度
-			if (savedProgress?.position?.chapterId) {
-				currentChapterId = savedProgress.position.chapterId;
-				const savedChapter = chapters.find(ch => ch.id === currentChapterId);
-				if (savedChapter) {
-					currentChapter = savedChapter;
-				}
-
-				// 如果是页码模式且有保存的页码进度，恢复到对应页码
-				if (viewMode === 'pages' && savedProgress.chapterIndex !== undefined) {
-					const savedPageNum = savedProgress.chapterIndex + 1; // chapterIndex是从0开始的
-					const savedPage = virtualPages.find(p => p.pageNum === savedPageNum);
-					if (savedPage) {
-						currentVirtualPage = savedPage;
-						currentPageNum = savedPageNum;
-					}
-				}
-			} else if (initialChapterId !== null) {
-				// 如果有初始章节ID，加载该章节
-				const savedChapter = chapters.find(ch => ch.id === initialChapterId);
-				if (savedChapter) {
-					currentChapter = savedChapter;
-					currentChapterId = savedChapter.id;
-				}
-			} else if (chapters.length > 0) {
-				// 否则加载第一章
-				currentChapter = chapters[0];
-				currentChapterId = chapters[0].id;
-			}
-		}
-
-		// 初始化时滚动到当前章节
-		if (currentChapter) {
-			if (displayMode === 'hover' && hoverChaptersContainer) {
-				scrollToActiveChapter(hoverChaptersContainer);
-			} else if (displayMode === 'outline' && outlineChaptersContainer) {
-				scrollToActiveChapter(outlineChaptersContainer);
-			} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
-				scrollToActiveChapter(sidebarChaptersContainer);
-			}
-		}
-
-		// 3. 初始化阅读会话
-		initializeReadingSession();
-
-		// 4. 添加笔记图标点击事件监听
-		const handleNoteIconClick = (event: CustomEvent) => {
-			const noteId = event.detail.noteId;
-			const note = notes.find(n => n.id === noteId);
-			if (note) {
-				selectedNote = note;
-				const noteMarker = document.querySelector(`[data-note-id="${noteId}"]`);
-				if (noteMarker) {
-					const rect = noteMarker.getBoundingClientRect();
-					noteViewerPosition = {
-						x: rect.left + (rect.width / 2),
-						y: rect.top
-					};
-					noteViewerVisible = true;
-				}
-			}
-		};
-
-		// 5. 页面可见性变化处理
-		const handleVisibilityHandler = () => {
-			isActive = !document.hidden;
-			handleVisibilityChange();
-		};
-
-		// 6. 用户活动处理（使用节流，避免高频触发）
-		let activityTimeout: ReturnType<typeof setTimeout> | null = null;
-		const throttledUpdateActivity = () => {
-			if (activityTimeout) return;
-			activityTimeout = setTimeout(() => {
-				updateActivity();
-				activityTimeout = null;
-			}, 1000); // 节流1秒
-		};
-
-		// 7. 添加所有事件监听器（确保每个事件只监听一次）
-		// 键盘事件已改为主div的on:keydown，不再使用全局window监听
-		window.addEventListener('noteIconClick', handleNoteIconClick as EventListener);
-		document.addEventListener('visibilitychange', handleVisibilityHandler);
-
-		// 用户活动监听（移除 mousemove 以提高性能，使用节流）
-		const activityEvents = ['keydown', 'scroll', 'click'];
-		activityEvents.forEach(event => {
-			window.addEventListener(event, throttledUpdateActivity);
-		});
-
-		// 8. 返回清理函数，移除所有事件监听器
-		return () => {
-			// 清理定时器
-			if (readingSessionInterval) {
-				clearInterval(readingSessionInterval);
-			}
-			if (activityTimeout) {
-				clearTimeout(activityTimeout);
-			}
-
-			// 结束当前会话
-			if (isReadingActive) {
-				endCurrentSession();
-			}
-
-			// 清理防抖函数，防止内存泄漏
-			debouncedRenderChapter.cancel();
-			debouncedScrollToChapter.cancel();
-
-			// 移除所有事件监听器
-			// 键盘事件已改为主div的on:keydown，不需要在这里移除
-			window.removeEventListener('noteIconClick', handleNoteIconClick as EventListener);
-			document.removeEventListener('visibilitychange', handleVisibilityHandler);
-
-			activityEvents.forEach(event => {
-				window.removeEventListener(event, throttledUpdateActivity);
-			});
-		};
-	})
-
-	$: if (content && !contentLoaded) {
-		parseAndSetChapters();
-		contentLoaded = true;
-	}
-
-	$: if (currentChapterId !== null && chapters.length > 0) {
-		console.log(`[${instanceId}] 🔄 Reactive statement triggered by currentChapterId change`, {
-			currentChapterId: currentChapterId,
-			novelId: novel.id,
-			novelTitle: novel.title,
-			isActive: isActive,
-			stackTrace: new Error().stack?.split('\n').slice(2, 5).join('\n')
-		});
-
-		const chapter = chapters.find(c => c.id === currentChapterId);
-		if (chapter) {
-			currentChapter = chapter;
-			// 只在章节模式下保存章节进度，页码模式下由switchPage单独处理
-			if (viewMode === 'chapters') {
-				const progress = saveReadingProgress(novel, currentChapter, chapters);
-				if (progress) {
-					console.log(`[${instanceId}] 💾 Dispatching saveProgress from reactive statement`);
-					// 使用组件事件而不是全局window事件，避免多视图互相干扰
-					dispatch('saveProgress', {progress});
-				}
-			}
-		}
-	}
-
-	// 防抖的章节内容渲染（延迟300ms执行，减少DOM重绘）
-	const debouncedRenderChapter = debounce((chapter: ChapterProgress) => {
-		processedContent = renderChapterContent(chapter);
-	}, 300);
-
-	// 防抖的滚动操作（延迟200ms执行）
-	const debouncedScrollToChapter = debounce((container: HTMLElement) => {
-		scrollToActiveChapter(container);
-	}, 200);
-
-	// 章节切换时更新会话
-	$: if (currentChapter) {
-		if (isReadingActive) {
-			endCurrentSession();
-		}
-
-		startNewSession();
-
-		// 只在章节模式下记录章节历史，页码模式下由recordPageHistory单独处理
-		if (viewMode === 'chapters') {
-			handleChapterChange(
-				currentChapter,
-				novel,
-				plugin.chapterHistoryService,
-				(newHistory) => {
-					chapterHistory = newHistory;
-				}
-			);
-		}
-
-		// 根据显示模式滚动到对应位置（使用防抖）
-		if (displayMode === 'hover' && hoverChaptersContainer) {
-			debouncedScrollToChapter(hoverChaptersContainer);
-		} else if (displayMode === 'outline' && outlineChaptersContainer) {
-			debouncedScrollToChapter(outlineChaptersContainer);
-		} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
-			debouncedScrollToChapter(sidebarChaptersContainer);
-		}
-
-		// 使用防抖渲染章节内容，减少高频DOM操作
-		debouncedRenderChapter(currentChapter);
-	}
-
-	// 当打开全屏目录时，自动滚动到当前章节
-	$: if (showOutlinePanel && fullscreenChaptersContainer) {
-		debouncedScrollToChapter(fullscreenChaptersContainer);
-	}
-
-	function parseAndSetChapters() {
-		chapters = parseChapters(content, novel);
-		if (chapters.length > 0) {
-			currentChapter = chapters[0];
-		}
-		// 计算虚拟页码
-		calculateVirtualPages();
-		// 触发自定义事件通知父组件章节更新
-		const event = new CustomEvent('chaptersUpdated', {
-			detail: {chapters}
-		});
-		window.dispatchEvent(event);
-	}
-
-	function handleMouseEnter() {
-		if (displayMode === 'hover') {
-			isMenuVisible = true;
-		}
-	}
-
-	function handleMouseLeave() {
-		if (displayMode === 'hover') {
-			isMenuVisible = false;
-		}
-	}
-
-	// sidebar切换函数
-	function toggleSidebar() {
-		isSidebarCollapsed = !isSidebarCollapsed;
-	}
-
-	function handleKeyDown(event: KeyboardEvent) {
-		console.log(`[${instanceId}] 🎯 handleKeyDown TRIGGERED`, {
-			key: event.key,
-			isActive: isActive,
-			readerElement: !!readerElement,
-			activeElement: document.activeElement?.className,
-			activeElementTagName: document.activeElement?.tagName,
-			eventTarget: (event.target as HTMLElement)?.className,
-			eventPhase: event.eventPhase
-		});
-
-		// 检查是否是输入元素获得焦点（TEXTAREA、INPUT、contenteditable）
-		// 如果是，让键盘事件正常传递，允许用户输入
-		const activeEl = document.activeElement;
-		if (activeEl) {
-			const tagName = activeEl.tagName;
-			const isContentEditable = (activeEl as HTMLElement).isContentEditable;
-			if (tagName === 'TEXTAREA' || tagName === 'INPUT' || isContentEditable) {
-				console.log(`[${instanceId}] ✅ ALLOWED: input element has focus, letting event pass through`);
-				return;
-			}
-		}
-
-		// 允许系统快捷键（CMD/Ctrl组合键）通过，不拦截
-		if (event.metaKey || event.ctrlKey) {
-			console.log(`[${instanceId}] ✅ ALLOWED: system shortcut (${event.key}), letting event pass through`);
-			return;
-		}
-
-		// 只拦截箭头键用于导航，其他按键一律放行
-		const isArrowKey = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key);
-		if (!isArrowKey) {
-			console.log(`[${instanceId}] ✅ ALLOWED: non-arrow key (${event.key}), letting event pass through`);
-			return;
-		}
-
-		// 对于箭头键，检查阅读器是否处于激活状态
-		if (!isActive) {
-			console.log(`[${instanceId}] ❌ REJECTED: arrow key but reader not active`);
-			return;
-		}
-
-		// 额外检查：确保事件目标是当前阅读器元素或其子元素
-		if (readerElement && !readerElement.contains(document.activeElement)) {
-			console.log(`[${instanceId}] ❌ REJECTED: focus not within reader`, {
-				activeElement: document.activeElement?.tagName,
-				activeElementClass: document.activeElement?.className,
-				readerContainsActive: readerElement.contains(document.activeElement)
-			});
-			return;
-		}
-
-		console.log(`[${instanceId}] ✅ PROCESSING arrow key navigation: ${event.key}`);
-
-		// 处理箭头键导航
-		if (event.key === 'ArrowLeft') {
-			// 根据模式选择切换方式
-			if (viewMode === 'pages') {
-				switchPage('prev');
-			} else {
-				handleSwitchChapter('prev');
-			}
-			event.preventDefault();
-			event.stopPropagation(); // 防止事件冒泡到其他视图
-		} else if (event.key === 'ArrowRight') {
-			// 根据模式选择切换方式
-			if (viewMode === 'pages') {
-				switchPage('next');
-			} else {
-				handleSwitchChapter('next');
-			}
-			event.preventDefault();
-			event.stopPropagation(); // 防止事件冒泡到其他视图
-		} else if (event.key === 'ArrowUp') {
-			event.preventDefault();
-			event.stopPropagation();
-			handleScroll('up');
-		} else if (event.key === 'ArrowDown') {
-			event.preventDefault();
-			event.stopPropagation();
-			handleScroll('down');
-		}
-	}
-
-	function handleFocus() {
-		console.log(`[${instanceId}] 🔵 handleFocus called, activating reader`);
-		isActive = true;
-		// 鼠标进入时自动聚焦，确保键盘事件能够响应
-		if (readerElement && document.activeElement !== readerElement) {
-			console.log(`[${instanceId}] 🔵 Auto-focusing reader element`);
-			readerElement.focus();
-		}
-	}
-
-	function handleBlur() {
-		console.log(`[${instanceId}] 🔴 handleBlur called, deactivating reader`);
-		isActive = false;
-	}
-
-	function smoothScrollToTop(element: HTMLElement | Window, duration: number) {
-		const start = element === window ? window.scrollY : (element as HTMLElement).scrollTop;
-		const change = -start; // 滚动到顶部，目标位置是 0
-		const startTime = performance.now();
-
-		function animateScroll(currentTime: number) {
-			const elapsed = currentTime - startTime;
-			const progress = Math.min(elapsed / duration, 1); // 限制进度在 0 到 1 之间
-			const easeInOutQuad = progress < 0.5
-				? 2 * progress * progress
-				: -1 + (4 - 2 * progress) * progress; // 缓动函数
-			const position = start + change * easeInOutQuad;
-
-			if (element === window) {
-				window.scrollTo(0, position);
-			} else {
-				(element as HTMLElement).scrollTop = position;
-			}
-
-			if (elapsed < duration) {
-				requestAnimationFrame(animateScroll);
-			}
-		}
-
-		requestAnimationFrame(animateScroll);
-	}
-
-
-	// 处理章节切换
-	function handleSwitchChapter(direction: 'prev' | 'next') {
-		console.log(`[${instanceId}] 📖 handleSwitchChapter called`, {
-			direction: direction,
-			currentChapterId: currentChapterId,
-			currentChapterTitle: currentChapter?.title,
-			novelTitle: novel.title
-		});
-
-		switchChapter(
-			direction,
-			currentChapter,
-			chapters,
-			(newChapter) => {
-				console.log(`[${instanceId}] 📝 Updating currentChapterId in handleSwitchChapter`, {
-					oldChapterId: currentChapterId,
-					newChapterId: newChapter.id,
-					newChapterTitle: newChapter.title
-				});
-
-				currentChapter = newChapter;
-				currentChapterId = newChapter.id;
-				dispatch('chapterChanged', {chapterId: newChapter.id});
-			},
-			() => {
-				setTimeout(() => {
-					const contentElement = document.querySelector('.content-area');
-					const duration = 100; // 滚动持续时间（毫秒）
-
-					if (contentElement instanceof HTMLElement) {
-						smoothScrollToTop(contentElement, duration);
-					}
-
-					smoothScrollToTop(window, duration);
-				}, 100);
-			}
-		);
-	}
-
-	function toggleOutlinePanel() {
-		showOutlinePanel = !showOutlinePanel;
-	}
-
-	function selectChapter(chapter: ChapterProgress) {
-		currentChapter = chapter;
-		currentChapterId = chapter.id;
-
-		// 记录章节历史
-		recordChapterHistory(chapter);
-
-		// 保存阅读进度
-		saveChapterProgress();
-
-		// 滚动到顶部
-		setTimeout(() => {
-			const contentElement = document.querySelector('.content-area');
-			const duration = 100;
-
-			if (contentElement instanceof HTMLElement) {
-				smoothScrollToTop(contentElement, duration);
-			}
-
-			smoothScrollToTop(window, duration);
-
-			// 设置焦点到阅读器主元素，使键盘事件生效
-			if (readerElement) {
-				readerElement.focus();
-			}
-		}, 100);
-
-		// 根据当前模式滚动到选中的章节（使用防抖优化）
-		if (displayMode === 'hover' && hoverChaptersContainer) {
-			debouncedScrollToChapter(hoverChaptersContainer);
-		} else if (displayMode === 'outline' && outlineChaptersContainer) {
-			debouncedScrollToChapter(outlineChaptersContainer);
-		} else if (displayMode === 'sidebar' && sidebarChaptersContainer) {
-			debouncedScrollToChapter(sidebarChaptersContainer);
-		}
-	}
-
-	// 记录章节历史
-	async function recordChapterHistory(chapter: ChapterProgress) {
-		try {
-			await plugin.chapterHistoryService.addHistory(novel.id, chapter.id, chapter.title);
-			const newHistory = await plugin.chapterHistoryService.getHistory(novel.id);
-			chapterHistory = newHistory;
-		} catch (error) {
-			console.error('Failed to record chapter history:', error);
-		}
-	}
-
-	// 保存章节进度
-	function saveChapterProgress() {
-		if (!currentChapter) return;
-
-		const progress = {
-			novelId: novel.id,
-			chapterIndex: currentChapter.id - 1,
-			progress: (currentChapter.id / chapters.length) * 100,
-			timestamp: Date.now(),
-			totalChapters: chapters.length,
-			position: {
-				chapterId: currentChapter.id,
-				chapterTitle: currentChapter.title,
-			}
-		};
-
-		// 使用组件事件而不是全局window事件，避免多视图互相干扰
-		dispatch('saveProgress', {progress});
-	}
-
-	// 初始化阅读会话
-	function initializeReadingSession() {
-		if (!currentChapter) return;
-
-		startNewSession();
-
-		// 每分钟检查用户活动
-		if (readingSessionInterval) clearInterval(readingSessionInterval);
-		readingSessionInterval = setInterval(() => {
-			const now = Date.now();
-			if (now - lastActivityTime > INACTIVITY_THRESHOLD) {
-				// 用户不活跃，暂停会话
-				if (isReadingActive) {
-					endCurrentSession();
-				}
-			}
-		}, 60000); // 每分钟检查一次
-	}
-
-	// 开始新会话
-	function startNewSession() {
-		if (!currentChapter) return;
-
-		sessionStartTime = Date.now();
-		isReadingActive = true;
-		lastActivityTime = Date.now();
-
-		dispatch('startReading', {
-			chapterId: currentChapter.id,
-			chapterTitle: currentChapter.title,
-			startTime: sessionStartTime
-		});
-	}
-
-	// 结束当前会话
-	function endCurrentSession() {
-		if (!isReadingActive || !sessionStartTime) return;
-
-		const sessionEndTime = Date.now();
-		const sessionDuration = sessionEndTime - sessionStartTime;
-
-		dispatch('endReading', {
-			endTime: sessionEndTime,
-			duration: sessionDuration
-		});
-
-		isReadingActive = false;
-		sessionStartTime = null;
-	}
-
-	// 更新用户活动时间
-	function updateActivity() {
-		lastActivityTime = Date.now();
-
-		// 如果之前不活跃，重新开始会话
-		if (!isReadingActive) {
-			startNewSession();
-		}
-	}
-
-	// 处理焦点变化
-	function handleVisibilityChange() {
-		if (document.hidden) {
-			if (isReadingActive) {
-				endCurrentSession();
-			}
-		} else {
-			updateActivity();
-		}
-	}
-
-	// 统一的滚动处理函数
-	function scrollToActiveChapter(container: HTMLElement) {
-		if (!container || currentChapter === null) return;
-
-		const activeElement = chapterElements.get(currentChapter.id);
-		if (!activeElement) return;
-
-		const containerHeight = container.clientHeight;
-		const elementOffset = activeElement.offsetTop;
-		const elementHeight = activeElement.clientHeight;
-
-		// 计算滚动位置，使当前章节居中显示
-		const scrollPosition = elementOffset - (containerHeight / 2) + (elementHeight / 2);
-
-		container.scrollTo({
-			top: scrollPosition,
-			behavior: 'smooth'
-		});
-	}
-
-	// 跟踪章节元素
-	function setChapterElement(node: HTMLElement, id: number) {
-		chapterElements.set(id, node);
-		return {
-			destroy() {
-				chapterElements.delete(id);
-			}
-		};
-	}
-
-	function handleScroll(dir: 'up' | 'down') {
-		scrollPage(dir, '.content-area');
-	}
-
-	async function handleAddNote(event: CustomEvent) {
-		console.log('handleAddNote event:', event.detail);
-		closeAllNoteDialogs(); // 先关闭所有笔记弹窗
-
-		selectedTextForNote = event.detail.selectedText;
-		selectedTextIndex = event.detail.textIndex;
-		selectedTextChapterId = event.detail.chapterId;
-		currentLineNumber = event.detail.lineNumber; // 保存行号
-		showNoteDialog = true;
-	}
-
-	// 4. 修改保存笔记的逻辑以匹配新的渲染方式
-	async function handleNoteSave(event: CustomEvent) {
-		if (!currentChapter) return;
-
-		if (selectedNote) {
-			// 编辑已有笔记
-			notes = notes.map(note =>
-				note.id === selectedNote?.id
-					? {...note, content: event.detail.content, timestamp: Date.now()}
-					: note
-			);
-		} else {
-			// 添加新笔记
-			const note: Note = {
-				id: uuidv4(),
-				chapterId: currentChapter.id,
-				chapterName: currentChapter.title,
-				selectedText: selectedTextForNote,
-				content: event.detail.content,
-				timestamp: Date.now(),
-				textIndex: selectedTextIndex,
-				textLength: selectedTextForNote.length,
-				lineNumber: currentLineNumber
-			};
-			notes = [...notes, note];
-		}
-
-		await saveNotes();
-		closeAllNoteDialogs(); // 保存后关闭所有弹窗
-
-		// 触发更新
-		if (currentChapter) {
-			currentChapter = {...currentChapter};
-		}
-	}
-
-	function renderChapterContent(chapter: ChapterProgress) {
-		if (!chapter) return [];
-
-		const lines = chapter.content.split('\n');
-
-		// 返回行信息对象数组,包含原始文本和笔记信息
-		return lines.map((line, lineIdx) => {
-			// 获取这一行的笔记
-			const lineNotes = notes.filter(note => note.lineNumber === lineIdx);
-
-			return {
-				text: line,
-				notes: lineNotes,
-				lineNumber: lineIdx
-			};
-		});
-	}
-
-	// 监听章节变化时更新统计
-	$: if (currentChapter) {
-		loadReadingStats();
-	}
-
-	function addNoteMarkers(paragraph: string, chapterId: number, lineIndex: number): string {
-		if (!notes || !currentChapter) return paragraph;
-
-		// 筛选当前行的笔记
-		const lineNotes = notes.filter(note =>
-			note.chapterId === chapterId && note.lineNumber === lineIndex
-		);
-
-		if (lineNotes.length === 0) return paragraph;
-
-		let result = paragraph;
-		const sortedNotes = [...lineNotes].sort((a, b) => b.textIndex - a.textIndex);
-
-		for (const note of sortedNotes) {
-			const start = note.textIndex;
-			const end = start + note.textLength;
-
-			if (start >= 0 && end <= result.length) {
-				const before = result.slice(0, start);
-				const highlighted = result.slice(start, end);
-				const after = result.slice(end);
-
-				// 修改这里，给笔记图标添加数据属性和点击事件处理
-				result = `${before}<span class="note-highlight" data-note-id="${note.id}">
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte';
+  import { fade } from 'svelte/transition';
+  import type { Novel, ReadingProgress } from '../../types';
+  import type NovelReaderPlugin from '../../main';
+  import type { ChapterHistory } from '../../types/reading-stats';
+  import type { ChapterProgress } from '../../types/txt/txt-reader';
+  import {
+    handleChapterChange,
+    parseChapters,
+    switchChapter,
+  } from '../../lib/txt.reader/chapter-logic';
+  // saveReadingProgress removed - now using ReaderProgressManager
+  import ReaderProgressManager from '../reader/ReaderProgressManager.svelte';
+  import { scrollPage } from '../../lib/txt.reader/scroll-control';
+  import type { Note } from '../../types/notes';
+  import NoteDialog from '../NoteDialog.svelte';
+  import { v4 as uuidv4 } from 'uuid';
+  import NoteViewer from '../NoteViewer.svelte';
+  import ReaderSettingsMenu from '../setting/ReaderSettingsMenu.svelte';
+  import { Notice } from 'obsidian';
+  import TextSelectionMenu from '../TextSelectionMenu.svelte';
+  import { NotesService } from '../../services/note/notes-service';
+  import { icons } from '../library/icons';
+  import { debounce, throttle } from '../../utils/debounce';
+  import BookmarkButton from '../BookmarkButton.svelte';
+  import BookmarkPanelWrapper from '../reader/BookmarkPanelWrapper.svelte';
+  import type { Bookmark } from '../../types/bookmark';
+  import { ReadingStatsService } from '../../services/reading-stats-service';
+  import ReaderSidebar from '../reader/ReaderSidebar.svelte';
+  import ReaderNavigation from '../reader/ReaderNavigation.svelte';
+  import HoverTOC from '../reader/HoverTOC.svelte';
+  import KeyboardNavigationHandler from '../reader/KeyboardNavigationHandler.svelte';
+  import ReadingSessionManager from '../reader/ReadingSessionManager.svelte';
+  // 统一渲染器
+  import { TxtRenderer, ReaderStyleManager, ReaderBookmarkManager } from '../../services/renderer';
+  import type { BookmarkPosition } from '../../services/renderer';
+
+  const dispatch = createEventDispatcher();
+
+  export let plugin: NovelReaderPlugin;
+  export let novel: Novel;
+  export let content: string = '';
+  export let displayMode: 'hover' | 'outline' | 'sidebar' = 'sidebar';
+  export let currentChapterId: number | null = null;
+  export let initialChapterId: number | null = null; //初始打开图书选择的章节ID
+  export let initialNoteId: string | undefined = undefined;
+  export let savedProgress: ReadingProgress | null = null;
+  export let chapters: ChapterProgress[] = [];
+
+  // 唯一实例ID用于调试
+  const instanceId = `TXT-${novel.id.substring(0, 8)}-${Date.now()}`;
+  console.log(`[${instanceId}] Component created for novel: ${novel.title}`);
+
+  let notesService: NotesService; //笔记
+
+  let isActive = false;
+  let readerElement: HTMLElement; // 阅读器主元素引用
+
+  // 统一渲染器实例
+  let renderer: TxtRenderer | null = null;
+  let styleManager: ReaderStyleManager | null = null;
+
+  let currentChapter: ChapterProgress | null = null;
+  let contentLoaded = false;
+  let isMenuVisible = false;
+
+  // 目录面板显示状态
+  let showOutlinePanel = false;
+
+  // ReadingSessionManager handles this now
+  let chapterElements: Map<number, HTMLElement> = new Map();
+
+  let notes: Note[] = [];
+  let noteViewerPosition = { x: 0, y: 0 };
+
+  let showNoteDialog = false; // 控制笔记对话框显示
+  let noteViewerVisible = false; // 控制笔记查看器显示
+  let selectedNote: Note | null = null;
+  let selectedTextForNote = '';
+  let selectedTextIndex = 0;
+  let currentLineNumber = 0;
+
+  let readingStats: unknown = null;
+
+  // 书签管理器
+  let bookmarkManager: ReaderBookmarkManager | null = null;
+  let showBookmarkPanel = false;
+
+  // 节流函数引用（用于清理）
+  let throttledCheckBookmark: (() => void) | null = null;
+
+  // 从书签管理器中提取 store
+  $: hasBookmarkAtCurrentPosition = bookmarkManager?.hasBookmarkAtCurrentPosition;
+
+  let processedContent: { notes: Note[]; text: string; lineNumber: number }[];
+  let chapterHistory: ChapterHistory[] = [];
+  let selectedTextChapterId = 0;
+  let showNoteList = false;
+
+  // TXT 悬浮目录：目录/页码切换功能
+  const LINES_PER_PAGE = 160; // 每页显示160行
+  let viewMode: 'chapters' | 'pages' = 'chapters';
+  let virtualPages: Array<{
+    pageNum: number;
+    chapterId: number;
+    chapterTitle: string;
+    startLine: number;
+    endLine: number;
+    absoluteStartLine: number; // 原始文本绝对行号
+    absoluteEndLine: number; // 原始文本绝对行号
+  }> = [];
+  let currentPageNum = 1;
+  let currentVirtualPage: (typeof virtualPages)[0] | null = null;
+
+  // 进度位置类型定义（与 ReaderProgressManager 一致）
+  interface ProgressPosition {
+    chapterIndex: number;
+    chapterTitle: string;
+    timestamp?: number;
+    scrollPosition?: number;
+    cfi?: string;
+    chapterId?: number;
+    pageNum?: number;
+  }
+
+  // 进度管理
+  let progressPosition: ProgressPosition = {
+    chapterIndex: 0,
+    chapterTitle: '',
+    scrollPosition: 0,
+  };
+
+  // 更新进度位置的响应式语句
+  $: if (currentChapter || currentVirtualPage) {
+    if (viewMode === 'chapters' && currentChapter) {
+      // 章节模式
+      const chapterIndex = chapters.findIndex((c) => c.id === currentChapter.id);
+      progressPosition = {
+        chapterIndex: (chapterIndex >= 0 ? chapterIndex : 0) + 1, // Save as 1-based index
+        chapterTitle: currentChapter.title,
+        chapterId: currentChapter.id,
+        scrollPosition: 0,
+      };
+    } else if (viewMode === 'pages' && currentVirtualPage) {
+      progressPosition = {
+        // use pageNum as chapterIndex (1-based) for Page Mode
+        chapterIndex: currentVirtualPage.pageNum,
+        chapterTitle: currentVirtualPage.chapterTitle || `第 ${currentVirtualPage.pageNum} 页`,
+        chapterId: currentVirtualPage.chapterId || 0,
+        scrollPosition: 0,
+        pageNum: currentVirtualPage.pageNum,
+      };
+    }
+  }
+
+  // 计算基于行数的虚拟页码
+  function calculateVirtualPages() {
+    virtualPages = [];
+    let pageNum = 1;
+
+    // 页码模式：直接按原始文本160行分页，不考虑章节
+    if (viewMode === 'pages' || chapters.length === 0) {
+      const lines = content.split('\n');
+      const totalLines = lines.length;
+
+      for (let startLine = 0; startLine < totalLines; startLine += LINES_PER_PAGE) {
+        const endLine = Math.min(startLine + LINES_PER_PAGE - 1, totalLines - 1);
+
+        virtualPages.push({
+          pageNum: pageNum++,
+          chapterId: 0, // 页码模式不关联章节
+          chapterTitle: '',
+          startLine: startLine,
+          endLine: endLine,
+          absoluteStartLine: startLine,
+          absoluteEndLine: endLine,
+        });
+      }
+    } else {
+      // 章节模式：基于章节分页
+      let absoluteLineOffset = 0;
+
+      chapters.forEach((chapter) => {
+        const lines = chapter.content.split('\n');
+        const totalLines = lines.length;
+
+        // 为每个章节按行数分页
+        for (let startLine = 0; startLine < totalLines; startLine += LINES_PER_PAGE) {
+          const endLine = Math.min(startLine + LINES_PER_PAGE - 1, totalLines - 1);
+
+          virtualPages.push({
+            pageNum: pageNum++,
+            chapterId: chapter.id,
+            chapterTitle: chapter.title,
+            startLine: startLine,
+            endLine: endLine,
+            absoluteStartLine: absoluteLineOffset + startLine,
+            absoluteEndLine: absoluteLineOffset + endLine,
+          });
+        }
+
+        absoluteLineOffset += totalLines;
+      });
+    }
+
+    // 初始化第一页
+    if (virtualPages.length > 0) {
+      currentVirtualPage = virtualPages[0];
+      currentPageNum = 1;
+    }
+  }
+
+  async function jumpToLineNumber(lineNumber: number) {
+    await tick();
+    const contentElement = document.querySelector('.content-area');
+    if (!(contentElement instanceof HTMLElement)) return;
+
+    const target = contentElement.querySelector(`p[data-line-number="${lineNumber}"]`);
+    if (target instanceof HTMLElement) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
+  async function handleJumpToNote(event: CustomEvent) {
+    const { note } = event.detail as { note: Note };
+    if (!note) return;
+    await jumpToNote(note);
+  }
+
+  async function jumpToNote(note: Note) {
+    if (!note) return;
+
+    if (viewMode !== 'chapters') {
+      viewMode = 'chapters';
+      if (!novel.customSettings) {
+        novel.customSettings = {};
+      }
+      novel.customSettings.txtViewMode = viewMode;
+      calculateVirtualPages();
+      await plugin.libraryService.updateNovel(novel);
+    }
+
+    const chapter = chapters.find((ch) => ch.id === note.chapterId);
+    if (chapter) {
+      selectChapter(chapter);
+    }
+
+    if (typeof note.lineNumber === 'number' && note.lineNumber >= 0) {
+      await jumpToLineNumber(note.lineNumber);
+      return;
+    }
+
+    if (typeof note.textIndex === 'number' && note.textIndex >= 0) {
+      const approxLine = Math.max(0, Math.floor(note.textIndex / 80));
+      await jumpToLineNumber(approxLine);
+    }
+  }
+
+  let lastAutoJumpNoteId: string | undefined;
+  $: if (initialNoteId && notes && notes.length > 0 && initialNoteId !== lastAutoJumpNoteId) {
+    const note = notes.find((n) => n.id === initialNoteId);
+    if (note) {
+      lastAutoJumpNoteId = initialNoteId;
+      void jumpToNote(note);
+    }
+  }
+
+  // 根据当前章节计算当前页码
+  function updateCurrentPage() {
+    if (viewMode === 'chapters') {
+      // 章节模式：基于当前章节
+      if (!currentChapter || virtualPages.length === 0) return;
+
+      // 提取局部变量解决TypeScript控制流分析问题
+      const chapter = currentChapter;
+      const page = virtualPages.find((p) => p.chapterId === chapter.id && p.startLine === 0);
+      if (page) {
+        currentPageNum = page.pageNum;
+      }
+    } else {
+      // 页码模式：基于当前虚拟页
+      if (currentVirtualPage) {
+        currentPageNum = currentVirtualPage.pageNum;
+      }
+    }
+  }
+
+  // 跳转到指定页码
+  function jumpToPage(pageNum: number) {
+    const page = virtualPages.find((p) => p.pageNum === pageNum);
+    if (!page) return;
+
+    currentVirtualPage = page;
+    currentPageNum = pageNum;
+
+    if (viewMode === 'pages') {
+      // 页码模式：不依赖章节，直接保存页码进度
+      // 如果有章节信息，设置一个有效的currentChapter以避免空指针
+      if (page.chapterId > 0) {
+        const targetChapter = chapters.find((ch) => ch.id === page.chapterId);
+        if (targetChapter && (!currentChapter || currentChapter.id !== targetChapter.id)) {
+          currentChapter = targetChapter;
+        }
+      } else if (chapters.length > 0 && !currentChapter) {
+        // 页码模式下，设置一个默认章节以避免空指针
+        currentChapter = chapters[0];
+      }
+      // savePageProgress removed - now handled by ReaderProgressManager
+      // 记录页码历史
+      recordPageHistory(pageNum);
+    } else {
+      // 章节模式：在跨章节时更新currentChapter
+      const targetChapter = chapters.find((ch) => ch.id === page.chapterId);
+      if (targetChapter && (!currentChapter || currentChapter.id !== targetChapter.id)) {
+        currentChapter = targetChapter;
+        currentChapterId = targetChapter.id;
+
+        // 记录章节历史和保存进度
+        recordChapterHistory(targetChapter);
+        // saveChapterProgress removed - now handled by ReaderProgressManager
+      }
+    }
+  }
+
+  // savePageProgress function removed - now using ReaderProgressManager
+
+  // 切换到上一页/下一页
+  function switchPage(direction: 'prev' | 'next') {
+    const currentIndex = virtualPages.findIndex((p) => p.pageNum === currentPageNum);
+    if (currentIndex === -1) return;
+
+    let nextIndex: number;
+    if (direction === 'prev') {
+      nextIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex;
+    } else {
+      nextIndex = currentIndex < virtualPages.length - 1 ? currentIndex + 1 : currentIndex;
+    }
+
+    if (nextIndex !== currentIndex) {
+      jumpToPage(virtualPages[nextIndex].pageNum);
+    }
+  }
+
+  // 记录页码历史
+  async function recordPageHistory(pageNum: number) {
+    const pageTitle = `第 ${pageNum} 页`;
+    try {
+      await plugin.chapterHistoryService.addHistory(novel.id, pageNum, pageTitle);
+      const newHistory = await plugin.chapterHistoryService.getHistory(novel.id);
+      chapterHistory = newHistory;
+    } catch (error) {
+      console.error('Failed to record page history:', error);
+    }
+  }
+
+  // 获取当前虚拟页的内容
+  function getCurrentPageContent(): string[] {
+    if (!currentVirtualPage) return [];
+
+    if (viewMode === 'pages') {
+      // 页码模式：使用原始文本，完全不考虑章节
+      const lines = content.split('\n');
+      return lines.slice(
+        currentVirtualPage.absoluteStartLine,
+        currentVirtualPage.absoluteEndLine + 1
+      );
+    } else {
+      // 章节模式：使用章节内容
+      if (!currentChapter) return [];
+      const lines = currentChapter.content.split('\n');
+      return lines.slice(currentVirtualPage.startLine, currentVirtualPage.endLine + 1);
+    }
+  }
+
+  // 从 novel.customSettings 读取用户偏好
+  $: {
+    if (novel?.customSettings?.txtViewMode) {
+      viewMode = novel.customSettings.txtViewMode;
+    } else {
+      // 优先显示目录，如果没有目录则显示页码
+      viewMode = chapters.length > 0 ? 'chapters' : 'pages';
+    }
+  }
+
+  // 当章节变化时更新页码
+  $: if (currentChapter && virtualPages.length > 0) {
+    updateCurrentPage();
+  }
+
+  // 切换目录/页码显示模式
+  async function toggleViewMode() {
+    viewMode = viewMode === 'chapters' ? 'pages' : 'chapters';
+
+    // 保存用户选择到 novel.customSettings
+    if (!novel.customSettings) {
+      novel.customSettings = {};
+    }
+    novel.customSettings.txtViewMode = viewMode;
+
+    // 重新计算虚拟页（因为页码模式和章节模式的分页逻辑不同）
+    calculateVirtualPages();
+
+    // 更新到数据库
+    await plugin.libraryService.updateNovel(novel);
+  }
+
+  // 合并所有 onMount 逻辑，避免重复的事件监听器
+  onMount(() => {
+    let noteFileModifyHandler: any;
+    // let handleVisibilityHandler: () => void; // Removed
+    // let activityTimeout: ReturnType<typeof setTimeout> | null = null; // Removed
+    let noteIconClickListener: EventListener;
+    // const activityEvents: Array<'keydown' | 'scroll' | 'click'> = ['keydown', 'scroll', 'click']; // Removed
+    // const throttledUpdateActivity = ... // Removed
+
+    // 1. 初始化笔记服务
+    notesService = new NotesService(plugin.app, plugin);
+
+    // 获取当前小说的笔记文件路径
+    const currentNotePath = plugin.pathsService.getNotesPath(novel.id);
+    console.log('监听笔记文件:', currentNotePath);
+
+    // 监听笔记文件变化，实时更新
+    noteFileModifyHandler = plugin.app.vault.on('modify', async (file) => {
+      // 检查是否是当前小说的笔记文件（精确匹配）
+      if (file.path === currentNotePath) {
+        console.log('笔记文件已修改，重新加载笔记:', file.path);
+
+        // 添加小延迟确保文件已完全写入
+        await new Promise((resolve) => setTimeout(resolve, 100));
+
+        // 重新加载笔记
+        const newNotes = await notesService.loadNotes(novel.id);
+        console.log('重新加载后的笔记数量:', newNotes.length);
+        notes = newNotes;
+
+        // 触发重新渲染
+        if (currentChapter) {
+          currentChapter = { ...currentChapter };
+        }
+      }
+    });
+
+    void (async () => {
+      notes = await notesService.loadNotes(novel.id);
+      await loadReadingStats();
+
+      // 1.5. 初始化统一渲染器
+      await tick();
+      try {
+        if (readerElement) {
+          renderer = new TxtRenderer(readerElement);
+          styleManager = new ReaderStyleManager(renderer, plugin, novel.id);
+          styleManager.applyAllSettings();
+          console.log(`[${instanceId}] 渲染器初始化成功`);
+        }
+      } catch (error) {
+        console.error(`[${instanceId}] 渲染器初始化失败:`, error);
+      }
+
+      // 1.6. 初始化书签管理器
+      try {
+        bookmarkManager = new ReaderBookmarkManager(
+          plugin.bookmarkService,
+          novel.id,
+          async (bookmark) => {
+            await handleJumpToBookmark(bookmark);
+          }
+        );
+        await bookmarkManager.initialize();
+        console.log(`[${instanceId}] 书签管理器初始化成功`);
+      } catch (error) {
+        console.error(`[${instanceId}] 书签管理器初始化失败:`, error);
+      }
+
+      // 2. 解析章节和恢复阅读进度
+      if (content) {
+        parseAndSetChapters();
+        contentLoaded = true;
+
+        // 恢复上次阅读进度
+        if (savedProgress?.position?.chapterId) {
+          currentChapterId = savedProgress.position.chapterId;
+          const savedChapter = chapters.find((ch) => ch.id === currentChapterId);
+          if (savedChapter) {
+            currentChapter = savedChapter;
+          }
+
+          // 如果是页码模式且有保存的页码进度，恢复到对应页码
+          if (viewMode === 'pages' && savedProgress.chapterIndex !== undefined) {
+            const savedPageNum = savedProgress.chapterIndex; // pageNum saved as chapterIndex (1-based)
+            const savedPage = virtualPages.find((p) => p.pageNum === savedPageNum);
+            if (savedPage) {
+              currentVirtualPage = savedPage;
+              currentPageNum = savedPageNum;
+            }
+          }
+        } else if (initialChapterId !== null) {
+          // 如果有初始章节ID，加载该章节
+          const savedChapter = chapters.find((ch) => ch.id === initialChapterId);
+          if (savedChapter) {
+            currentChapter = savedChapter;
+            currentChapterId = savedChapter.id;
+          }
+        } else if (chapters.length > 0) {
+          // 否则加载第一章
+          currentChapter = chapters[0];
+          currentChapterId = chapters[0].id;
+        }
+      }
+
+      // 初始化时滚动到当前章节
+      if (currentChapter) {
+        // Legacy scroll logic removed
+      }
+
+      // 3. 初始化阅读会话 - Handled by ReadingSessionManager
+      // initializeReadingSession();
+
+      // 4. 添加笔记图标点击事件监听
+      const handleNoteIconClick = async (event: CustomEvent) => {
+        const noteId = event.detail.noteId;
+
+        // 重新加载笔记，确保显示最新内容
+        console.log('点击笔记图标，重新加载笔记');
+        notes = await notesService.loadNotes(novel.id);
+
+        const note = notes.find((n) => n.id === noteId);
+        if (note) {
+          selectedNote = note;
+          const noteMarker = document.querySelector(`[data-note-id="${noteId}"]`);
+          if (noteMarker) {
+            const rect = noteMarker.getBoundingClientRect();
+            noteViewerPosition = {
+              x: rect.left + rect.width / 2,
+              y: rect.top,
+            };
+            noteViewerVisible = true;
+          }
+        }
+      };
+
+      // 5. 页面可见性变化处理 - Handled by ReadingSessionManager
+      /*
+      handleVisibilityHandler = () => {
+        isActive = !document.hidden;
+        handleVisibilityChange();
+      };
+      */
+
+      // 7. 添加所有事件监听器（确保每个事件只监听一次）
+      // 键盘事件已改为主div的on:keydown，不再使用全局window监听
+      noteIconClickListener = (evt: Event) => {
+        void handleNoteIconClick(evt as CustomEvent);
+      };
+      window.addEventListener('noteIconClick', noteIconClickListener);
+      // document.addEventListener('visibilitychange', handleVisibilityHandler);
+
+      // 用户活动监听（移除 mousemove 以提高性能，使用节流）- Handled by ReadingSessionManager
+      /*
+      activityEvents.forEach((eventName) => {
+        window.addEventListener(eventName, throttledUpdateActivity);
+      });
+      */
+
+      // 滚动监听 - 已移除，书签由 bookmarkManager 管理
+      // 不再需要 throttledCheckBookmark
+    })();
+
+    // 8. 返回清理函数，移除所有事件监听器
+    return () => {
+      // 清理定时器
+      /*
+      if (readingSessionInterval) {
+        clearInterval(readingSessionInterval);
+      }
+      if (activityTimeout) {
+        clearTimeout(activityTimeout);
+      }
+      */
+
+      // 清理渲染器
+      try {
+        if (renderer) {
+          renderer.destroy();
+          renderer = null;
+          styleManager = null;
+          console.log(`[${instanceId}] 渲染器已清理`);
+        }
+      } catch (error) {
+        console.error(`[${instanceId}] 渲染器清理失败:`, error);
+      }
+
+      // 结束当前会话 - Handled by ReadingSessionManager on destroy
+      // if (isReadingActive) {
+      //   endCurrentSession();
+      // }
+
+      // 清理防抖函数，防止内存泄漏
+      debouncedRenderChapter.cancel();
+      debouncedScrollToChapter.cancel();
+
+      // 移除所有事件监听器
+      // 键盘事件已改为主div的on:keydown，不需要在这里移除
+      if (noteIconClickListener) {
+        window.removeEventListener('noteIconClick', noteIconClickListener);
+      }
+      // if (handleVisibilityHandler) {
+      //   document.removeEventListener('visibilitychange', handleVisibilityHandler);
+      // }
+      if (noteFileModifyHandler) {
+        plugin.app.vault.offref(noteFileModifyHandler);
+      }
+
+      // activityEvents.forEach((event) => {
+      //   window.removeEventListener(event, throttledUpdateActivity);
+      // });
+
+      // if (readerElement && throttledCheckBookmark) {
+      //   readerElement.removeEventListener('scroll', throttledCheckBookmark);
+      // }
+    };
+  });
+
+  $: if (content && !contentLoaded) {
+    parseAndSetChapters();
+    contentLoaded = true;
+  }
+
+  $: if (currentChapterId !== null && chapters.length > 0) {
+    console.log(`[${instanceId}] 🔄 Reactive statement triggered by currentChapterId change`, {
+      currentChapterId: currentChapterId,
+      novelId: novel.id,
+      novelTitle: novel.title,
+      isActive: isActive,
+      stackTrace: new Error().stack?.split('\n').slice(2, 5).join('\n'),
+    });
+
+    const chapter = chapters.find((c) => c.id === currentChapterId);
+    if (chapter) {
+      currentChapter = chapter;
+      // 只在章节模式下保存章节进度，页码模式下由switchPage单独处理
+      // Progress saving now handled by ReaderProgressManager
+    }
+  }
+
+  // 防抖的章节内容渲染（延迟300ms执行，减少DOM重绘）
+  const debouncedRenderChapter = debounce((chapter: ChapterProgress) => {
+    processedContent = renderChapterContent(chapter);
+  }, 300);
+
+  // 防抖的滚动操作（延迟200ms执行）
+  const debouncedScrollToChapter = debounce((container: HTMLElement) => {
+    scrollToActiveChapter(container);
+  }, 200);
+
+  // 章节切换时更新会话
+  $: if (currentChapter) {
+    // if (isReadingActive) {
+    //   endCurrentSession();
+    // }
+
+    // startNewSession();
+
+    // 只在章节模式下记录章节历史，页码模式下由recordPageHistory单独处理
+    if (viewMode === 'chapters') {
+      handleChapterChange(currentChapter, novel, plugin.chapterHistoryService, (newHistory) => {
+        chapterHistory = newHistory as ChapterHistory[];
+      });
+    }
+
+    // 使用防抖渲染章节内容，减少高频DOM操作
+    debouncedRenderChapter(currentChapter);
+  }
+
+  // 当打开全屏目录时，自动滚动到当前章节
+
+  function parseAndSetChapters() {
+    chapters = parseChapters(content, novel);
+    if (chapters.length > 0) {
+      currentChapter = chapters[0];
+    }
+    // 计算虚拟页码
+    calculateVirtualPages();
+    // 触发自定义事件通知父组件章节更新
+    const event = new CustomEvent('chaptersUpdated', {
+      detail: { chapters },
+    });
+    window.dispatchEvent(event);
+  }
+
+  // sidebar切换函数
+
+  // 键盘导航处理函数
+  function handlePrevChapter() {
+    if (viewMode === 'pages') {
+      switchPage('prev');
+    } else {
+      handleSwitchChapter('prev');
+    }
+  }
+
+  function handleNextChapter() {
+    if (viewMode === 'pages') {
+      switchPage('next');
+    } else {
+      handleSwitchChapter('next');
+    }
+  }
+
+  function handleToggleTOC() {
+    showOutlinePanel = !showOutlinePanel;
+  }
+
+  function handleClosePanel() {
+    if (showOutlinePanel) {
+      showOutlinePanel = false;
+    } else if (showBookmarkPanel) {
+      showBookmarkPanel = false;
+    } else if (showNoteList) {
+      showNoteList = false;
+    }
+  }
+
+  function smoothScrollToTop(element: HTMLElement | Window, duration: number) {
+    const start = element === window ? window.scrollY : (element as HTMLElement).scrollTop;
+    const change = -start; // 滚动到顶部，目标位置是 0
+    const startTime = performance.now();
+
+    function animateScroll(currentTime: number) {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1); // 限制进度在 0 到 1 之间
+      const easeInOutQuad =
+        progress < 0.5 ? 2 * progress * progress : -1 + (4 - 2 * progress) * progress; // 缓动函数
+      const position = start + change * easeInOutQuad;
+
+      if (element === window) {
+        window.scrollTo(0, position);
+      } else {
+        (element as HTMLElement).scrollTop = position;
+      }
+
+      if (elapsed < duration) {
+        requestAnimationFrame(animateScroll);
+      }
+    }
+
+    requestAnimationFrame(animateScroll);
+  }
+
+  // 处理章节切换
+  function handleSwitchChapter(direction: 'prev' | 'next') {
+    console.log(`[${instanceId}] 📖 handleSwitchChapter called`, {
+      direction: direction,
+      currentChapterId: currentChapterId,
+      currentChapterTitle: currentChapter?.title,
+      novelTitle: novel.title,
+    });
+
+    switchChapter(
+      direction,
+      currentChapter,
+      chapters,
+      (newChapter) => {
+        console.log(`[${instanceId}] 📝 Updating currentChapterId in handleSwitchChapter`, {
+          oldChapterId: currentChapterId,
+          newChapterId: newChapter.id,
+          newChapterTitle: newChapter.title,
+        });
+
+        currentChapter = newChapter;
+        currentChapterId = newChapter.id;
+
+        // 更新书签管理器的当前位置
+        bookmarkManager?.updateCurrentPosition({
+          novelId: novel.id,
+          novelTitle: novel.title,
+          chapterId: newChapter.id,
+          chapterTitle: newChapter.title,
+          progress: 0,
+        });
+
+        // 书签状态由 bookmarkManager 自动管理
+
+        dispatch('chapterChanged', { chapterId: newChapter.id });
+      },
+      () => {
+        setTimeout(() => {
+          const contentElement = document.querySelector('.content-area');
+          const duration = 100; // 滚动持续时间（毫秒）
+
+          if (contentElement instanceof HTMLElement) {
+            smoothScrollToTop(contentElement, duration);
+          }
+
+          smoothScrollToTop(window, duration);
+        }, 100);
+      }
+    );
+  }
+
+  function toggleOutlinePanel() {
+    showOutlinePanel = !showOutlinePanel;
+  }
+
+  function selectChapter(chapter: ChapterProgress) {
+    currentChapter = chapter;
+    currentChapterId = chapter.id;
+
+    // 记录章节历史
+    recordChapterHistory(chapter);
+
+    // 保存阅读进度
+    // saveChapterProgress removed - now handled by ReaderProgressManager
+
+    // 更新书签管理器的当前位置
+    bookmarkManager?.updateCurrentPosition({
+      novelId: novel.id,
+      novelTitle: novel.title,
+      chapterId: chapter.id,
+      chapterTitle: chapter.title,
+      progress: 0,
+    });
+
+    // 检查当前章节的书签状态
+    // 书签状态由 bookmarkManager 自动管理
+
+    // 滚动到顶部
+    setTimeout(() => {
+      const contentElement = document.querySelector('.content-area');
+      const duration = 100;
+
+      if (contentElement instanceof HTMLElement) {
+        smoothScrollToTop(contentElement, duration);
+      }
+
+      smoothScrollToTop(window, duration);
+
+      // 设置焦点到阅读器主元素，使键盘事件生效
+      if (readerElement) {
+        readerElement.focus();
+      }
+
+      // 滚动后再次检查书签（因为滚动位置已改变）
+      // 书签状态由 bookmarkManager 自动管理
+    }, 100);
+  }
+
+  // 记录章节历史
+  async function recordChapterHistory(chapter: ChapterProgress) {
+    try {
+      await plugin.chapterHistoryService.addHistory(novel.id, chapter.id, chapter.title);
+      const newHistory = await plugin.chapterHistoryService.getHistory(novel.id);
+      chapterHistory = newHistory;
+    } catch (error) {
+      console.error('Failed to record chapter history:', error);
+    }
+  }
+
+  // saveChapterProgress function removed - now using ReaderProgressManager
+
+  // 初始化阅读会话
+  // function initializeReadingSession() {
+  //   if (!currentChapter) return;
+
+  //   startNewSession();
+
+  //   // 每分钟检查用户活动
+  //   if (readingSessionInterval) clearInterval(readingSessionInterval);
+  //   readingSessionInterval = setInterval(() => {
+  //     const now = Date.now();
+  //     if (now - lastActivityTime > INACTIVITY_THRESHOLD) {
+  //       // 用户不活跃，暂停会话
+  //       if (isReadingActive) {
+  //         endCurrentSession();
+  //       }
+  //     }
+  //   }, 60000); // 每分钟检查一次
+  // }
+
+  // 开始新会话
+  // function startNewSession() {
+  //   if (!currentChapter) return;
+
+  //   sessionStartTime = Date.now();
+  //   isReadingActive = true;
+  //   lastActivityTime = Date.now();
+
+  //   dispatch('startReading', {
+  //     chapterId: currentChapter.id,
+  //     chapterTitle: currentChapter.title,
+  //     startTime: sessionStartTime,
+  //   });
+  // }
+
+  // 结束当前会话
+  // function endCurrentSession() {
+  //   if (!isReadingActive || !sessionStartTime) return;
+
+  //   const sessionEndTime = Date.now();
+  //   const sessionDuration = sessionEndTime - sessionStartTime;
+
+  //   dispatch('endReading', {
+  //     endTime: sessionEndTime,
+  //     duration: sessionDuration,
+  //   });
+
+  //   isReadingActive = false;
+  //   sessionStartTime = null;
+  // }
+
+  // 更新用户活动时间
+  // function updateActivity() {
+  //   lastActivityTime = Date.now();
+
+  //   // 如果之前不活跃，重新开始会话
+  //   if (!isReadingActive) {
+  //     startNewSession();
+  //   }
+  // }
+
+  // 处理焦点变化
+  // function handleVisibilityChange() {
+  //   if (document.hidden) {
+  //     if (isReadingActive) {
+  //       endCurrentSession();
+  //     }
+  //   } else {
+  //     updateActivity();
+  //   }
+  // }
+
+  // 统一的滚动处理函数
+  function scrollToActiveChapter(container: HTMLElement) {
+    if (!container || currentChapter === null) return;
+
+    const activeElement = chapterElements.get(currentChapter.id);
+    if (!activeElement) return;
+
+    const containerHeight = container.clientHeight;
+    const elementOffset = activeElement.offsetTop;
+    const elementHeight = activeElement.clientHeight;
+
+    // 计算滚动位置，使当前章节居中显示
+    const scrollPosition = elementOffset - containerHeight / 2 + elementHeight / 2;
+
+    container.scrollTo({
+      top: scrollPosition,
+      behavior: 'smooth',
+    });
+  }
+
+  // 跟踪章节元素
+  function setChapterElement(node: HTMLElement, id: number) {
+    chapterElements.set(id, node);
+    return {
+      destroy() {
+        chapterElements.delete(id);
+      },
+    };
+  }
+
+  function handleScroll(dir: 'up' | 'down') {
+    scrollPage(dir, '.content-area');
+  }
+
+  async function handleAddNote(event: CustomEvent) {
+    console.log('handleAddNote event:', event.detail);
+    closeAllNoteDialogs(); // 先关闭所有笔记弹窗
+
+    selectedTextForNote = event.detail.selectedText;
+    selectedTextIndex = event.detail.textIndex;
+    selectedTextChapterId = event.detail.chapterId;
+    currentLineNumber = event.detail.lineNumber; // 保存行号
+    showNoteDialog = true;
+  }
+
+  // 4. 修改保存笔记的逻辑以匹配新的渲染方式
+  async function handleNoteSave(event: CustomEvent) {
+    if (!currentChapter) return;
+
+    if (selectedNote) {
+      // 编辑已有笔记
+      notes = notes.map((note) =>
+        note.id === selectedNote?.id
+          ? { ...note, content: event.detail.content, timestamp: Date.now() }
+          : note
+      );
+    } else {
+      // 添加新笔记
+      const note: Note = {
+        id: uuidv4(),
+        chapterId: currentChapter.id,
+        chapterName: currentChapter.title,
+        selectedText: selectedTextForNote,
+        content: event.detail.content,
+        timestamp: Date.now(),
+        textIndex: selectedTextIndex,
+        textLength: selectedTextForNote.length,
+        lineNumber: currentLineNumber,
+      };
+      notes = [...notes, note];
+    }
+
+    await saveNotes();
+    closeAllNoteDialogs(); // 保存后关闭所有弹窗
+
+    // 触发更新
+    if (currentChapter) {
+      currentChapter = { ...currentChapter };
+    }
+  }
+
+  function renderChapterContent(chapter: ChapterProgress) {
+    if (!chapter) return [];
+
+    const lines = chapter.content.split('\n');
+
+    // 返回行信息对象数组,包含原始文本和笔记信息
+    return lines.map((line, lineIdx) => {
+      // 获取这一行的笔记
+      const lineNotes = notes.filter((note) => note.lineNumber === lineIdx);
+
+      return {
+        text: line,
+        notes: lineNotes,
+        lineNumber: lineIdx,
+      };
+    });
+  }
+
+  // 监听章节变化时更新统计
+  $: if (currentChapter) {
+    loadReadingStats();
+  }
+
+  function addNoteMarkers(paragraph: string, chapterId: number, lineIndex: number): string {
+    if (!notes || !currentChapter) return paragraph;
+
+    // 筛选当前行的笔记
+    const lineNotes = notes.filter(
+      (note) => note.chapterId === chapterId && note.lineNumber === lineIndex
+    );
+
+    if (lineNotes.length === 0) return paragraph;
+
+    let result = paragraph;
+    const sortedNotes = [...lineNotes].sort((a, b) => b.textIndex - a.textIndex);
+
+    for (const note of sortedNotes) {
+      const start = note.textIndex;
+      const end = start + note.textLength;
+
+      if (start >= 0 && end <= result.length) {
+        const before = result.slice(0, start);
+        const highlighted = result.slice(start, end);
+        const after = result.slice(end);
+
+        // 修改这里，给笔记图标添加数据属性和点击事件处理
+        result = `${before}<span class="note-highlight" data-note-id="${note.id}">
                 ${highlighted}
                 <button
                     class="note-marker"
@@ -990,1296 +1068,531 @@
                     ${icons.note}
                 </button>
             </span>${after}`;
-			}
-		}
+      }
+    }
 
-		return result;
-	}
+    return result;
+  }
 
-	async function handleNoteDelete(event: CustomEvent) {
-		const {noteId} = event.detail;
-		notes = notes.filter(n => n.id !== noteId);
-		await saveNotes();
-		noteViewerVisible = false;
-		selectedNote = null;
+  async function handleNoteDelete(event: CustomEvent) {
+    const { noteId } = event.detail;
+    notes = notes.filter((n) => n.id !== noteId);
+    await saveNotes();
+    noteViewerVisible = false;
+    selectedNote = null;
 
-		// 触发重新渲染
-		if (currentChapter) {
-			currentChapter = {...currentChapter};
-		}
-	}
+    // 触发重新渲染
+    if (currentChapter) {
+      currentChapter = { ...currentChapter };
+    }
+  }
 
-	function handleNoteEdit(event: CustomEvent) {
-		const {note} = event.detail;
-		noteViewerVisible = false; // 关闭查看器
-		selectedNote = note;  // 保存当前编辑的笔记
-		selectedTextForNote = note.selectedText; // 确保显示正确的选中文本
-		showNoteDialog = true;  // 显示编辑对话框
-	}
+  function handleNoteEdit(event: CustomEvent) {
+    const { note } = event.detail;
+    noteViewerVisible = false; // 关闭查看器
+    selectedNote = note; // 保存当前编辑的笔记
+    selectedTextForNote = note.selectedText; // 确保显示正确的选中文本
+    showNoteDialog = true; // 显示编辑对话框
+  }
 
-	function handleNoteDialogClose() {
-		closeAllNoteDialogs();
-	}
+  function handleNoteDialogClose() {
+    closeAllNoteDialogs();
+  }
 
-	function closeAllNoteDialogs() {
-		showNoteDialog = false;
-		noteViewerVisible = false;
-		selectedNote = null;
-		selectedTextForNote = '';
-	}
+  function closeAllNoteDialogs() {
+    showNoteDialog = false;
+    noteViewerVisible = false;
+    selectedNote = null;
+    selectedTextForNote = '';
+  }
 
-	function handleNoteClick(event: MouseEvent, noteId: string) {
-		event.stopPropagation();
-		const note = notes.find(n => n.id === noteId);
-		if (note) {
-			closeAllNoteDialogs(); // 先关闭所有笔记弹窗
+  function handleNoteClick(event: MouseEvent, noteId: string) {
+    event.stopPropagation();
+    const note = notes.find((n) => n.id === noteId);
+    if (note) {
+      closeAllNoteDialogs(); // 先关闭所有笔记弹窗
 
-			selectedNote = note;
-			const target = event.target as HTMLElement;
-			const rect = target.getBoundingClientRect();
-			noteViewerPosition = {
-				x: rect.left,
-				y: rect.top
-			};
-			noteViewerVisible = true;
-		}
-	}
+      selectedNote = note;
+      const target = event.target as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      noteViewerPosition = {
+        x: rect.left,
+        y: rect.top,
+      };
+      noteViewerVisible = true;
+    }
+  }
 
-	// 获取阅读统计
-	async function loadReadingStats() {
-		if (novel) {
-			try {
-				readingStats = await plugin.dbService?.getNovelStats(novel.id);
-			} catch (error) {
-				console.error('Failed to load reading stats:', error);
-			}
-		}
-	}
+  // 获取阅读统计
+  async function loadReadingStats() {
+    if (novel) {
+      try {
+        const statsService = new ReadingStatsService(plugin.app, plugin);
+        readingStats = await statsService.getNovelStats(novel.id);
+      } catch (error) {
+        console.error('Failed to load reading stats:', error);
+      }
+    }
+  }
 
-	async function saveNotes() {
-		await notesService.saveNotes(novel.id, novel.title, notes);
-	}
+  async function saveNotes() {
+    console.log('保存笔记:', novel.id, '笔记数量:', notes.length);
+    await notesService.saveNotes(novel.id, novel.title, notes);
+    console.log('笔记保存完成');
+  }
 
-	async function loadNotesForNovel() {
-		notes = await notesService.loadNotes(novel.id);
-	}
+  async function loadNotesForNovel() {
+    notes = await notesService.loadNotes(novel.id);
+  }
 
+  // ==================== 书签功能 ====================
+  // 书签功能现在由 ReaderBookmarkManager 统一管理
+  // 跳转到书签
+  async function handleJumpToBookmark(bookmark: Bookmark) {
+    // 切换到对应章节
+    if (bookmark.chapterId !== currentChapter?.id) {
+      const targetChapter = chapters.find((c) => c.id === bookmark.chapterId);
+      if (targetChapter) {
+        selectChapter(targetChapter);
+      }
+    }
+
+    // 滚动到书签位置
+    setTimeout(() => {
+      if (readerElement) {
+        readerElement.scrollTop = bookmark.position;
+      }
+    }, 200);
+
+    // 更新访问统计
+    plugin.bookmarkService.jumpToBookmark(bookmark);
+
+    // 关闭书签面板
+    showBookmarkPanel = false;
+  }
 </script>
 
-<div class="novel-reader" class:outline-mode={displayMode === 'outline' || displayMode === 'sidebar'}
-	 bind:this={readerElement}
-	 tabindex="0"
-	 on:mouseenter={handleFocus}
-	 on:mouseleave={handleBlur}
-	 on:focus={() => isActive = true}
-	 on:blur={() => isActive = false}
-	 on:keydown={handleKeyDown}>
+<!-- Main Reader Container -->
+<div
+  class="txt-reader"
+  bind:this={readerElement}
+  tabindex="0"
+  role="region"
+  aria-label="Novel Reader"
+>
+  <!-- 目录面板 -->
+  <ReaderSidebar
+    show={showOutlinePanel}
+    chapters={(chapters || []).map((ch, index) => ({ ...ch, page: index + 1 }))}
+    currentChapterId={currentChapterId || 0}
+    {viewMode}
+    {virtualPages}
+    {currentPageNum}
+    showPageToggle={false}
+    on:chapterSelect={(e) => {
+      selectChapter(e.detail.chapter);
+      showOutlinePanel = false;
+    }}
+    on:pageSelect={(e) => {
+      jumpToPage(e.detail.page.pageNum);
+      showOutlinePanel = false;
+    }}
+    on:toggleViewMode={toggleViewMode}
+    on:close={() => (showOutlinePanel = false)}
+  />
 
-	<!-- 满屏目录面板 -->
-	{#if showOutlinePanel}
-		<div class="fullscreen-outline-panel" transition:fade on:click={toggleOutlinePanel}>
-			<div class="outline-modal" on:click|stopPropagation>
-				<div class="outline-modal-header">
-					<h2>目录</h2>
-					<button class="close-button" on:click={toggleOutlinePanel}>✕</button>
-				</div>
-				<div class="outline-modal-content"
-					 bind:this={fullscreenChaptersContainer}>
-					{#if viewMode === 'chapters'}
-						<!-- 章节视图 -->
-						{#each chapters as chapter}
-							<button
-								class="chapter-item"
-								class:active={currentChapter?.id === chapter.id}
-								use:setChapterElement={chapter.id}
-								on:click={() => {
-									selectChapter(chapter);
-									showOutlinePanel = false;
-								}}
-							>
-								<span class="chapter-title">{chapter.title}</span>
-								<span class="chapter-number">第 {chapter.id} 章</span>
-							</button>
-						{/each}
-					{:else}
-						<!-- 页码视图 -->
-						{#each virtualPages as page}
-							<button
-								class="page-item"
-								class:active={page.pageNum === currentPageNum}
-								on:click={() => {
-									jumpToPage(page.pageNum);
-									showOutlinePanel = false;
-								}}
-							>
-								<span class="page-title">第 {page.pageNum} 页</span>
-								<span class="page-chapter">{page.chapterTitle}</span>
-							</button>
-						{/each}
-					{/if}
-				</div>
-			</div>
-		</div>
-	{/if}
+  <ReadingSessionManager
+    {plugin}
+    {novel}
+    chapters={(chapters || []).map((ch, index) => ({
+      id: ch.id,
+      title: ch.title,
+      level: 0,
+    }))}
+    currentChapterId={currentChapterId || null}
+    currentChapterTitle={currentChapter?.title || ''}
+    totalChapters={chapters.length}
+    bind:isActive
+    on:startReading={(e) => console.log('Start Reading', e.detail)}
+    on:endReading={(e) => console.log('End Reading', e.detail)}
+    on:chapterSelect={(e) => {
+      const chapter = chapters.find((ch) => ch.id === e.detail.chapterId);
+      if (chapter) selectChapter(chapter);
+    }}
+    on:toggleTOC={toggleOutlinePanel}
+    on:prevChapter={() => handleSwitchChapter('prev')}
+    on:nextChapter={() => handleSwitchChapter('next')}
+    canGoPrev={currentChapterId !== null && currentChapterId > 0}
+    canGoNext={currentChapterId !== null && currentChapterId < chapters.length - 1}
+  >
+    <!-- 悬浮章节模式 - 使用 HoverTOC 组件 -->
+    <HoverTOC
+      show={displayMode === 'hover'}
+      chapters={chapters.map((ch) => ({
+        id: ch.id,
+        title: ch.title,
+        level: 0,
+        subChapters: [],
+      }))}
+      currentChapterId={currentChapterId || 0}
+      {viewMode}
+      {virtualPages}
+      {currentPageNum}
+      canToggleView={false}
+      on:chapterSelect={(e) => selectChapter(e.detail.chapter)}
+      on:pageSelect={(e) => jumpToPage(e.detail.page.pageNum)}
+      on:toggleViewMode={toggleViewMode}
+    />
 
-	<!-- 悬浮章节模式 -->
-	{#if displayMode === 'hover'}
-		<div class="chapter-trigger"
-			 on:mouseenter={handleMouseEnter}
-			 on:mouseleave={handleMouseLeave}>
-			<div class="chapters-panel"
-				 class:visible={isMenuVisible}>
-				<div class="chapters-header">
-					<div class="header-content">
-						<h3>{viewMode === 'chapters' ? '目录' : '页码'}</h3>
-						{#if chapters.length > 0}
-							<button
-								class="view-mode-toggle"
-								on:click={toggleViewMode}
-								title={viewMode === 'chapters' ? '切换到页码视图' : '切换到目录视图'}
-							>
-								{viewMode === 'chapters' ? '页码' : '目录'}
-							</button>
-						{/if}
-					</div>
-				</div>
-				<div class="chapters-scroll"
-					 bind:this={hoverChaptersContainer}>
-					{#if viewMode === 'chapters'}
-						<!-- 目录视图 -->
-						{#each chapters as chapter}
-							<button
-								class="chapter-item"
-								class:active={currentChapter?.id === chapter.id}
-								use:setChapterElement={chapter.id}
-								on:click={() => selectChapter(chapter)}
-							>
-								{chapter.title}
-							</button>
-						{/each}
-					{:else}
-						<!-- 页码视图 -->
-						{#each virtualPages as page}
-							<button
-								class="page-item"
-								class:active={page.pageNum === currentPageNum}
-								on:click={() => jumpToPage(page.pageNum)}
-							>
-								<span class="page-title">第 {page.pageNum} 页</span>
-								<span class="page-chapter">{page.chapterTitle}</span>
-							</button>
-						{/each}
-					{/if}
-				</div>
-			</div>
-		</div>
-	{/if}
+    <!-- 大纲章节模式 -->
 
-	<!-- 大纲章节模式 -->
-	{#if displayMode === 'outline'}
-		<div class="outline-panel">
-			<div class="outline-header">
-				<h3>章节大纲</h3>
-			</div>
-			<div class="outline-scroll"
-				 bind:this={outlineChaptersContainer}>
-				{#each chapters as chapter}
-					<button
-						class="chapter-item"
-						class:active={currentChapter?.id === chapter.id}
-						use:setChapterElement={chapter.id}
-						on:click={() => selectChapter(chapter)}
-					>
-						{chapter.title}
-					</button>
-				{/each}
-			</div>
-		</div>
-	{/if}
+    <!-- 侧边栏模式（可折叠） -->
 
-	<!-- 侧边栏模式（可折叠） -->
-	{#if displayMode === 'sidebar'}
-		<div class="sidebar-panel" class:collapsed={isSidebarCollapsed}>
-			<div class="sidebar-header">
-				<h3>目录</h3>
-				<button class="toggle-button" on:click={toggleSidebar} title={isSidebarCollapsed ? '展开' : '折叠'}>
-					{isSidebarCollapsed ? '▶' : '◀'}
-				</button>
-			</div>
-			{#if !isSidebarCollapsed}
-				<div class="sidebar-scroll"
-					 bind:this={sidebarChaptersContainer}>
-					{#each chapters as chapter}
-						<button
-							class="chapter-item"
-							class:active={currentChapter?.id === chapter.id}
-							use:setChapterElement={chapter.id}
-							on:click={() => selectChapter(chapter)}
-						>
-							{chapter.title}
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	{/if}
+    <!-- 内容区域 -->
+    <div class="content-area">
+      {#if viewMode === 'chapters'}
+        <!-- 章节模式：显示完整章节 -->
+        {#if currentChapter}
+          <div class="chapter-content">
+            <h2>{currentChapter.title}</h2>
+            <div class="content-text">
+              {#each currentChapter.content.split('\n') as paragraph, index}
+                <p data-line-number={index}>
+                  {@html addNoteMarkers(paragraph, currentChapter.id, index)}
+                </p>
+              {/each}
+            </div>
+            <!-- 导航栏 -->
+            <ReaderNavigation
+              currentChapter={currentChapterId || 1}
+              totalChapters={chapters.length}
+              currentPage={currentChapterId || 1}
+              totalPages={chapters.length}
+              canGoPrev={currentChapterId !== null && currentChapterId > 0}
+              canGoNext={currentChapterId !== null && currentChapterId < chapters.length - 1}
+              on:prev={() => handleSwitchChapter('prev')}
+              on:next={() => handleSwitchChapter('next')}
+              on:toggleTOC={toggleOutlinePanel}
+            />
+          </div>
+        {:else}
+          <div class="no-chapter">请选择要阅读的章节</div>
+        {/if}
+      {:else}
+        <!-- 页码模式：只显示当前虚拟页的内容 -->
+        {#if currentVirtualPage}
+          <div class="chapter-content">
+            <h2>第 {currentVirtualPage.pageNum} 页</h2>
+            <div class="content-text">
+              {#each getCurrentPageContent() as paragraph, index}
+                <p data-line-number={currentVirtualPage.absoluteStartLine + index}>
+                  {@html addNoteMarkers(
+                    paragraph,
+                    currentVirtualPage.chapterId || 0,
+                    currentVirtualPage.absoluteStartLine + index
+                  )}
+                </p>
+              {/each}
+            </div>
+            <!-- 页码导航已由 ReaderNavigation 组件统一处理 -->
+          </div>
+        {:else}
+          <div class="no-chapter">请选择要阅读的页面</div>
+        {/if}
+      {/if}
 
-	<!-- 内容区域 -->
-	<div class="content-area">
-		{#if viewMode === 'chapters'}
-			<!-- 章节模式：显示完整章节 -->
-			{#if currentChapter}
-				<div class="chapter-content">
-					<h2>{currentChapter.title}</h2>
-					<div class="content-text">
-						{#each currentChapter.content.split('\n') as paragraph, index}
-							<p data-line-number={index}>
-								{@html addNoteMarkers(paragraph, currentChapter.id, index)}
-							</p>
-						{/each}
-					</div>
-					<!-- 章节导航栏 -->
-					<div class="chapter-navigation">
-						<button
-							class="nav-button prev-chapter"
-							disabled={!currentChapter || chapters.findIndex(ch => ch.id === currentChapter?.id) === 0}
-							on:click={() => handleSwitchChapter('prev')}
-							title="上一章"
-						>
-							← 上一章
-						</button>
-						<button
-							class="nav-button toggle-outline"
-							on:click={toggleOutlinePanel}
-							title="目录"
-						>
-							目录
-						</button>
-						<button
-							class="nav-button next-chapter"
-							disabled={!currentChapter || chapters.findIndex(ch => ch.id === currentChapter?.id) === chapters.length - 1}
-							on:click={() => handleSwitchChapter('next')}
-							title="下一章"
-						>
-							下一章 →
-						</button>
-					</div>
-				</div>
-			{:else}
-				<div class="no-chapter">
-					请选择要阅读的章节
-				</div>
-			{/if}
-		{:else}
-			<!-- 页码模式：只显示当前虚拟页的内容 -->
-			{#if currentVirtualPage}
-				<div class="chapter-content">
-					<h2>第 {currentVirtualPage.pageNum} 页</h2>
-					<div class="content-text">
-						{#each getCurrentPageContent() as paragraph, index}
-							<p data-line-number={currentVirtualPage.absoluteStartLine + index}>
-								{@html addNoteMarkers(paragraph, currentVirtualPage.chapterId || 0, currentVirtualPage.absoluteStartLine + index)}
-							</p>
-						{/each}
-					</div>
-					<!-- 页码导航 -->
-					<div class="page-navigation-footer">
-						<button
-							class="nav-button"
-							disabled={currentPageNum === 1}
-							on:click={() => switchPage('prev')}
-						>
-							← 上一页
-						</button>
-						<span class="page-info">
-							第 {currentPageNum} 页 / 共 {virtualPages.length} 页
-						</span>
-						<button
-							class="nav-button"
-							disabled={currentPageNum === virtualPages.length}
-							on:click={() => switchPage('next')}
-						>
-							下一页 →
-						</button>
-					</div>
-				</div>
-			{:else}
-				<div class="no-chapter">
-					请选择要阅读的页面
-				</div>
-			{/if}
-		{/if}
+      <TextSelectionMenu
+        novelId={novel?.id || ''}
+        chapterId={currentChapter?.id || 0}
+        on:addNote={handleAddNote}
+      />
 
-		<TextSelectionMenu
-			novelId={novel?.id || ''}
-			chapterId={currentChapter?.id || 0}
-			on:addNote={handleAddNote}
-		/>
+      {#if showNoteDialog}
+        <NoteDialog
+          isOpen={showNoteDialog}
+          selectedText={selectedTextForNote}
+          existingNote={selectedNote}
+          on:save={handleNoteSave}
+          on:close={handleNoteDialogClose}
+        />
+      {/if}
+    </div>
 
-		{#if showNoteDialog}
-			<NoteDialog
-				isOpen={showNoteDialog}
-				selectedText={selectedTextForNote}
-				existingNote={selectedNote}
-				on:save={handleNoteSave}
-				on:close={handleNoteDialogClose}
-			/>
-		{/if}
-	</div>
+    {#if selectedNote && noteViewerVisible}
+      <NoteViewer
+        note={selectedNote}
+        position={noteViewerPosition}
+        visible={noteViewerVisible}
+        on:close={closeAllNoteDialogs}
+        on:delete={handleNoteDelete}
+        on:edit={handleNoteEdit}
+      />
+    {/if}
 
-	{#if selectedNote && noteViewerVisible}
-		<NoteViewer
-			note={selectedNote}
-			position={noteViewerPosition}
-			visible={noteViewerVisible}
-			on:close={closeAllNoteDialogs}
-			on:delete={handleNoteDelete}
-			on:edit={handleNoteEdit}
-		/>
-	{/if}
+    <!-- 书签面板 -->
+    <BookmarkPanelWrapper
+      {plugin}
+      novelId={novel.id}
+      currentChapterId={currentChapter?.id || 0}
+      show={showBookmarkPanel}
+      on:jump={(e) => {
+        if (bookmarkManager) {
+          bookmarkManager.goToBookmark(e.detail);
+        }
+      }}
+      on:close={() => (showBookmarkPanel = false)}
+    />
 
-	<div class="toolbar">
-		<ReaderSettingsMenu
-			plugin={plugin}
-			novel={novel}
-			content={content}
-			readerType="txt"
-			currentChapterId={currentChapter?.id}
-			notes={notes}
-			readingStats={readingStats}
-			chapterHistory={chapterHistory}
-			on:savePattern={async (event) => {
-    try {
-      const {novel: updatedNovel, chapters: newChapters} = event.detail;
+    <div class="toolbar">
+      <ReaderSettingsMenu
+        {plugin}
+        {novel}
+        {content}
+        readerType="txt"
+        currentChapterId={currentChapter?.id}
+        {notes}
+        {readingStats}
+        {chapterHistory}
+        hasBookmarkAtCurrentPosition={bookmarkManager
+          ? ($hasBookmarkAtCurrentPosition ?? false)
+          : false}
+        {styleManager}
+        on:showBookmarks={() => (showBookmarkPanel = true)}
+        on:addBookmark={() => {
+          if (bookmarkManager && currentChapter) {
+            bookmarkManager.toggleBookmark({
+              novelId: novel.id,
+              novelTitle: novel.title,
+              chapterId: currentChapter.id,
+              chapterTitle: currentChapter.title,
+              progress: readerElement?.scrollTop || 0,
+            });
+          }
+        }}
+        on:jumpToNote={handleJumpToNote}
+        on:savePattern={async (event) => {
+          try {
+            const { novel: updatedNovel, chapters: newChapters } = event.detail;
 
-      // 第一步：保存到数据库
-      const saveResult = await plugin.libraryService.updateNovel(updatedNovel);
+            // 第一步：保存到数据库
+            const saveResult = await plugin.libraryService.updateNovel(updatedNovel);
 
-      if (saveResult) {
-        // 第二步：只有保存成功后才更新本地状态
-        // 使用不可变方式更新，避免触发额外的响应式更新
-        novel = Object.assign({}, updatedNovel);
-        chapters = [...newChapters];
+            if (saveResult) {
+              // 第二步：只有保存成功后才更新本地状态
+              // 使用不可变方式更新，避免触发额外的响应式更新
+              novel = Object.assign({}, updatedNovel);
+              chapters = [...newChapters];
 
-        // 第三步：通知视图更新
-        window.dispatchEvent(new CustomEvent('chaptersUpdated', {
-          detail: {chapters: newChapters}
-        }));
+              // 第三步：通知视图更新
+              window.dispatchEvent(
+                new CustomEvent('chaptersUpdated', {
+                  detail: { chapters: newChapters },
+                })
+              );
 
-        new Notice('章节解析规则已保存');
-      }
-    } catch (error) {
-      console.error('Failed to save pattern:', error);
-      new Notice('保存章节解析规则失败');
-    }
-  }}
-			on:deleteNote={async (event) => {
-            	await handleNoteDelete(event);
-            	// 重新渲染当前章节以更新笔记显示
-            	if (currentChapter) {
-                	currentChapter = {...currentChapter};
-            	}
-        	}}
-			on:editNote={(event) => {
-            	handleNoteEdit(event);
-            	showNoteList = false; // 关闭列表面板
-        	}}
-			on:jumpToChapter={async (event) => {
-    			const { chapterId, chapterTitle } = event.detail;
+              new Notice('章节解析规则已保存');
+            }
+          } catch (error) {
+            console.error('Failed to save pattern:', error);
+            new Notice('保存章节解析规则失败');
+          }
+        }}
+        on:deleteNote={async (event) => {
+          await handleNoteDelete(event);
+          // 重新渲染当前章节以更新笔记显示
+          if (currentChapter) {
+            currentChapter = { ...currentChapter };
+          }
+        }}
+        on:editNote={(event) => {
+          handleNoteEdit(event);
+          showNoteList = false; // 关闭列表面板
+        }}
+        on:jumpToChapter={async (event) => {
+          const { chapterId, chapterTitle } = event.detail;
 
-    			// 判断是页码历史还是章节历史
-    			if (chapterTitle && chapterTitle.includes('页')) {
-      				// 页码历史：提取页码并跳转
-      				const pageMatch = chapterTitle.match(/第\s*(\d+)\s*页/);
-      				if (pageMatch) {
-        				const pageNum = parseInt(pageMatch[1], 10);
-        				// 切换到页码模式
-        				if (viewMode !== 'pages') {
-          					viewMode = 'pages';
-          					if (!novel.customSettings) {
-            					novel.customSettings = {};
-          					}
-          					novel.customSettings.txtViewMode = viewMode;
-          					calculateVirtualPages();
-          					await plugin.libraryService.updateNovel(novel);
-        				}
-        				// 跳转到指定页码
-        				jumpToPage(pageNum);
-        				// 触发滚动到顶部
-        				const contentElement = document.querySelector('.content-area');
-        				if (contentElement) {
-          					contentElement.scrollTo({top: 0, behavior: 'smooth'});
-        				}
-      				}
-    			} else {
-      				// 章节历史：查找章节并跳转
-      				const chapter = chapters.find(ch => ch.id === chapterId);
-      				if (chapter) {
-        				// 切换到章节模式
-        				if (viewMode !== 'chapters') {
-          					viewMode = 'chapters';
-          					if (!novel.customSettings) {
-            					novel.customSettings = {};
-          					}
-          					novel.customSettings.txtViewMode = viewMode;
-          					calculateVirtualPages();
-          					await plugin.libraryService.updateNovel(novel);
-        				}
-        				currentChapter = chapter;
-        				currentChapterId = chapter.id;
-        				// 触发滚动到顶部
-        				const contentElement = document.querySelector('.content-area');
-        				if (contentElement) {
-          					contentElement.scrollTo({top: 0, behavior: 'smooth'});
-        				}
-      				}
-    			}
-  			}}
-		/>
-	</div>
+          // 判断是页码历史还是章节历史
+          if (chapterTitle && chapterTitle.includes('页')) {
+            // 页码历史：提取页码并跳转
+            const pageMatch = chapterTitle.match(/第\s*(\d+)\s*页/);
+            if (pageMatch) {
+              const pageNum = parseInt(pageMatch[1], 10);
+              // 切换到页码模式
+              if (viewMode !== 'pages') {
+                viewMode = 'pages';
+                if (!novel.customSettings) {
+                  novel.customSettings = {};
+                }
+                novel.customSettings.txtViewMode = viewMode;
+                calculateVirtualPages();
+                await plugin.libraryService.updateNovel(novel);
+              }
+              // 跳转到指定页码
+              jumpToPage(pageNum);
+              // 触发滚动到顶部
+              const contentElement = document.querySelector('.content-area');
+              if (contentElement) {
+                contentElement.scrollTo({ top: 0, behavior: 'smooth' });
+              }
+            }
+          } else {
+            // 章节历史：跳转到章节
+            const chapter = chapters.find((ch) => ch.id === chapterId);
+            if (chapter) {
+              if (viewMode === 'pages') {
+                // 如果在页码模式点击章节，切换回章节模式（或者跳转到该章节第一页）
+                // 这里选择切换回章节模式以保持一致性
+                viewMode = 'chapters';
+                if (!novel.customSettings) {
+                  novel.customSettings = {};
+                }
+                novel.customSettings.txtViewMode = viewMode;
+                calculateVirtualPages();
+                await plugin.libraryService.updateNovel(novel);
+              }
+              selectChapter(chapter);
+            }
+          }
+        }}
+      />
+    </div>
 
+    <!-- 书签面板 -->
+    <BookmarkPanelWrapper
+      {plugin}
+      novelId={novel.id}
+      currentChapterId={currentChapter?.id || 0}
+      show={showBookmarkPanel}
+      on:jump={(e) => {
+        if (bookmarkManager) {
+          bookmarkManager.goToBookmark(e.detail);
+        }
+      }}
+      on:close={() => (showBookmarkPanel = false)}
+    />
+
+    <!-- 键盘导航处理组件 -->
+    <ReaderProgressManager
+      {plugin}
+      {novel}
+      readerType="txt"
+      totalChapters={chapters.length}
+      bind:currentPosition={progressPosition}
+      on:save={(e) => {
+        console.log('[TXT] Progress auto-saved:', e.detail.progress);
+        dispatch('saveProgress', e.detail);
+      }}
+    />
+
+    <KeyboardNavigationHandler
+      enabled={isActive}
+      readerType="txt"
+      canGoPrev={currentChapter ? chapters.findIndex((c) => c.id === currentChapter.id) > 0 : false}
+      canGoNext={currentChapter
+        ? chapters.findIndex((c) => c.id === currentChapter.id) < chapters.length - 1
+        : false}
+      on:prevChapter={handlePrevChapter}
+      on:nextChapter={handleNextChapter}
+      on:toggleTOC={handleToggleTOC}
+      on:closePanel={handleClosePanel}
+    />
+  </ReadingSessionManager>
 </div>
 
 <style>
-	.novel-reader {
-		height: 100%;
-		display: flex;
-		position: relative;
-		overflow: hidden;
-	}
-
-	.novel-reader.outline-mode {
-		flex-direction: row;
-	}
-
-	/* 悬浮模式样式 */
-	.chapter-trigger {
-		position: absolute;
-		left: 0;
-		top: 0;
-		bottom: 0;
-		width: 50px;
-		z-index: 100;
-	}
-
-	.chapters-panel {
-		position: absolute;
-		left: -240px;
-		top: 0;
-		bottom: 0;
-		width: 240px;
-		background: var(--background-primary);
-		border-right: 1px solid var(--background-modifier-border);
-		transition: transform 0.3s ease-in-out;
-		display: flex;
-		flex-direction: column;
-		box-shadow: 2px 0 8px rgba(0, 0, 0, 0.1);
-		z-index: 101;
-	}
-
-	.chapters-panel.visible {
-		transform: translateX(240px);
-	}
-
-	/* 大纲模式样式 */
-	.outline-panel {
-		width: 240px;
-		min-width: 240px; /* 防止内容挤压 */
-		flex-shrink: 0;
-		border-right: 1px solid var(--background-modifier-border);
-		display: flex;
-		flex-direction: column;
-		background: var(--background-primary);
-	}
-
-	.outline-header {
-		padding: 16px;
-		border-bottom: 1px solid var(--background-modifier-border);
-	}
-
-	.outline-header h3 {
-		margin: 0;
-	}
-
-	.outline-scroll {
-		flex: 1;
-		overflow-y: auto;
-		padding: 8px;
-		scroll-behavior: smooth; /* 添加平滑滚动效果 */
-	}
-
-	/* 侧边栏模式样式（可折叠） */
-	.sidebar-panel {
-		width: 240px;
-		min-width: 240px;
-		flex-shrink: 0;
-		border-right: 1px solid var(--background-modifier-border);
-		display: flex;
-		flex-direction: column;
-		background: var(--background-primary);
-		transition: width 0.3s ease-in-out, min-width 0.3s ease-in-out;
-	}
-
-	.sidebar-panel.collapsed {
-		width: 40px;
-		min-width: 40px;
-	}
-
-	.sidebar-header {
-		padding: 16px;
-		border-bottom: 1px solid var(--background-modifier-border);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.sidebar-header h3 {
-		margin: 0;
-	}
-
-	.sidebar-panel.collapsed .sidebar-header h3 {
-		display: none;
-	}
-
-	.toggle-button {
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		cursor: pointer;
-		padding: 4px;
-		font-size: 14px;
-		transition: color 0.2s;
-	}
-
-	.toggle-button:hover {
-		color: var(--text-normal);
-	}
-
-	.sidebar-scroll {
-		flex: 1;
-		overflow-y: auto;
-		padding: 8px;
-		scroll-behavior: smooth;
-	}
-
-	/* 共享样式 */
-	.chapters-header {
-		padding: 16px;
-		border-bottom: 1px solid var(--background-modifier-border);
-	}
-
-	.header-content {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.chapters-header h3 {
-		margin: 0;
-	}
-
-	.view-mode-toggle {
-		padding: 4px 12px;
-		border: none;
-		border-radius: 4px;
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
-		cursor: pointer;
-		font-size: 12px;
-		transition: all 0.2s;
-	}
-
-	.view-mode-toggle:hover {
-		background: var(--interactive-accent-hover);
-	}
-
-	.chapters-scroll {
-		flex: 1;
-		overflow-y: auto;
-		padding: 8px;
-		scroll-behavior: smooth; /* 添加平滑滚动效果 */
-	}
-
-	.chapter-item {
-		width: 100%;
-		margin-bottom: 4px;
-		border: none;
-		border-radius: 4px;
-		background: transparent;
-		cursor: pointer;
-		text-align: left;
-		white-space: nowrap; /* 防止文本换行 */
-		overflow: hidden; /* 隐藏溢出的内容 */
-		text-overflow: ellipsis; /* 显示省略号 */
-		/* 给省略号留出空间 */
-		display: block; /* 改变按钮的默认display行为 */
-		padding: 8px 16px 8px 8px;
-		color: var(--text-normal);
-		transition: background-color 0.2s;
-		position: relative; /* 添加相对定位以支持滚动定位 */
-	}
-
-	.chapter-item:hover {
-		background: var(--background-modifier-hover);
-	}
-
-	.chapter-item.active {
-		background: var(--background-modifier-active);
-		color: var(--text-accent);
-	}
-
-	.page-item {
-		width: 100%;
-		margin-bottom: 4px;
-		padding: 8px 12px;
-		border: none;
-		border-radius: 4px;
-		background: transparent;
-		cursor: pointer;
-		text-align: left;
-		color: var(--text-normal);
-		transition: background-color 0.2s;
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-	}
-
-	.page-item:hover {
-		background: var(--background-modifier-hover);
-	}
-
-	.page-item.active {
-		background: var(--background-modifier-active);
-		color: var(--text-accent);
-	}
-
-	.page-title {
-		font-weight: 500;
-	}
-
-	.page-chapter {
-		font-size: 0.85em;
-		color: var(--text-muted);
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-	}
-
-	.content-area {
-		flex: 1;
-		overflow-y: auto;
-		padding: 16px 32px 35px 32px;
-		min-width: 0;
-	}
-
-	.chapter-content {
-		max-width: 800px;
-		margin: 0 auto;
-	}
-
-	.chapter-content h2 {
-		margin-bottom: 24px;
-		padding-bottom: 16px;
-		border-bottom: 1px solid var(--background-modifier-border);
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-	}
-
-	.page-subtitle {
-		font-size: 0.6em;
-		color: var(--text-muted);
-		font-weight: normal;
-	}
-
-	.page-navigation-footer {
-		margin-top: 32px;
-		padding-top: 24px;
-		border-top: 1px solid var(--background-modifier-border);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		gap: 16px;
-	}
-
-	.nav-button {
-		padding: 8px 16px;
-		border: none;
-		border-radius: 4px;
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
-		cursor: pointer;
-		font-size: 14px;
-		transition: all 0.2s;
-	}
-
-	.nav-button:hover:not(:disabled) {
-		background: var(--interactive-accent-hover);
-	}
-
-	.nav-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.page-info {
-		font-size: 14px;
-		color: var(--text-muted);
-	}
-
-	.content-text {
-		line-height: 1.8;
-		font-size: 1.1em;
-		user-select: text;
-		-webkit-user-select: text;
-		-moz-user-select: text;
-		-ms-user-select: text;
-	}
-
-	.content-text p {
-		margin: 1em 0;
-		text-indent: 2em;
-	}
-
-	.no-chapter {
-		text-align: center;
-		color: var(--text-muted);
-		padding: 32px;
-	}
-
-	/* 设置 */
-	.toolbar {
-		position: fixed;
-		top: 13px; /* 原来10px，往下3px变成13px */
-		right: 15px; /* 原来10px，往左5px变成15px */
-		z-index: 1000;
-	}
-
-	.settings-button {
-		background: var(--background-secondary);
-		border: none;
-		border-radius: 6px;
-		padding: 8px;
-		cursor: pointer;
-		opacity: 0.8;
-		transition: all 0.2s;
-		font-size: 16px;
-		width: 36px;
-		height: 36px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-	}
-
-	.settings-button:hover {
-		opacity: 1;
-		transform: translateY(-1px);
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-	}
-
-	.settings-header {
-		padding: 20px 24px;
-		border-bottom: 1px solid var(--background-modifier-border);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.settings-header h3 {
-		margin: 0;
-		font-size: 20px;
-		font-weight: 600;
-	}
-
-	.settings-body {
-		display: flex;
-		flex: 1;
-		min-height: 0;
-	}
-
-	.save-button:hover {
-		filter: brightness(1.1);
-	}
-
-	.delete-button:hover {
-		filter: brightness(1.1);
-	}
-
-	.settings-panel {
-		position: fixed;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
-		width: 800px;
-		max-width: 90vw;
-		height: 600px;
-		max-height: 90vh;
-		background: var(--background-primary);
-		border-radius: 12px;
-		box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-		z-index: 1000;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.settings-nav {
-		width: 200px;
-		padding: 20px 0;
-		border-right: 1px solid var(--background-modifier-border);
-		background: var(--background-secondary);
-	}
-
-	.nav-item {
-		width: 100%;
-		padding: 12px 24px;
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 15px;
-		cursor: pointer;
-		transition: all 0.2s;
-		text-align: left;
-	}
-
-	.nav-item:hover {
-		background: var(--background-modifier-hover);
-		color: var(--text-normal);
-	}
-
-	.nav-item.active {
-		background: var(--background-modifier-active);
-		color: var(--text-accent);
-		font-weight: 500;
-	}
-
-	.settings-main {
-		flex: 1;
-		padding: 24px;
-		overflow-y: auto;
-	}
-
-	.settings-section {
-		max-width: 600px;
-		margin: 0 auto;
-	}
-
-	.section-header {
-		margin-bottom: 24px;
-	}
-
-	.section-header h4 {
-		margin: 0 0 8px 0;
-		font-size: 18px;
-		font-weight: 500;
-	}
-
-	.section-desc {
-		margin: 0;
-		color: var(--text-muted);
-		font-size: 14px;
-	}
-
-	.form-group {
-		margin-bottom: 24px;
-	}
-
-	.form-group label {
-		display: block;
-		margin-bottom: 8px;
-		font-weight: 500;
-	}
-
-	.pattern-input {
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-	}
-
-	.pattern-input input {
-		padding: 10px 12px;
-		border-radius: 6px;
-		border: 1px solid var(--background-modifier-border);
-		background: var(--background-primary);
-		font-size: 14px;
-	}
-
-	.button-group {
-		display: flex;
-		gap: 8px;
-	}
-
-	.save-button,
-	.delete-button {
-		padding: 8px 16px;
-		border-radius: 6px;
-		border: none;
-		font-size: 14px;
-		font-weight: 500;
-		cursor: pointer;
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		transition: all 0.2s;
-	}
-
-	.save-button {
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
-	}
-
-	.delete-button {
-		background: var(--background-modifier-error);
-		color: white;
-	}
-
-	.settings-container {
-		position: relative;
-	}
-
-	.settings-dropdown {
-		position: absolute;
-		top: calc(100% + 8px);
-		right: 0;
-		background: var(--background-primary);
-		border: 1px solid var(--background-modifier-border);
-		border-radius: 6px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-		min-width: 160px;
-		z-index: 1000;
-	}
-
-	.dropdown-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		padding: 10px 16px;
-		border: none;
-		background: none;
-		color: var(--text-normal);
-		cursor: pointer;
-		text-align: left;
-		transition: background-color 0.2s;
-	}
-
-	.dropdown-item:hover {
-		background-color: var(--background-modifier-hover);
-	}
-
-	.dropdown-item .icon {
-		font-size: 16px;
-		opacity: 0.8;
-	}
-
-	.close-button {
-		background: none;
-		border: none;
-		color: var(--text-muted);
-		font-size: 24px;
-		cursor: pointer;
-		padding: 4px;
-	}
-
-	.close-button:hover {
-		color: var(--text-error);
-	}
-
-	:global(.note-highlight) {
-		background-color: var(--novel-color-note-highlight);
-		border-radius: 3px;
-		display: inline;
-		position: relative;
-		padding: 2px 0;
-		transition: background-color 0.2s ease;
-	}
-
-	:global(.note-highlight:hover) {
-		background-color: rgba(var(--interactive-accent-rgb), 0.25);
-	}
-
-	:global(.note-marker) {
-		position: absolute;
-		right: -18px; /* 微调右侧距离 */
-		top: -14px; /* 上移位置使其位于文字上方 */
-		font-size: 14px;
-		color: var(--interactive-accent);
-		opacity: 0.8;
-		cursor: pointer;
-		z-index: 2;
-		transition: all 0.2s ease;
-		padding: 2px;
-		border-radius: 4px;
-		background: none;
-		border: none;
-	}
-
-	:global(.note-marker:hover) {
-		opacity: 1;
-		transform: scale(1.1);
-		background-color: rgba(var(--interactive-accent-rgb), 0.1);
-	}
-
-	:global(.note-highlight:hover .note-marker) {
-		opacity: 1;
-	}
-
-	.content-text p {
-		position: relative;
-		line-height: 1.8;
-		margin: 1em 0;
-		text-indent: 2em;
-		padding-right: 2px; /* 为笔记图标留出空间 */
-	}
-
-	.dropdown-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		padding: 10px 16px;
-		border: none;
-		background: none;
-		color: var(--text-normal);
-		cursor: pointer;
-		text-align: left;
-		transition: background-color 0.2s;
-	}
-
-	.dropdown-item:hover {
-		background-color: var(--background-modifier-hover);
-	}
-
-	.dropdown-item .icon {
-		font-size: 16px;
-		opacity: 0.8;
-	}
-
-	/* 添加统计相关样式 */
-	.dropdown-item {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		width: 100%;
-		padding: 10px 16px;
-		border: none;
-		background: none;
-		color: var(--text-normal);
-		cursor: pointer;
-		text-align: left;
-		transition: background-color 0.2s;
-	}
-
-	.dropdown-item:hover {
-		background-color: var(--background-modifier-hover);
-	}
-
-	.dropdown-item .icon {
-		font-size: 16px;
-		opacity: 0.8;
-	}
-
-	/* 章节导航栏样式 */
-	.chapter-navigation {
-		position: fixed;
-		bottom: 0;
-		left: 0;
-		right: 0;
-		display: flex;
-		justify-content: center;
-		align-items: center;
-		gap: 12px;
-		padding: 10px 20px 10px 20px;
-		background: var(--background-primary);
-		border-top: 1px solid var(--background-modifier-border);
-		z-index: 100;
-	}
-
-	.chapter-navigation .nav-button {
-		padding: 4px 16px;
-		background: var(--interactive-normal);
-		border: 1px solid var(--background-modifier-border);
-		border-radius: 6px;
-		color: var(--text-normal);
-		font-size: 14px;
-		cursor: pointer;
-		transition: all 0.2s;
-		white-space: nowrap;
-	}
-
-	.chapter-navigation .nav-button:hover:not(:disabled) {
-		background: var(--interactive-hover);
-		border-color: var(--interactive-accent);
-	}
-
-	.chapter-navigation .nav-button:active:not(:disabled) {
-		background: var(--interactive-active);
-	}
-
-	.chapter-navigation .nav-button:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.chapter-navigation .nav-button.toggle-outline {
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
-		font-weight: 500;
-	}
-
-	.chapter-navigation .nav-button.toggle-outline:hover {
-		background: var(--interactive-accent-hover);
-	}
-
-	/* 满屏目录面板样式 */
-	.fullscreen-outline-panel {
-		position: fixed;
-		top: 0;
-		left: 0;
-		right: 0;
-		bottom: 0;
-		background: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-	}
-
-	.outline-modal {
-		background: var(--background-primary);
-		border-radius: 8px;
-		width: 90%;
-		max-width: 800px;
-		max-height: 80vh;
-		display: flex;
-		flex-direction: column;
-		box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-	}
-
-	.outline-modal-header {
-		padding: 16px 20px;
-		border-bottom: 1px solid var(--background-modifier-border);
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-	}
-
-	.outline-modal-header h2 {
-		margin: 0;
-		font-size: 18px;
-		font-weight: 600;
-		color: var(--text-normal);
-	}
-
-	.close-button {
-		background: none;
-		border: none;
-		font-size: 24px;
-		color: var(--text-muted);
-		cursor: pointer;
-		padding: 0;
-		width: 32px;
-		height: 32px;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 4px;
-	}
-
-	.close-button:hover {
-		background: var(--background-modifier-hover);
-		color: var(--text-normal);
-	}
-
-	.outline-modal-content {
-		overflow-y: auto;
-		padding: 12px;
-		flex: 1;
-	}
-
-	.outline-modal-content .chapter-item {
-		width: 100%;
-		padding: 12px 16px;
-		margin-bottom: 4px;
-		background: var(--background-secondary);
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		text-align: left;
-		transition: all 0.2s;
-	}
-
-	.outline-modal-content .chapter-item:hover {
-		background: var(--background-modifier-hover);
-		transform: translateX(4px);
-	}
-
-	.outline-modal-content .chapter-item.active {
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
-	}
-
-	.outline-modal-content .chapter-title {
-		flex: 1;
-		font-size: 14px;
-		font-weight: 500;
-	}
-
-	.outline-modal-content .chapter-number {
-		font-size: 12px;
-		color: var(--text-muted);
-		margin-left: 12px;
-	}
-
-	.outline-modal-content .chapter-item.active .chapter-number {
-		color: var(--text-on-accent);
-	}
-
-	.outline-modal-content .page-item {
-		width: 100%;
-		padding: 10px 16px;
-		margin-bottom: 4px;
-		background: var(--background-secondary);
-		border: none;
-		border-radius: 6px;
-		cursor: pointer;
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		text-align: left;
-		transition: all 0.2s;
-	}
-
-	.outline-modal-content .page-item:hover {
-		background: var(--background-modifier-hover);
-		transform: translateX(4px);
-	}
-
-	.outline-modal-content .page-item.active {
-		background: var(--interactive-accent);
-		color: var(--text-on-accent);
-	}
-
-	.outline-modal-content .page-title {
-		font-size: 14px;
-		font-weight: 500;
-		flex: 1;
-	}
-
-	.outline-modal-content .page-chapter {
-		font-size: 12px;
-		color: var(--text-muted);
-		margin-left: 12px;
-	}
-
-	.outline-modal-content .page-item.active .page-chapter {
-		color: var(--text-on-accent);
-	}
-
+  .novel-reader {
+    height: 100%;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .content-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 40px 60px 40px;
+    min-width: 0;
+    background: linear-gradient(
+      135deg,
+      var(--background-primary) 0%,
+      var(--background-secondary) 100%
+    );
+  }
+
+  .chapter-content {
+    max-width: 820px;
+    margin: 0 auto;
+    background: var(--background-primary);
+    padding: 32px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+
+  .chapter-content h2 {
+    margin-bottom: 32px;
+    padding-bottom: 20px;
+    border-bottom: 2px solid var(--background-modifier-border);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-size: 28px;
+    font-weight: 600;
+    background: linear-gradient(
+      135deg,
+      var(--interactive-accent) 0%,
+      var(--interactive-accent-hover) 100%
+    );
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .content-text {
+    line-height: 2;
+    font-size: 1.1em;
+    user-select: text;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
+    color: var(--text-normal);
+  }
+
+  .content-text p {
+    margin: 1.2em 0;
+    text-indent: 2em;
+    padding: 4px 8px;
+    margin-left: -8px;
+    margin-right: -8px;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+  }
+
+  .content-text p:hover {
+    background-color: rgba(var(--interactive-accent-rgb), 0.03);
+  }
+
+  .no-chapter {
+    text-align: center;
+    color: var(--text-muted);
+    padding: 32px;
+  }
+
+  /* 设置 */
+  .toolbar {
+    position: fixed;
+    top: 13px; /* 原来10px，往下3px变成13px */
+    right: 15px; /* 原来10px，往左5px变成15px */
+    z-index: 1000;
+  }
+
+  /* ==================== 书签样式 ==================== */
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
 </style>

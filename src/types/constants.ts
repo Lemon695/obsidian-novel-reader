@@ -21,6 +21,7 @@ export const VIEW_TYPE_COLLECTION = `${PLUGIN_ID}.novel-collection-view`;
 export const VIEW_TYPE_LIBRARY = `${PLUGIN_ID}.novel-library-view`;
 export const VIEW_TYPE_STATS = `${PLUGIN_ID}.novel-stats-view`;
 export const VIEW_TYPE_PDF_READER = `${PLUGIN_ID}.pdf-novel-reader`;
+export const VIEW_TYPE_MOBI_READER = `${PLUGIN_ID}.mobi-novel-reader`;
 export const VIEW_TYPE_OUTLINE = `${PLUGIN_ID}.txt-novel-outline-view`;
 
 

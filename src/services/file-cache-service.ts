@@ -10,7 +10,7 @@ interface CacheMetadata {
 interface CacheEntry {
 	metadata: CacheMetadata;
 	content: string | ArrayBuffer;
-	chapters?: any[];
+	chapters?: unknown[];
 	timestamp: number;
 }
 
@@ -73,7 +73,7 @@ export class FileCacheService {
 		}
 	}
 
-	async setChaptersCache(file: TFile, chapters: any[]): Promise<void> {
+	async setChaptersCache(file: TFile, chapters: unknown[]): Promise<void> {
 		if (!this.db) await this.initDatabase();
 
 		try {
@@ -87,7 +87,7 @@ export class FileCacheService {
 		}
 	}
 
-	async getChaptersCache(file: TFile): Promise<any[] | null> {
+	async getChaptersCache(file: TFile): Promise<unknown[] | null> {
 		if (!this.db) await this.initDatabase();
 
 		try {
@@ -113,7 +113,7 @@ export class FileCacheService {
 		});
 	}
 
-	private async setCacheEntry(file: TFile, content: string | ArrayBuffer, chapters?: any[]): Promise<void> {
+	private async setCacheEntry(file: TFile, content: string | ArrayBuffer, chapters?: unknown[]): Promise<void> {
 		const entry: CacheEntry = {
 			metadata: {
 				path: file.path,

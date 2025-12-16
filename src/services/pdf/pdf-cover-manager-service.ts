@@ -1,6 +1,7 @@
 import type { App, TFile } from "obsidian";
 import type NovelReaderPlugin from "../../main";
 import * as pdfjs from 'pdfjs-dist';
+import { getPDFWorkerPath } from '../../constants/app-config';
 
 export class PDFCoverManagerService {
 	private coverDir: string;
@@ -42,8 +43,14 @@ export class PDFCoverManagerService {
 
 	async getPDFCover(file: TFile, format: string): Promise<string | null> {
 		try {
-			// 配置 PDF.js worker
-			pdfjs.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+			// 使用 Blob URL 加载 worker (绕过 Electron 的 file:// 限制)
+			const vaultPath = (this.app.vault.adapter as any).getBasePath();
+			const workerUrl = await getPDFWorkerPath(
+				this.app,
+				vaultPath,
+				(this.plugin as any).manifest.dir
+			);
+			pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
 
 			const arrayBuffer = await this.app.vault.readBinary(file);
 			const pdfDoc = await pdfjs.getDocument(arrayBuffer).promise;
@@ -61,8 +68,9 @@ export class PDFCoverManagerService {
 			if (!context) throw new Error('Cannot get canvas context');
 
 			// 渲染页面到 canvas
+			// PDF.js 5.x 使用 canvas 参数替代 canvasContext
 			await page.render({
-				canvasContext: context,
+				canvas: canvas,
 				viewport: viewport
 			}).promise;
 

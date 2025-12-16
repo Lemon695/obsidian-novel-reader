@@ -2,44 +2,53 @@ import {App} from 'obsidian';
 import type NovelReaderPlugin from '../main';
 import type {ReadingStats} from "../types/reading-stats";
 
+interface RawDailyStats {
+	totalDuration: number;
+	averageSpeed?: number;
+}
+
+interface RawChapterStats {
+	averageSpeed?: number;
+}
+
 export class ReadingStatsService {
 	constructor(private app: App, private plugin: NovelReaderPlugin) {
 	}
 
 	// 获取小说的阅读统计
 	async getNovelStats(novelId: string): Promise<ReadingStats> {
-		// 从数据库服务获取原始数据
-		if (!this.plugin.dbService) {
-			console.warn('Database service is not available');
+		// 从统计服务获取数据
+		if (!this.plugin.statsService) {
+			console.warn('Stats service is not available');
 			return this.getEmptyStats();
 		}
 
-		const rawStats = await this.plugin.dbService.getNovelStats(novelId);
+		const rawStats = await this.plugin.statsService.getNovelStats(novelId);
 
 		// 如果没有统计数据，返回空统计
-		if (!rawStats || !rawStats.stats) {
+		if (!rawStats) {
 			console.warn(`No stats found for novel: ${novelId}`);
 			return this.getEmptyStats();
 		}
 
 		// 处理今日阅读时间
 		const todayKey = new Date().toISOString().split('T')[0];
-		const todayTime = rawStats.stats.dailyStats?.[todayKey]?.totalDuration || 0;
+		const todayTime = rawStats.timeAnalysis.dailyStats?.[todayKey]?.totalDuration || 0;
 
 		// 计算总阅读时间
-		const totalTime = rawStats.stats.totalReadingTime || 0;
+		const totalTime = rawStats.basicStats.totalReadingTime || 0;
 
 		// 计算平均速度
-		const averageSpeed = rawStats.stats.averageSessionTime || 0;
+		let averageSpeed = rawStats.behaviorStats.averageReadingSpeed || 0;
 
 		// 获取阅读天数
-		const readingDays = Object.keys(rawStats.stats.dailyStats || {}).length;
+		const readingDays = Object.keys(rawStats.timeAnalysis.dailyStats || {}).length;
 
 		// 处理每日统计数据
-		const dailyStats = this.processDailyStats(rawStats.stats.dailyStats || {});
+		const dailyStats = this.processDailyStats(rawStats.timeAnalysis.dailyStats || {});
 
 		// 处理速度统计数据
-		const speedStats = this.processSpeedStats(rawStats.stats.chapterStats || {});
+		const speedStats = this.processSpeedStats(rawStats.chapterStats || {});
 
 		// 计算完成率
 		const completionRate = await this.calculateCompletionRate(novelId);
@@ -48,11 +57,11 @@ export class ReadingStatsService {
 		const lastChapter = await this.getLastChapter(novelId);
 
 		// 计算连续阅读天数
-		const readingStreak = this.calculateReadingStreak(rawStats.stats.dailyStats || {});
+		const readingStreak = this.calculateReadingStreak(rawStats.timeAnalysis.dailyStats || {});
 
 		// 获取首次阅读时间
-		const firstReadTime = rawStats.stats.firstReadTime
-			? this.formatFirstReadTime(rawStats.stats.firstReadTime)
+		const firstReadTime = rawStats.basicStats.firstReadTime
+			? this.formatFirstReadTime(rawStats.basicStats.firstReadTime)
 			: '未开始阅读';
 
 		return {
@@ -85,21 +94,21 @@ export class ReadingStatsService {
 		};
 	}
 
-	private processDailyStats(dailyStats: any) {
+	private processDailyStats(dailyStats: Record<string, RawDailyStats>) {
 		return Object.entries(dailyStats)
-			.map(([date, stats]: [string, any]) => ({
+			.map(([date, stats]) => ({
 				date,
-				minutes: Math.floor(stats.totalDuration / 60000), // 转换为分钟
-				speed: stats.averageSpeed
+				minutes: Math.floor(stats.totalDuration / 60000),
+				speed: stats.averageSpeed || 0
 			}))
 			.sort((a, b) => a.date.localeCompare(b.date));
 	}
 
-	private processSpeedStats(chapterStats: any) {
+	private processSpeedStats(chapterStats: Record<string, RawChapterStats>) {
 		return Object.entries(chapterStats)
-			.map(([time, stats]: [string, any]) => ({
+			.map(([time, stats]) => ({
 				time,
-				speed: stats.averageSpeed
+				speed: stats.averageSpeed || 0
 			}))
 			.sort((a, b) => a.time.localeCompare(b.time));
 	}
@@ -115,7 +124,7 @@ export class ReadingStatsService {
 		return progress?.position?.chapterTitle || '';
 	}
 
-	private calculateReadingStreak(dailyStats: any): number {
+	private calculateReadingStreak(dailyStats: Record<string, RawDailyStats>): number {
 		let streak = 0;
 		const today = new Date();
 		let currentDate = new Date(today);
@@ -153,8 +162,11 @@ export class ReadingStatsService {
 
 	// 导出统计报告
 	async exportReport(novelId: string): Promise<string> {
-		const stats = await this.getNovelStats(novelId);
-		const novel = await this.plugin.libraryService.getNovel(novelId);
+		// 并行获取统计数据和小说信息
+		const [stats, novel] = await Promise.all([
+			this.getNovelStats(novelId),
+			this.plugin.libraryService.getNovel(novelId)
+		]);
 
 		// 生成报告内容
 		const report = `# 阅读统计报告 - ${novel?.title}

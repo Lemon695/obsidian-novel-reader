@@ -19,14 +19,21 @@ export class EpubCoverManager {
 	}
 
 	// 确保封面目录存在
-	async ensureCoverDirectory(format: string) {
+	async ensureCoverDirectory(format: string): Promise<void> {
 		const adapter = this.app.vault.adapter;
-		if (!(await adapter.exists(this.coverDir))) {
+		const formatCoverPath = await this.plugin.bookCoverManagerService.coverFormatDir(format);
+		
+		// 并行检查两个目录是否存在
+		const [coverDirExists, formatDirExists] = await Promise.all([
+			adapter.exists(this.coverDir),
+			adapter.exists(formatCoverPath)
+		]);
+
+		// 按顺序创建目录（父目录必须先存在）
+		if (!coverDirExists) {
 			await adapter.mkdir(this.coverDir);
 		}
-
-		const formatCoverPath = await this.plugin.bookCoverManagerService.coverFormatDir(format);
-		if (!(await adapter.exists(formatCoverPath))) {
+		if (!formatDirExists) {
 			await adapter.mkdir(formatCoverPath);
 		}
 	}

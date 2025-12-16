@@ -26,7 +26,7 @@ export class ReadingProgressService {
 		let selectChapterId = initialChapterId || progress?.position?.chapterId || 1;
 		try {
 			// 优先使用传入的章节ID
-			currentSessionId = await this.plugin.dbService?.startReadingSession(
+			currentSessionId = await this.plugin.statsService?.startReadingSession(
 				novel.id, selectChapterId,
 				txtChapterProgress?.find(c => c.id === (initialChapterId || progress?.position?.chapterId))?.title || 'Chapter 1'
 			);

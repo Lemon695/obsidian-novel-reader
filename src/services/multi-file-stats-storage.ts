@@ -130,53 +130,85 @@ export class MultiFileStatsStorage {
     }
 
     /**
-     * 重建索引文件（从现有数据）
+     * 重建索引文件（从现有数据，带备份和错误处理）
      */
     private async rebuildIndex(): Promise<StatsIndexFile> {
         console.log('Rebuilding index from existing data...');
 
+        // 1. 备份原索引（如果存在）
+        const indexPath = this.pathsManager.getIndexFilePath();
+        const backupPath = `${indexPath}.backup.${Date.now()}`;
+        
+        try {
+            if (await this.app.vault.adapter.exists(indexPath)) {
+                const content = await this.app.vault.adapter.read(indexPath);
+                await this.app.vault.adapter.write(backupPath, content);
+                console.log('Original index backed up to:', backupPath);
+            }
+        } catch (error) {
+            console.error('Failed to backup index:', error);
+            // 继续执行，但记录警告
+        }
+
+        // 2. 创建新索引
         const index = await this.createNewIndex();
         const novelsDir = `${this.pathsManager.getStatsRoot()}/novels`;
 
         try {
             const exists = await this.app.vault.adapter.exists(novelsDir);
             if (!exists) {
+                console.warn('Novels directory not found, returning empty index');
                 return index;
             }
 
             const dirs = await this.app.vault.adapter.list(novelsDir);
+            let successCount = 0;
+            let failCount = 0;
 
             for (const dir of dirs.folders) {
-                const novelId = dir.split('/').pop()!;
-                const statsPath = this.pathsManager.getNovelStatsPath(novelId);
+                try {
+                    const novelId = dir.split('/').pop()!;
+                    const statsPath = this.pathsManager.getNovelStatsPath(novelId);
 
-                const statsExists = await this.app.vault.adapter.exists(statsPath);
-                if (statsExists) {
-                    const content = await this.app.vault.adapter.read(statsPath);
-                    const stats = JSON.parse(content) as EnhancedNovelStats;
+                    const statsExists = await this.app.vault.adapter.exists(statsPath);
+                    if (statsExists) {
+                        const content = await this.app.vault.adapter.read(statsPath);
+                        const stats = JSON.parse(content) as EnhancedNovelStats;
 
-                    index.novelIndex[novelId] = {
-                        title: stats.novel.title,
-                        author: stats.novel.author,
-                        type: stats.novel.type,
-                        lastAccess: stats.basicStats.lastReadTime,
-                        statsFile: statsPath,
-                        checksum: stats.basicStats.dataChecksum,
-                        status: this.determineBookStatus(stats),
-                        progress: stats.progressTracking.currentProgress
-                    };
+                        index.novelIndex[novelId] = {
+                            title: stats.novel.title,
+                            author: stats.novel.author,
+                            type: stats.novel.type,
+                            lastAccess: stats.basicStats.lastReadTime,
+                            statsFile: statsPath,
+                            checksum: stats.basicStats.dataChecksum,
+                            status: this.determineBookStatus(stats),
+                            progress: stats.progressTracking.currentProgress
+                        };
 
-                    index.totalNovels++;
+                        index.totalNovels++;
+                        successCount++;
+                    }
+                } catch (error) {
+                    console.error(`Failed to process novel ${dir}:`, error);
+                    failCount++;
                 }
             }
 
-            await this.saveIndex(index);
-            console.log(`Rebuilt index with ${index.totalNovels} novels`);
+            console.log(`Index rebuilt: ${successCount} novels processed, ${failCount} failed`);
+            
+            if (failCount > 0) {
+                new Notice(`索引重建完成，但有 ${failCount} 本书处理失败`);
+            } else if (successCount > 0) {
+                new Notice(`索引重建成功，处理了 ${successCount} 本书`);
+            }
 
+            await this.saveIndex(index);
             return index;
         } catch (error) {
             console.error('Failed to rebuild index:', error);
-            return index;
+            new Notice('索引重建失败，请检查日志');
+            throw error;
         }
     }
 
@@ -648,8 +680,11 @@ export class MultiFileStatsStorage {
     async recalculateGlobalStats(): Promise<EnhancedGlobalStats> {
         console.log('Recalculating global stats...');
 
-        const index = this.indexCache || await this.loadOrCreateIndex();
-        const global = await this.createGlobalStats();
+        // 并行加载索引和创建全局统计对象
+        const [index, global] = await Promise.all([
+            this.indexCache || this.loadOrCreateIndex(),
+            this.createGlobalStats()
+        ]);
 
         // 遍历所有小说统计
         for (const [novelId, entry] of Object.entries(index.novelIndex)) {

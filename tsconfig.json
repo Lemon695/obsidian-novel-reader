@@ -30,7 +30,7 @@
 		"types": [
 			"node",
 			"svelte",
-			"jest"
+			"vitest/globals"
 		]
 	},
 	"include": [

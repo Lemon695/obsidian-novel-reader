@@ -14,10 +14,13 @@ export class ShelfService {
 		this.initialize();
 	}
 
-	private async initialize() {
-		await this.loadShelves();
-		await this.loadCategories();
-		await this.loadTags();
+	private async initialize(): Promise<void> {
+		// 并行加载所有数据
+		await Promise.all([
+			this.loadShelves(),
+			this.loadCategories(),
+			this.loadTags()
+		]);
 	}
 
 	async loadShelves(): Promise<Shelf[]> {
@@ -41,30 +44,31 @@ export class ShelfService {
 	// 获取所有书架及其图书数量
 	async getShelves(): Promise<Shelf[]> {
 		try {
-			// 加载所有小说
 			const novels = await this.plugin.libraryService.getAllNovels();
 
-			// 计算每个书架的图书数量
-			const shelvesWithCount = this.shelves.map(shelf => ({
-				...shelf,
-				count: novels.filter(novel => novel.shelfId === shelf.id).length
-			}));
+			// 一次遍历完成所有计数（性能优化：O(n) 而不是 O(n*m)）
+			const shelfCounts = new Map<string, number>();
+			
+			for (const novel of novels) {
+				const shelfId = novel.shelfId || 'toread';
+				shelfCounts.set(shelfId, (shelfCounts.get(shelfId) || 0) + 1);
+			}
 
-			// 计算"全部"书架的数量
-			const allShelfCount = novels.length;
-
-			// 确保默认书架存在
+			// 构建默认书架
 			const defaultShelves = [
-				{id: 'all', name: '全部', sort: 0, count: allShelfCount},
-				{id: 'reading', name: '在读', sort: 1, count: novels.filter(n => n.shelfId === 'reading').length},
-				{id: 'toread', name: '待读', sort: 2, count: novels.filter(n => n.shelfId === 'toread').length},
-				{id: 'finished', name: '已读', sort: 3, count: novels.filter(n => n.shelfId === 'finished').length},
+				{id: 'all', name: '全部', sort: 0, count: novels.length},
+				{id: 'reading', name: '在读', sort: 1, count: shelfCounts.get('reading') || 0},
+				{id: 'toread', name: '待读', sort: 2, count: shelfCounts.get('toread') || 0},
+				{id: 'finished', name: '已读', sort: 3, count: shelfCounts.get('finished') || 0},
 			];
 
-			// 合并默认书架和自定义书架
-			const customShelves = shelvesWithCount.filter(shelf =>
-				!defaultShelves.some(ds => ds.id === shelf.id)
-			);
+			// 添加自定义书架的计数
+			const customShelves = this.shelves
+				.filter(shelf => !defaultShelves.some(ds => ds.id === shelf.id))
+				.map(shelf => ({
+					...shelf,
+					count: shelfCounts.get(shelf.id) || 0
+				}));
 
 			return [...defaultShelves, ...customShelves].sort((a, b) => a.sort - b.sort);
 		} catch (error) {
@@ -78,12 +82,21 @@ export class ShelfService {
 		try {
 			const novels = await this.plugin.libraryService.getAllNovels();
 
-			// 计算每个标签的使用次数
+			// 一次遍历完成所有计数（性能优化：O(n) 而不是 O(n*m)）
+			const tagCounts = new Map<string, number>();
+			
+			for (const novel of novels) {
+				if (novel.tags) {
+					for (const tagId of novel.tags) {
+						tagCounts.set(tagId, (tagCounts.get(tagId) || 0) + 1);
+					}
+				}
+			}
+
+			// 添加计数到标签
 			return this.tags.map(tag => ({
 				...tag,
-				count: novels.reduce((count, novel) =>
-					count + (novel.tags?.includes(tag.id) ? 1 : 0), 0
-				)
+				count: tagCounts.get(tag.id) || 0
 			}));
 		} catch (error) {
 			console.error('Error getting tags:', error);

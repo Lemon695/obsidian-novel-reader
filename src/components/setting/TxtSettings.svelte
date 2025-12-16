@@ -142,27 +142,41 @@
 		display: flex;
 		flex: 1;
 		min-height: 0;
+		background: linear-gradient(135deg, var(--background-primary) 0%, var(--background-secondary) 100%);
 	}
 
 	.settings-section {
 		max-width: 600px;
 		margin: 0 auto;
+		background: var(--background-secondary);
+		padding: 24px;
+		border-radius: 12px;
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+		border-left: 4px solid var(--interactive-accent);
 	}
 
 	.section-header {
 		margin-bottom: 24px;
+		padding-bottom: 16px;
+		border-bottom: 2px solid var(--background-modifier-border);
 	}
 
 	.section-header h4 {
 		margin: 0 0 8px 0;
 		font-size: 18px;
-		font-weight: 500;
+		font-weight: 600;
+		color: var(--text-normal);
+		background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 	}
 
 	.section-desc {
 		margin: 0;
 		color: var(--text-muted);
 		font-size: 14px;
+		font-weight: 500;
 	}
 
 	.form-group {
@@ -171,8 +185,10 @@
 
 	.form-group label {
 		display: block;
-		margin-bottom: 8px;
-		font-weight: 500;
+		margin-bottom: 12px;
+		font-weight: 600;
+		color: var(--text-normal);
+		font-size: 15px;
 	}
 
 	.pattern-input {
@@ -182,95 +198,125 @@
 	}
 
 	.pattern-input input {
-		padding: 10px 12px;
-		border-radius: 6px;
-		border: 1px solid var(--background-modifier-border);
+		padding: 12px 16px;
+		border-radius: 8px;
+		border: 2px solid var(--background-modifier-border);
 		background: var(--background-primary);
 		font-size: 14px;
+		font-family: 'Courier New', monospace;
+		transition: all 0.2s ease;
+	}
+
+	.pattern-input input:focus {
+		outline: none;
+		border-color: var(--interactive-accent);
+		box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.15);
 	}
 
 	.button-group {
 		display: flex;
-		gap: 8px;
+		gap: 12px;
 	}
 
 	.save-button,
 	.delete-button {
-		padding: 8px 16px;
-		border-radius: 6px;
+		padding: 10px 20px;
+		border-radius: 8px;
 		border: none;
 		font-size: 14px;
-		font-weight: 500;
+		font-weight: 600;
 		cursor: pointer;
 		display: flex;
 		align-items: center;
-		gap: 6px;
-		transition: all 0.2s;
+		gap: 8px;
+		transition: all 0.2s ease;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	}
 
 	.save-button {
-		background: var(--interactive-accent);
+		background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
 		color: var(--text-on-accent);
 	}
 
+	.save-button:hover {
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(var(--interactive-accent-rgb), 0.4);
+	}
+
 	.delete-button {
-		background: var(--background-modifier-error);
+		background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
 		color: white;
 	}
 
-	.save-button:hover,
 	.delete-button:hover {
-		filter: brightness(1.1);
+		transform: translateY(-2px);
+		box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+	}
+
+	.button-icon {
+		font-size: 16px;
+		font-weight: bold;
 	}
 
 	.settings-nav {
-		width: 200px;
+		width: 220px;
 		padding: 20px 0;
-		border-right: 1px solid var(--background-modifier-border);
+		border-right: 2px solid var(--background-modifier-border);
 		background: var(--background-secondary);
 	}
 
 	.nav-item {
 		width: 100%;
-		padding: 12px 24px;
+		padding: 14px 24px;
 		display: flex;
 		align-items: center;
 		gap: 12px;
 		background: none;
 		border: none;
+		border-left: 3px solid transparent;
 		color: var(--text-muted);
 		font-size: 15px;
+		font-weight: 500;
 		cursor: pointer;
-		transition: all 0.2s;
+		transition: all 0.2s ease;
 		text-align: left;
 	}
 
 	.nav-item:hover {
 		background: var(--background-modifier-hover);
 		color: var(--text-normal);
+		border-left-color: var(--interactive-accent);
+		transform: translateX(4px);
 	}
 
 	.nav-item.active {
-		background: var(--background-modifier-active);
-		color: var(--text-accent);
-		font-weight: 500;
+		background: linear-gradient(90deg, rgba(var(--interactive-accent-rgb), 0.15) 0%, transparent 100%);
+		color: var(--interactive-accent);
+		border-left-color: var(--interactive-accent);
+		font-weight: 600;
 	}
 
 	.nav-icon {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+		transition: transform 0.2s ease;
+	}
+
+	.nav-item:hover .nav-icon,
+	.nav-item.active .nav-icon {
+		transform: scale(1.1);
 	}
 
 	.nav-icon :global(svg) {
-		width: 16px;
-		height: 16px;
+		width: 18px;
+		height: 18px;
 		stroke: currentColor;
 	}
 
 	.settings-main {
 		flex: 1;
-		padding: 24px;
+		padding: 32px;
 		overflow-y: auto;
 	}
 </style>

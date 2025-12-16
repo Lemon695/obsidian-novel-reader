@@ -1,502 +1,517 @@
-import {ItemView, Notice, TFile, WorkspaceLeaf} from 'obsidian';
-import type {Novel} from '../types';
+import { type App, ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
+import type { Novel } from '../types';
 import NovelReaderPlugin from '../main';
-import {LibraryService} from '../services/library-service';
+import { LibraryService } from '../services/library-service';
 import {
-	VIEW_TYPE_TXT_READER, VIEW_TYPE_EPUB_READER, VIEW_TYPE_LIBRARY,
-	VIEW_TYPE_STATS, VIEW_TYPE_PDF_READER, VIEW_TYPE_TXT_CHAPTER_GRID
-} from "../types/constants";
-import {NovelNoteService} from "../services/note/novel-note-service";
-import {ConfirmationDialog} from "../modals/confirmation-dialog";
-import {NovelStatsView} from "./novel-stats-view";
-import type {ComponentType} from "svelte";
-import {ChapterGridView} from "./txt/chapter-grid-view";
-import {PDFNovelReaderView} from "./pdf/pdf-novel-reader-view";
-import {EpubNovelReaderView} from "./epub-novel-reader-view";
-import NovelLibraryComponent from "../components/library/NovelLibraryComponent.svelte";
-import {TxtNovelReaderView} from "./txt/txt-novel-reader-view";
+  VIEW_TYPE_TXT_READER,
+  VIEW_TYPE_EPUB_READER,
+  VIEW_TYPE_LIBRARY,
+  VIEW_TYPE_STATS,
+  VIEW_TYPE_PDF_READER,
+  VIEW_TYPE_TXT_CHAPTER_GRID,
+} from '../types/constants';
+import { NovelNoteService } from '../services/note/novel-note-service';
+import { ConfirmationDialog } from '../modals/confirmation-dialog';
+import { NovelStatsView } from './novel-stats-view';
+import type { ComponentType } from 'svelte';
+import { ChapterGridView } from './txt/chapter-grid-view';
+import { PDFNovelReaderView } from './pdf/pdf-novel-reader-view';
+import { EpubNovelReaderView } from './epub-novel-reader-view';
+import NovelLibraryComponent from '../components/library/NovelLibraryComponent.svelte';
+import { TxtNovelReaderView } from './txt/txt-novel-reader-view';
 
-//图书库
 export class NovelLibraryView extends ItemView {
-	private component: NovelLibraryComponent | null = null;
-	private lastRefreshTime: number = 0;
-	private readonly REFRESH_COOLDOWN = 5000; // 5秒冷却时间
-	private isAddingNovel = false; // 防止重复添加图书
+  private component: NovelLibraryComponent | null = null;
+  private lastRefreshTime: number = 0;
+  private readonly REFRESH_COOLDOWN = 5000;
+  private isAddingNovel = false;
+  private libraryService: LibraryService;
+  private noteService: NovelNoteService;
+  private eventUnsubscribers: Array<() => void> = [];
 
-	private libraryService!: LibraryService;
-	private noteService!: NovelNoteService;
+  constructor(
+    leaf: WorkspaceLeaf,
+    private plugin: NovelReaderPlugin
+  ) {
+    super(leaf);
+    this.libraryService = this.plugin.libraryService;
+    this.noteService = this.plugin.noteService;
+  }
 
-	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
-		super(leaf);
-		this.libraryService = this.plugin.libraryService;
-		this.noteService = this.plugin.noteService;
-	}
+  private async loadNovelsWithCovers(): Promise<Novel[]> {
+    const novels = await this.libraryService.getAllNovels();
+    if (!novels || novels.length === 0) return [];
 
-	getViewType(): string {
-		return VIEW_TYPE_LIBRARY;
-	}
+    return Promise.all(
+      novels.map(novel => this.plugin.bookCoverManagerService.loadNovelWithCover(novel))
+    );
+  }
 
-	getDisplayText(): string {
-		return '图书库';
-	}
+  private async loadNovelsWithProgress(): Promise<Novel[]> {
+    const novels = await this.libraryService.getAllNovels();
+    if (!novels || novels.length === 0) return [];
 
-	private handleFocus = async () => {
-		const now = Date.now();
-		// 检查是否超过冷却时间
-		if (now - this.lastRefreshTime >= this.REFRESH_COOLDOWN) {
-			await this.refresh();
-			this.lastRefreshTime = now;
-		}
-	};
+    return Promise.all(
+      novels.map(async (novel) => {
+        const progress = await this.libraryService.getProgress(novel.id);
+        const updatedNovel = { ...novel };
 
-	async onOpen() {
-		try {
-			const container = this.containerEl.children[1];
-			if (!container) {
-				console.error('Container not found');
-				return;
-			}
-			container.empty();
+        if (progress?.totalChapters) {
+          updatedNovel.progress = Math.floor(
+            (progress.chapterIndex / progress.totalChapters) * 100
+          );
+          updatedNovel.currentChapter = progress.position?.chapterId;
+          updatedNovel.lastRead = progress.timestamp;
+        }
 
-			// 先加载已有图书
-			let novels = await this.libraryService.getAllNovels() || [];
+        return this.plugin.bookCoverManagerService.loadNovelWithCover(updatedNovel);
+      })
+    );
+  }
 
-			// 加载书架和标签
-			const shelves = await this.plugin.shelfService.getShelves();
-			const tags = await this.plugin.shelfService.getTags();
-			const categories = await this.plugin.shelfService.loadCategories();
+  private async openReaderView<T extends ItemView>(
+    novel: Novel,
+    viewType: string,
+    findExisting: (app: App, novelId: string) => T | null,
+    setupView: (view: T) => Promise<void>
+  ): Promise<void> {
+    const existingView = findExisting(this.app, novel.id);
 
-			console.log('Loaded novels:', novels);
+    if (existingView) {
+      await this.app.workspace.revealLeaf(existingView.leaf);
+      return;
+    }
 
-			this.component = new (NovelLibraryComponent as unknown as ComponentType)({
-				target: container,
-				props: {
-					novels: novels,
-					shelves: shelves,
-					tags: tags,
-					categories: categories,
-					customShelves: await this.plugin.customShelfService.getAllCustomShelves(),
-					plugin: this.plugin,
-					onAddNovel: async () => {
-						console.log('onAddNovel called');
-						try {
-							// 防止重复触发
-							if (this.isAddingNovel) {
-								console.log('Already adding novels, skipping...');
-								new Notice('正在添加图书，请稍候...');
-								return;
-							}
-							this.isAddingNovel = true;
+    const leaf = this.app.workspace.getLeaf('tab');
+    await leaf.setViewState({
+      type: viewType,
+      state: { novel },
+      active: true
+    });
 
-							const result = await this.libraryService.pickNovelFile();
-							if (!result) {
-								return;
-							}
+    const view = leaf.view as T;
+    if (view) {
+      await setupView(view);
+      await this.app.workspace.revealLeaf(leaf);
+    }
+  }
 
-							// 判断是单个文件还是多个文件
-							if (Array.isArray(result)) {
-								// 批量添加
-								new Notice(`正在批量添加 ${result.length} 本图书...`);
-								const addedNovels = await this.libraryService.batchAddNovels(
-									result,
-									async (novel, index, total) => {
-										try {
-											// 只为新添加的图书加载封面，避免每次重新加载所有图书
-											const novelWithCover = await this.plugin.bookCoverManagerService.loadNovelWithCover(novel);
+  getViewType(): string {
+    return VIEW_TYPE_LIBRARY;
+  }
 
-											// 获取当前图书列表并更新
-											const novels = await this.libraryService.getAllNovels() || [];
+  getDisplayText(): string {
+    return '图书库';
+  }
 
-											// 更新组件的 novels 属性
-											if (this.component) {
-												this.component.$set({novels: novels});
-											}
+  private handleFocus = async () => {
+    // 检查组件是否存在
+    if (!this.component) {
+      console.warn('Cannot handle focus: component is null');
+      return;
+    }
 
-											// 显示进度
-											new Notice(`已添加 ${index}/${total}: ${novel.title}`, 2000);
-										} catch (error) {
-											console.error(`Failed to update UI for ${novel.title}:`, error);
-											// 即使UI更新失败，也继续处理下一本书
-										}
-									}
-								);
+    const now = Date.now();
+    // 检查是否超过冷却时间
+    if (now - this.lastRefreshTime >= this.REFRESH_COOLDOWN) {
+      await this.refresh();
+      this.lastRefreshTime = now;
+    }
+  };
 
-								// 批量添加完成后，刷新一次以确保所有封面都已加载
-								await this.refresh();
+  async onOpen(): Promise<void> {
+    try {
+      const container = this.containerEl.children[1];
+      if (!container) {
+        console.error('Container not found');
+        return;
+      }
+      container.empty();
 
-								new Notice(`批量添加完成：成功 ${addedNovels.length} 本，失败 ${result.length - addedNovels.length} 本`);
-							} else {
-								// 单个添加
-								let newNovel = await this.libraryService.addNovel(result);
-								// 加载封面信息
-								newNovel = await this.plugin.bookCoverManagerService.loadNovelWithCover(newNovel);
+      // 并行加载所有初始数据
+      const [novels, shelves, tags, categories, customShelves] = await Promise.all([
+        this.libraryService.getAllNovels(),
+        this.plugin.shelfService.getShelves(),
+        this.plugin.shelfService.getTags(),
+        this.plugin.shelfService.loadCategories(),
+        this.plugin.customShelfService.getAllCustomShelves()
+      ]);
 
-								const novels = await this.libraryService.getAllNovels() || [];
-								const updatedNovels = await Promise.all(
-									novels.map(novel => this.plugin.bookCoverManagerService.loadNovelWithCover(novel))
-								);
+      console.log('Loaded novels:', novels);
 
-								// 更新组件的 novels 属性
-								if (this.component) {
-									this.component.$set({novels: updatedNovels});
-								}
-								new Notice(`添加成功: ${result.basename}`);
-							}
-						} catch (error) {
-							console.error('Error adding novel:', error);
-							const errorMsg = error instanceof Error ? error.message : '未知错误';
-							new Notice(`添加失败: ${errorMsg}`);
-						} finally {
-							// 确保标志位被重置，即使发生错误
-							this.isAddingNovel = false;
-						}
-					},
-					onRemoveNovel: async (novel: Novel) => {
-						try {
-							// 调用 LibraryService 的删除方法
-							await this.libraryService.deleteNovel(novel);
-							// 更新图书列表
-							const novels = await this.libraryService.getAllNovels() || [];
-							const updatedNovels = await Promise.all(
-								novels.map(novel => this.plugin.bookCoverManagerService.loadNovelWithCover(novel))
-							);
+      this.component = new (NovelLibraryComponent as unknown as ComponentType)({
+        target: container,
+        props: {
+          novels: novels || [],
+          shelves,
+          tags,
+          categories,
+          customShelves,
+          plugin: this.plugin,
+          onAddNovel: async () => {
+            console.log('onAddNovel called');
+            try {
+              // 防止重复触发
+              if (this.isAddingNovel) {
+                console.log('Already adding novels, skipping...');
+                new Notice('正在添加图书，请稍候...');
+                return;
+              }
+              this.isAddingNovel = true;
 
-							if (this.component) {
-								this.component.$set({novels: updatedNovels});
-							}
-							new Notice(`已移除: ${novel.title}`);
-						} catch (error) {
-							console.error('Error removing novel:', error);
-							new Notice('移除失败');
-						}
-					},
-					onOpenNovel: async (novel: Novel) => {
-						try {
-							console.log("Opening novel:", novel);
+              const result = await this.libraryService.pickNovelFile();
+              if (!result) {
+                return;
+              }
 
-							if (novel.format === 'pdf') {
-								// 检查是否已存在阅读视图
-								const existingView = PDFNovelReaderView.findExistingView(this.app, novel.id);
+              // 判断是单个文件还是多个文件
+              if (Array.isArray(result)) {
+                // 批量添加
+                new Notice(`正在批量添加 ${result.length} 本图书...`);
+                const addedNovels = await this.libraryService.batchAddNovels(
+                  result,
+                  async (novel, index, total) => {
+                    try {
+                      // 只为新添加的图书加载封面，避免每次重新加载所有图书
+                      const novelWithCover =
+                        await this.plugin.bookCoverManagerService.loadNovelWithCover(novel);
 
-								if (existingView) {
-									await this.app.workspace.revealLeaf(existingView.leaf);
-								} else {
-									const leaf = this.app.workspace.getLeaf('tab');
-									await leaf.setViewState({
-										type: VIEW_TYPE_PDF_READER,
-										state: {
-											novel: novel,
-										},
-										active: true
-									});
+                      // 获取当前图书列表并更新
+                      const novels = (await this.libraryService.getAllNovels()) || [];
 
-									const view = leaf.view as PDFNovelReaderView;
-									if (view) {
-										await view.setNovelData(novel);
-										this.app.workspace.revealLeaf(leaf);
-									}
-								}
-							} else if (novel.format === 'epub') {
-								// 检查是否已存在阅读视图
-								const existingView = EpubNovelReaderView.findExistingView(this.app, novel.id);
+                      // 更新组件的 novels 属性
+                      if (this.component) {
+                        this.component.$set({ novels: novels });
+                      }
 
-								if (existingView) {
-									await this.app.workspace.revealLeaf(existingView.leaf);
-								} else {
-									const leaf = this.app.workspace.getLeaf('tab');
-									await leaf.setViewState({
-										type: VIEW_TYPE_EPUB_READER,
-										state: {
-											novel: novel,
-										},
-										active: true
-									});
+                      // 显示进度
+                      new Notice(`已添加 ${index}/${total}: ${novel.title}`, 2000);
+                    } catch (error) {
+                      console.error(`Failed to update UI for ${novel.title}:`, error);
+                      // 即使UI更新失败，也继续处理下一本书
+                    }
+                  }
+                );
 
-									const view = leaf.view as EpubNovelReaderView;
-									if (view) {
-										await view.setNovelData(novel);
-										this.app.workspace.revealLeaf(leaf);
-									}
-								}
-							} else {
-								// 检查是否已存在阅读视图
-								const existingView = TxtNovelReaderView.findExistingView(this.app, novel.id);
+                // 批量添加完成后，刷新一次以确保所有封面都已加载
+                await this.refresh();
 
-								if (existingView) {
-									// 如果存在，直接激活该视图
-									await this.app.workspace.revealLeaf(existingView.leaf);
-								} else {
-									const file = this.app.vault.getAbstractFileByPath(novel.path);
-									if (!(file instanceof TFile)) {
-										throw new Error('File not found: ' + novel.path);
-									}
+                new Notice(
+                  `批量添加完成：成功 ${addedNovels.length} 本，失败 ${result.length - addedNovels.length} 本`
+                );
+              } else {
+                // 单个添加
+                await this.libraryService.addNovel(result);
+                const updatedNovels = await this.loadNovelsWithCovers();
 
-									// 读取文件内容
-									const content = await this.plugin.contentLoaderService.loadContent(file) as string;
-									console.log("Content loaded, length:", content.length);
+                if (this.component) {
+                  this.component.$set({ novels: updatedNovels });
+                }
+                new Notice(`添加成功: ${result.basename}`);
+              }
+            } catch (error) {
+              console.error('Error adding novel:', error);
+              const errorMsg = error instanceof Error ? error.message : '未知错误';
+              new Notice(`添加失败: ${errorMsg}`);
+            } finally {
+              // 确保标志位被重置，即使发生错误
+              this.isAddingNovel = false;
+            }
+          },
+          onRemoveNovel: async (novel: Novel) => {
+            try {
+              await this.libraryService.deleteNovel(novel);
+              const updatedNovels = await this.loadNovelsWithCovers();
 
-									// 创建新的阅读视图
-									const leaf = this.app.workspace.getLeaf('tab');
-									await leaf.setViewState({
-										type: VIEW_TYPE_TXT_READER,
-										active: true
-									});
+              if (this.component) {
+                this.component.$set({ novels: updatedNovels });
+              }
+              new Notice(`已移除: ${novel.title}`);
+            } catch (error) {
+              console.error('Error removing novel:', error);
+              new Notice('移除失败');
+            }
+          },
+          onOpenNovel: async (novel: Novel) => {
+            try {
+              console.log('Opening novel:', novel);
 
-									// 获取视图实例
-									const view = leaf.view as TxtNovelReaderView;
+              switch (novel.format) {
+                case 'pdf':
+                  await this.openReaderView(
+                    novel,
+                    VIEW_TYPE_PDF_READER,
+                    PDFNovelReaderView.findExistingView,
+                    async (view) => await view.setNovelData(novel)
+                  );
+                  break;
 
-									// 确保视图已经初始化
-									await view.setNovelData(novel, content);
+                case 'epub':
+                  await this.openReaderView(
+                    novel,
+                    VIEW_TYPE_EPUB_READER,
+                    EpubNovelReaderView.findExistingView,
+                    async (view) => await view.setNovelData(novel)
+                  );
+                  break;
 
-									this.app.workspace.revealLeaf(leaf);
-								}
-							}
+                case 'mobi':
+                  // MOBI 支持 (需要导入 MobiNovelReaderView)
+                  const { MobiNovelReaderView } = await import('../views/mobi/mobi-novel-reader-view');
+                  const { VIEW_TYPE_MOBI_READER } = await import('../types/constants');
+                  await this.openReaderView(
+                    novel,
+                    VIEW_TYPE_MOBI_READER,
+                    MobiNovelReaderView.findExistingView,
+                    async (view) => await view.setNovelData(novel)
+                  );
+                  break;
 
-						} catch (error) {
-							console.error('Error opening novel:', error);
-							new Notice(`打开失败：${novel.title} - ${(error as Error).message}`);
-						}
-					},
-					onOpenNovelChapter: async (novel: Novel) => {
-						try {
-							console.log("Opening novelChapter:", novel);
-							const file = this.app.vault.getAbstractFileByPath(novel.path);
-							if (!(file instanceof TFile)) {
-								throw new Error('File not found: ' + novel.path);
-							}
+                default: {
+                  // TXT 格式
+                  const existingView = TxtNovelReaderView.findExistingView(this.app, novel.id);
+                  if (existingView) {
+                    await this.app.workspace.revealLeaf(existingView.leaf);
+                    return;
+                  }
 
-							// 创建新的阅读视图
-							const leaf = this.app.workspace.getLeaf('tab');
-							await leaf.setViewState({
-								type: VIEW_TYPE_TXT_CHAPTER_GRID,
-								active: true
-							});
+                  const file = this.app.vault.getAbstractFileByPath(novel.path);
+                  if (!(file instanceof TFile)) {
+                    throw new Error('File not found: ' + novel.path);
+                  }
 
-							// 获取视图实例
-							const view = leaf.view as ChapterGridView;
+                  const content = await this.plugin.contentLoaderService.loadContent(file) as string;
+                  const leaf = this.app.workspace.getLeaf('tab');
 
-							// 确保视图已经初始化
-							await view.setNovel(novel);
+                  await leaf.setViewState({
+                    type: VIEW_TYPE_TXT_READER,
+                    active: true
+                  });
 
-							this.app.workspace.revealLeaf(leaf);
-						} catch (error) {
-							console.error('Error opening novel:', error);
-							new Notice(`打开失败：${novel.title} - ${(error as Error).message}`);
-						}
-					},
-					onOpenNote: async (novel: Novel) => {
-						try {
-							console.log("Opening note for novel:", novel);
+                  const view = leaf.view as TxtNovelReaderView;
+                  await view.setNovelData(novel, content);
+                  await this.app.workspace.revealLeaf(leaf);
+                }
+              }
+            } catch (error) {
+              console.error('Error opening novel:', error);
+              new Notice(`打开失败：${novel.title} - ${(error as Error).message}`);
+            }
+          },
+          onOpenNovelChapter: async (novel: Novel) => {
+            try {
+              console.log('Opening novelChapter:', novel);
+              const file = this.app.vault.getAbstractFileByPath(novel.path);
+              if (!(file instanceof TFile)) {
+                throw new Error('File not found: ' + novel.path);
+              }
 
-							// 检查笔记文件是否已存在
-							const notePath = await this.noteService.getNotePath(novel);
-							const noteFile = this.app.vault.getAbstractFileByPath(notePath);
+              // 创建新的阅读视图
+              const leaf = this.app.workspace.getLeaf('tab');
+              await leaf.setViewState({
+                type: VIEW_TYPE_TXT_CHAPTER_GRID,
+                active: true,
+              });
 
-							if (!noteFile) {
-								// 创建并显示确认对话框
-								const confirmDialog = new ConfirmationDialog(
-									this.app,
-									'创建笔记',
-									`是否为《${novel.title}》创建笔记？`,
-									'创建',
-									'取消'
-								);
+              // 获取视图实例
+              const view = leaf.view as ChapterGridView;
 
-								const shouldCreate = await confirmDialog.openAndWait();
-								if (!shouldCreate) {
-									return;
-								}
-							}
+              // 确保视图已经初始化
+              await view.setNovel(novel);
 
-							await this.libraryService.openNovelNote(novel);
-						} catch (error) {
-							console.error('Error opening note:', error);
-							new Notice(`打开笔记失败：${novel.title}`);
-						}
-					},
-					onOpenStats: async (novel: Novel) => {
-						//阅读统计
-						await this.openNovelStats(novel);
-					},
-					// 新增更新小说信息的处理函数
-					onUpdateNovel: async (novel: Novel) => {
-						try {
-							await this.libraryService.updateNovel(novel);
-							await this.refresh();
-							new Notice(`已更新：${novel.title}`);
-						} catch (error) {
-							console.error('Error updating novel:', error);
-							new Notice('更新失败');
-						}
-					},
-					// 新增标签相关处理函数
-					onCreateTag: async (name: string, color: string) => {
-						try {
-							await this.plugin.shelfService.createTag(name, color);
-							await this.refresh();
-							new Notice(`已创建标签：${name}`);
-						} catch (error) {
-							console.error('Error creating tag:', error);
-							new Notice('创建标签失败');
-						}
-					},
-					onDeleteTag: async (tagId: string) => {
-						try {
-							await this.plugin.shelfService.deleteTag(tagId);
-							await this.refresh();
-							new Notice('已删除标签');
-						} catch (error) {
-							console.error('Error deleting tag:', error);
-							new Notice('删除标签失败');
-						}
-					},
-					// 新增分类相关处理函数
-					onCreateCategory: async (name: string) => {
-						try {
-							await this.plugin.shelfService.addCategory(name);
-							await this.refresh();
-							new Notice(`已创建分类：${name}`);
-						} catch (error) {
-							console.error('Error creating category:', error);
-							new Notice('创建分类失败');
-						}
-					},
-					onDeleteCategory: async (categoryId: string) => {
-						try {
-							await this.plugin.shelfService.deleteCategory(categoryId);
-							await this.refresh();
-							new Notice('已删除分类');
-						} catch (error) {
-							console.error('Error deleting category:', error);
-							new Notice('删除分类失败');
-						}
-					}
-				}
-			}) as NovelLibraryComponent;
+              this.app.workspace.revealLeaf(leaf);
+            } catch (error) {
+              console.error('Error opening novel:', error);
+              new Notice(`打开失败：${novel.title} - ${(error as Error).message}`);
+            }
+          },
+          onOpenNote: async (novel: Novel) => {
+            try {
+              console.log('Opening note for novel:', novel);
 
-			console.log('Component created successfully');
+              // 检查笔记文件是否已存在
+              const notePath = await this.noteService.getNotePath(novel);
+              const noteFile = this.app.vault.getAbstractFileByPath(notePath);
 
-			// 添加刷新事件监听
-			this.component.$on('refresh', async () => {
-				await this.refresh();
-				new Notice('图书库已刷新');
-			});
+              if (!noteFile) {
+                // 创建并显示确认对话框
+                const confirmDialog = new ConfirmationDialog(
+                  this.app,
+                  '创建笔记',
+                  `是否为《${novel.title}》创建笔记？`,
+                  '创建',
+                  '取消'
+                );
 
-			// 添加焦点事件监听
-			this.registerDomEvent(window, 'focus', this.handleFocus);
-			// 添加视图激活事件监听
-			this.registerEvent(
-				this.app.workspace.on('active-leaf-change', (leaf) => {
-					if (leaf?.view === this) {
-						this.handleFocus();
-					}
-				})
-			);
+                const shouldCreate = await confirmDialog.openAndWait();
+                if (!shouldCreate) {
+                  return;
+                }
+              }
 
-		} catch (error) {
-			console.error('Error in onOpen:', error);
-			new Notice('Failed to open library view');
-		}
-	}
+              await this.libraryService.openNovelNote(novel);
+            } catch (error) {
+              console.error('Error opening note:', error);
+              new Notice(`打开笔记失败：${novel.title}`);
+            }
+          },
+          // 新增更新小说信息的处理函数
+          onUpdateNovel: async (novel: Novel) => {
+            try {
+              await this.libraryService.updateNovel(novel);
+              await this.refresh();
+              new Notice(`已更新：${novel.title}`);
+            } catch (error) {
+              console.error('Error updating novel:', error);
+              new Notice('更新失败');
+            }
+          },
+          // 新增标签相关处理函数
+          onCreateTag: async (name: string, color: string) => {
+            try {
+              await this.plugin.shelfService.createTag(name, color);
+              await this.refresh();
+              new Notice(`已创建标签：${name}`);
+            } catch (error) {
+              console.error('Error creating tag:', error);
+              new Notice('创建标签失败');
+            }
+          },
+          onDeleteTag: async (tagId: string) => {
+            try {
+              await this.plugin.shelfService.deleteTag(tagId);
+              await this.refresh();
+              new Notice('已删除标签');
+            } catch (error) {
+              console.error('Error deleting tag:', error);
+              new Notice('删除标签失败');
+            }
+          },
+          // 新增分类相关处理函数
+          onCreateCategory: async (name: string) => {
+            try {
+              await this.plugin.shelfService.addCategory(name);
+              await this.refresh();
+              new Notice(`已创建分类：${name}`);
+            } catch (error) {
+              console.error('Error creating category:', error);
+              new Notice('创建分类失败');
+            }
+          },
+          onDeleteCategory: async (categoryId: string) => {
+            try {
+              await this.plugin.shelfService.deleteCategory(categoryId);
+              await this.refresh();
+              new Notice('已删除分类');
+            } catch (error) {
+              console.error('Error deleting category:', error);
+              new Notice('删除分类失败');
+            }
+          },
+          // 新增自定义书架处理函数
+          onCreateCustomShelf: async (event: { name: string }) => {
+            try {
+              await this.plugin.customShelfService.createCustomShelf(event.name);
+              await this.refresh();
+              new Notice(`已创建书架：${event.name}`);
+            } catch (error) {
+              console.error('Error creating custom shelf:', error);
+              new Notice('创建书架失败');
+            }
+          },
+        },
+      }) as NovelLibraryComponent;
 
-	async refresh() {
-		if (!this.component) {
-			return; // 如果当前视图不是活跃的，不执行刷新
-		}
+      console.log('Component created successfully');
 
-		try {
-			const novels = await this.libraryService.getAllNovels() || [];
-			const updatedNovels = await Promise.all(
-				novels.map(async (novel) => {
-					// 先获取最新进度
-					const progress = await this.libraryService.getProgress(novel.id);
+      const refreshHandler = async () => {
+        await this.refresh();
+        new Notice('图书库已刷新');
+      };
 
-					// 复制小说对象以避免引用问题
-					const updatedNovel = {...novel};
+      // 使用 $on 的返回值来取消订阅（更安全）
+      const unsubRefresh = this.component.$on('refresh', refreshHandler);
+      this.eventUnsubscribers.push(unsubRefresh);
 
-					// 更新进度
-					if (progress && progress.totalChapters) {
-						updatedNovel.progress = Math.floor((progress.chapterIndex / progress.totalChapters) * 100);
-						updatedNovel.currentChapter = progress.position?.chapterId;
-						updatedNovel.lastRead = progress.timestamp;
-						console.log(`Updated progress for ${updatedNovel.title} to ${updatedNovel.progress}%`);
-					}
+      this.registerDomEvent(window, 'focus', this.handleFocus);
+      this.registerEvent(
+        this.app.workspace.on('active-leaf-change', (leaf) => {
+          if (leaf?.view === this) {
+            this.handleFocus();
+          }
+        })
+      );
+    } catch (error) {
+      console.error('Error in onOpen:', error);
+      new Notice('Failed to open library view');
+    }
+  }
 
-					// 加载封面
-					return await this.plugin.bookCoverManagerService.loadNovelWithCover(updatedNovel);
-				})
-			);
+  async refresh(): Promise<void> {
+    if (!this.component) {
+      console.warn('Cannot refresh: component is null');
+      return;
+    }
 
-			// 强制创建新的数组以触发更新
-			console.log('Setting component with updated novels:', updatedNovels);
-			this.component.$set({
-				novels: [...updatedNovels],
-				shelves: await this.plugin.shelfService.getShelves(),
-				tags: await this.plugin.shelfService.getTags(),
-				categories: await this.plugin.shelfService.loadCategories()
-			});
+    try {
+      const [updatedNovels, shelves, tags, categories, customShelves] = await Promise.all([
+        this.loadNovelsWithProgress(),
+        this.plugin.shelfService.getShelves(),
+        this.plugin.shelfService.getTags(),
+        this.plugin.shelfService.loadCategories(),
+        this.plugin.customShelfService.getAllCustomShelves()
+      ]);
 
-			console.log('刷新图书库成功', updatedNovels)
-		} catch (error) {
-			console.error('Error refreshing library:', error);
-			new Notice('刷新图书库时出错');
-		}
-	}
+      this.component.$set({
+        novels: [...updatedNovels],
+        shelves,
+        tags,
+        categories,
+        customShelves
+      });
 
-	async onClose() {
-		if (this.component) {
-			this.component.$destroy();
-			this.component = null;
-		}
-	}
+      console.log('刷新图书库成功', updatedNovels.length, '本');
+    } catch (error) {
+      console.error('Error refreshing library:', error);
+      new Notice('刷新图书库时出错');
+    }
+  }
 
-	//阅读统计
-	async openNovelStats(novel: Novel) {
-		try {
-			// 查找已存在的统计视图
-			let existingLeaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_STATS)[0];
+  async onClose(): Promise<void> {
+    // 先取消事件订阅（在组件销毁前）
+    if (this.component) {
+      this.eventUnsubscribers.forEach(unsub => {
+        try {
+          unsub();
+        } catch (error) {
+          console.error('Error unsubscribing event:', error);
+        }
+      });
+      this.eventUnsubscribers = [];
+    }
 
-			// 如果没有找到，创建新的视图
-			if (!existingLeaf) {
-				const newLeaf = this.app.workspace.getRightLeaf(false);
-				if (!newLeaf) {
-					throw new Error('Failed to create new leaf');
-				}
+    // 再销毁组件
+    if (this.component) {
+      this.component.$destroy();
+      this.component = null;
+    }
+  }
 
-				await newLeaf.setViewState({
-					type: VIEW_TYPE_STATS,
-					active: true
-				});
 
-				existingLeaf = newLeaf;
-			}
 
-			// 获取视图实例并设置小说数据
-			const view = existingLeaf.view as NovelStatsView;
-			if (view) {
-				await view.setNovel(novel);
-				await this.app.workspace.revealLeaf(existingLeaf);
-			}
-		} catch (error) {
-			console.error('Error opening stats:', error);
-			new Notice(`打开统计失败：${novel.title}`);
-		}
-	}
+  // 获取最近阅读的小说
+  getRecentNovel(): Novel | null {
+    if (!this.component) return null;
 
-	// 获取最近阅读的小说
-	getRecentNovel(): Novel | null {
-		if (!this.component) return null;
+    // 从组件中获取小说列表
+    const novels = this.component.$$.ctx[this.component.$$.props['novels']];
+    if (!novels || novels.length === 0) return null;
 
-		// 从组件中获取小说列表
-		const novels = this.component.$$.ctx[this.component.$$.props['novels']];
-		if (!novels || novels.length === 0) return null;
-
-		// 根据最后阅读时间排序，返回最近阅读的小说
-		return novels.sort((a: Novel, b: Novel) => {
-			const timeA = a.lastRead || 0;
-			const timeB = b.lastRead || 0;
-			return timeB - timeA;
-		})[0];
-	}
-
+    // 根据最后阅读时间排序，返回最近阅读的小说
+    return novels.sort((a: Novel, b: Novel) => {
+      const timeA = a.lastRead || 0;
+      const timeB = b.lastRead || 0;
+      return timeB - timeA;
+    })[0];
+  }
 }

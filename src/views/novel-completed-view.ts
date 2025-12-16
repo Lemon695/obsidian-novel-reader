@@ -55,7 +55,7 @@ export class NovelCompletedView extends ItemView {
 		});
 	}
 
-	private getMonthlyStats(novels: any[]) {
+	private getMonthlyStats(novels: import('../types').Novel[]): number[] {
 		const monthlyData = new Array(12).fill(0);
 		const currentYear = new Date().getFullYear();
 

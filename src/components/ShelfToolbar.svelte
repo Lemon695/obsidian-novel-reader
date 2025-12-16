@@ -44,8 +44,11 @@
 	.shelf-toolbar {
 		display: flex;
 		align-items: center;
-		gap: 8px;
-		padding: 8px;
+		gap: 12px;
+		padding: 12px;
+		background: var(--background-secondary);
+		border-radius: 10px;
+		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 	}
 
 	.shelf-select-container {
@@ -54,23 +57,44 @@
 
 	.shelf-select {
 		width: 100%;
-		padding: 6px 12px;
-		border-radius: 4px;
-		border: 1px solid var(--background-modifier-border);
+		padding: 10px 14px;
+		border-radius: 8px;
+		border: 2px solid var(--background-modifier-border);
 		background: var(--background-primary);
 		color: var(--text-normal);
+		font-weight: 500;
+		font-size: 14px;
+		cursor: pointer;
+		transition: all 0.2s ease;
+	}
+
+	.shelf-select:hover {
+		border-color: var(--interactive-accent);
+	}
+
+	.shelf-select:focus {
+		outline: none;
+		border-color: var(--interactive-accent);
+		box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.15);
 	}
 
 	.manage-shelves-button {
-		padding: 6px 12px;
-		border-radius: 4px;
-		border: 1px solid var(--background-modifier-border);
-		background: var(--background-primary);
-		color: var(--text-normal);
+		padding: 10px 18px;
+		border-radius: 8px;
+		border: 2px solid var(--interactive-accent);
+		background: linear-gradient(135deg, transparent 0%, rgba(var(--interactive-accent-rgb), 0.1) 100%);
+		color: var(--interactive-accent);
+		font-weight: 600;
+		font-size: 14px;
 		cursor: pointer;
+		transition: all 0.2s ease;
+		white-space: nowrap;
 	}
 
 	.manage-shelves-button:hover {
-		background: var(--background-modifier-hover);
+		background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
+		color: var(--text-on-accent);
+		transform: translateY(-1px);
+		box-shadow: 0 4px 12px rgba(var(--interactive-accent-rgb), 0.3);
 	}
 </style>

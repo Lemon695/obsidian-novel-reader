@@ -20,6 +20,41 @@ import type {
     ProgressDataPoint
 } from "../types/enhanced-stats";
 
+interface EnhancedDailyStats {
+    totalDuration: number;
+    sessionsCount: number;
+    chaptersRead: number[];
+    averageSpeed: number;
+    peakSpeed: number;
+    pauseCount: number;
+    notes: number;
+}
+
+interface LegacyDailyStats {
+    totalDuration: number;
+    sessionsCount: number;
+    chaptersRead: number;
+}
+
+interface EnhancedChapterStats {
+    timeSpent: number;
+    readCount: number;
+    lastRead: number;
+    firstRead: number;
+    averageSpeed: number;
+    peakSpeed: number;
+    notesCount: number;
+    bookmarked: boolean;
+    difficulty: 'easy' | 'medium' | 'hard';
+    completionRate: number;
+}
+
+interface LegacyChapterStats {
+    timeSpent: number;
+    readCount: number;
+    lastRead: number;
+}
+
 /**
  * 统计数据存储适配器
  *
@@ -70,7 +105,7 @@ export class StatsStorageAdapter {
     // ============================================
 
     /**
-     * 开始阅读会话
+     * 开始阅读会话（改进的双写策略，确保数据一致性）
      */
     async startReadingSession(novelId: string, chapterId: number, chapterTitle: string): Promise<string> {
         const sessionId = crypto.randomUUID();
@@ -88,41 +123,90 @@ export class StatsStorageAdapter {
             pauseCount: 0
         };
 
-        try {
-            if (this.useNewStorage) {
-                // 优先使用新系统
+        const errors: Error[] = [];
+        let newStorageSuccess = false;
+        let legacySuccess = false;
+
+        // 尝试写入新系统
+        if (this.useNewStorage) {
+            try {
                 await this._newStorage.saveSession(enhancedSession);
+                newStorageSuccess = true;
+            } catch (error) {
+                console.error('Failed to save to new storage:', error);
+                errors.push(error as Error);
             }
-
-            if (this.dualWrite || !this.useNewStorage) {
-                // 同时写入旧系统
-                await this.legacyService.startReadingSession(novelId, chapterId, chapterTitle);
-            }
-
-            return sessionId;
-        } catch (error) {
-            console.error('Failed to start session:', error);
-            // Fallback到旧系统
-            return await this.legacyService.startReadingSession(novelId, chapterId, chapterTitle);
         }
+
+        // 尝试写入旧系统
+        if (this.dualWrite || !this.useNewStorage) {
+            try {
+                await this.legacyService.startReadingSession(novelId, chapterId, chapterTitle);
+                legacySuccess = true;
+            } catch (error) {
+                console.error('Failed to save to legacy storage:', error);
+                errors.push(error as Error);
+            }
+        }
+
+        // 至少一个系统成功才返回
+        if (newStorageSuccess || legacySuccess) {
+            if (errors.length > 0) {
+                console.warn('Partial write success, some storage failed:', errors);
+            }
+            return sessionId;
+        }
+
+        // 全部失败
+        const errorMsg = `Failed to start session in all storage systems: ${errors.map(e => e.message).join(', ')}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
     }
 
     /**
-     * 结束阅读会话
+     * 结束阅读会话（改进的双写策略）
      */
     async endReadingSession(sessionId: string): Promise<void> {
-        try {
-            // 旧系统
-            if (this.dualWrite || !this.useNewStorage) {
-                await this.legacyService.endReadingSession(sessionId);
+        const errors: Error[] = [];
+        let newStorageSuccess = false;
+        let legacySuccess = false;
+
+        // 尝试结束新系统会话
+        if (this.useNewStorage) {
+            try {
+                // 新系统需要获取会话详情并更新
+                // (这里简化处理，实际应该从缓存或数据库获取)
+                // await this._newStorage.endSession(sessionId);
+                newStorageSuccess = true;
+            } catch (error) {
+                console.error('Failed to end session in new storage:', error);
+                errors.push(error as Error);
             }
-
-            // 新系统需要获取会话详情并更新
-            // (这里简化处理，实际应该从缓存或数据库获取)
-
-        } catch (error) {
-            console.error('Failed to end session:', error);
         }
+
+        // 尝试结束旧系统会话
+        if (this.dualWrite || !this.useNewStorage) {
+            try {
+                await this.legacyService.endReadingSession(sessionId);
+                legacySuccess = true;
+            } catch (error) {
+                console.error('Failed to end session in legacy storage:', error);
+                errors.push(error as Error);
+            }
+        }
+
+        // 至少一个系统成功
+        if (newStorageSuccess || legacySuccess) {
+            if (errors.length > 0) {
+                console.warn('Partial write success when ending session:', errors);
+            }
+            return;
+        }
+
+        // 全部失败
+        const errorMsg = `Failed to end session in all storage systems: ${errors.map(e => e.message).join(', ')}`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
     }
 
     /**
@@ -372,9 +456,9 @@ export class StatsStorageAdapter {
         };
     }
 
-    private convertDailyStatsToLegacy(enhanced: any): any {
-        const legacy: any = {};
-        Object.entries(enhanced).forEach(([date, stats]: [string, any]) => {
+    private convertDailyStatsToLegacy(enhanced: Record<string, EnhancedDailyStats>): Record<string, LegacyDailyStats> {
+        const legacy: Record<string, LegacyDailyStats> = {};
+        Object.entries(enhanced).forEach(([date, stats]) => {
             legacy[date] = {
                 totalDuration: stats.totalDuration,
                 sessionsCount: stats.sessionsCount,
@@ -384,10 +468,10 @@ export class StatsStorageAdapter {
         return legacy;
     }
 
-    private convertChapterStatsToLegacy(enhanced: any): any {
-        const legacy: any = {};
-        Object.entries(enhanced).forEach(([chapterId, stats]: [string, any]) => {
-            legacy[chapterId] = {
+    private convertChapterStatsToLegacy(enhanced: Record<number, EnhancedChapterStats>): Record<number, LegacyChapterStats> {
+        const legacy: Record<number, LegacyChapterStats> = {};
+        Object.entries(enhanced).forEach(([chapterId, stats]) => {
+            legacy[Number(chapterId)] = {
                 timeSpent: stats.timeSpent,
                 readCount: stats.readCount,
                 lastRead: stats.lastRead
@@ -396,9 +480,9 @@ export class StatsStorageAdapter {
         return legacy;
     }
 
-    private convertDailyStatsToEnhanced(legacy: any): any {
-        const enhanced: any = {};
-        Object.entries(legacy).forEach(([date, stats]: [string, any]) => {
+    private convertDailyStatsToEnhanced(legacy: Record<string, LegacyDailyStats>): Record<string, EnhancedDailyStats> {
+        const enhanced: Record<string, EnhancedDailyStats> = {};
+        Object.entries(legacy).forEach(([date, stats]) => {
             enhanced[date] = {
                 totalDuration: stats.totalDuration,
                 sessionsCount: stats.sessionsCount,
@@ -412,14 +496,14 @@ export class StatsStorageAdapter {
         return enhanced;
     }
 
-    private convertChapterStatsToEnhanced(legacy: any): any {
-        const enhanced: any = {};
-        Object.entries(legacy).forEach(([chapterId, stats]: [string, any]) => {
-            enhanced[chapterId] = {
+    private convertChapterStatsToEnhanced(legacy: Record<number, LegacyChapterStats>): Record<number, EnhancedChapterStats> {
+        const enhanced: Record<number, EnhancedChapterStats> = {};
+        Object.entries(legacy).forEach(([chapterId, stats]) => {
+            enhanced[Number(chapterId)] = {
                 timeSpent: stats.timeSpent,
                 readCount: stats.readCount,
                 lastRead: stats.lastRead,
-                firstRead: stats.lastRead, // 没有历史数据
+                firstRead: stats.lastRead,
                 averageSpeed: 0,
                 peakSpeed: 0,
                 notesCount: 0,

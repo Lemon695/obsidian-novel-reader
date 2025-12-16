@@ -28,6 +28,41 @@ import {MultiFileStatsStorage} from "./multi-file-stats-storage";
 import {StatsPathsManager} from "../utils/stats-paths";
 import {StatsValidator} from "../utils/stats-validator";
 
+interface OldDailyStats {
+    totalDuration?: number;
+    sessionsCount?: number;
+    chaptersRead?: number[];
+}
+
+interface NewDailyStats {
+    totalDuration: number;
+    sessionsCount: number;
+    chaptersRead: number[];
+    averageSpeed: number;
+    peakSpeed: number;
+    pauseCount: number;
+    notes: number;
+}
+
+interface OldChapterStats {
+    timeSpent?: number;
+    readCount?: number;
+    lastRead?: number;
+}
+
+interface NewChapterStats {
+    timeSpent: number;
+    readCount: number;
+    lastRead: number;
+    firstRead: number;
+    averageSpeed: number;
+    peakSpeed: number;
+    notesCount: number;
+    bookmarked: boolean;
+    difficulty: 'easy' | 'medium' | 'hard';
+    completionRate: number;
+}
+
 /**
  * 迁移进度回调
  */
@@ -455,11 +490,11 @@ export class StatsMigrationService {
                 hourlyDistribution: new Array(24).fill(0),
                 weekdayDistribution: new Array(7).fill(0),
                 preferredTimeSlot: 'evening',
-                dailyStats: this.convertDailyStats(old.dailyStats || {}),
+                dailyStats: this.convertDailyStats((old.dailyStats as unknown as Record<string, OldDailyStats>) || {}),
                 monthlyStats: {}
             },
 
-            chapterStats: this.convertChapterStats(old.chapterStats || {}),
+            chapterStats: this.convertChapterStats((old.chapterStats as unknown as Record<number, OldChapterStats>) || {}),
 
             notesCorrelation: {
                 totalNotes: 0,
@@ -503,8 +538,8 @@ export class StatsMigrationService {
     /**
      * 转换每日统计数据
      */
-    private convertDailyStats(oldDaily: {[key: string]: any}): {[key: string]: any} {
-        const result: {[key: string]: any} = {};
+    private convertDailyStats(oldDaily: Record<string, OldDailyStats>): Record<string, NewDailyStats> {
+        const result: Record<string, NewDailyStats> = {};
 
         for (const [date, stats] of Object.entries(oldDaily)) {
             result[date] = {
@@ -524,8 +559,8 @@ export class StatsMigrationService {
     /**
      * 转换章节统计数据
      */
-    private convertChapterStats(oldChapters: {[key: number]: any}): {[key: number]: any} {
-        const result: {[key: number]: any} = {};
+    private convertChapterStats(oldChapters: Record<number, OldChapterStats>): Record<number, NewChapterStats> {
+        const result: Record<number, NewChapterStats> = {};
 
         for (const [chapterId, stats] of Object.entries(oldChapters)) {
             result[Number(chapterId)] = {
@@ -538,7 +573,7 @@ export class StatsMigrationService {
                 notesCount: 0,
                 bookmarked: false,
                 difficulty: 'medium',
-                completionRate: stats.readCount > 0 ? 1 : 0
+                completionRate: stats.readCount && stats.readCount > 0 ? 1 : 0
             };
         }
 
@@ -551,7 +586,7 @@ export class StatsMigrationService {
     private calculateDerivedData(stats: EnhancedNovelStats): void {
         // 计算已完成章节
         stats.progressTracking.completedChapters = Object.entries(stats.chapterStats)
-            .filter(([_, chapter]: [string, any]) => chapter.completionRate >= 1)
+            .filter(([_, chapter]) => chapter.completionRate >= 1)
             .map(([id, _]) => Number(id));
 
         // 计算进度百分比
@@ -564,9 +599,8 @@ export class StatsMigrationService {
         // 计算最长单日阅读时长
         let maxDailyTime = 0;
         for (const daily of Object.values(stats.timeAnalysis.dailyStats)) {
-            const dailyStats = daily as any;
-            if (dailyStats.totalDuration > maxDailyTime) {
-                maxDailyTime = dailyStats.totalDuration;
+            if (daily.totalDuration > maxDailyTime) {
+                maxDailyTime = daily.totalDuration;
             }
         }
         stats.achievements.timeRecords.singleDay = maxDailyTime;
@@ -575,9 +609,8 @@ export class StatsMigrationService {
         let lastChapter = 0;
         let lastTime = 0;
         for (const [chapterId, chapter] of Object.entries(stats.chapterStats)) {
-            const chapterStats = chapter as any;
-            if (chapterStats.lastRead > lastTime) {
-                lastTime = chapterStats.lastRead;
+            if (chapter.lastRead > lastTime) {
+                lastTime = chapter.lastRead;
                 lastChapter = Number(chapterId);
             }
         }
@@ -623,7 +656,7 @@ export class StatsMigrationService {
     /**
      * 创建迁移记录
      */
-    private createMigrationRecord(result: MigrationResult, error?: any): MigrationRecord {
+    private createMigrationRecord(result: MigrationResult, error?: Error | unknown): MigrationRecord {
         const status: MigrationStatus = error ? 'failed' :
             result.failedCount > 0 ? 'completed' : 'completed';
 

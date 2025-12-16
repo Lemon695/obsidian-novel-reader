@@ -18,13 +18,14 @@ export class EpubNovelReaderView extends ItemView {
 	private noteService: NovelNoteService;
 	private dataReady = false;
 	private book: EpubBook | null = null;
-	private toc: any[] = [];
+	private toc: EpubNavigationItem[] = [];
 	private chapters: EpubChapter[] = [];
+	private eventUnsubscribers: Array<() => void> = [];
 
 	constructor(leaf: WorkspaceLeaf, private plugin: NovelReaderPlugin) {
 		super(leaf);
-		this.libraryService = plugin.libraryService; // 使用plugin中已有的实例
-		this.noteService = new NovelNoteService(this.app, plugin);
+		this.libraryService = plugin.libraryService;
+		this.noteService = plugin.noteService;
 	}
 
 	getViewType(): string {
@@ -60,13 +61,28 @@ export class EpubNovelReaderView extends ItemView {
 		}
 	}
 
-	async onClose() {
+	async onClose(): Promise<void> {
 		if (this.currentSessionId) {
-			await this.plugin.dbService?.endReadingSession(this.currentSessionId);
+			await this.plugin.statsService?.endReadingSession(this.currentSessionId);
+			this.currentSessionId = undefined;
 		}
 
+		// 先取消事件订阅（在组件销毁前）
+		if (this.component) {
+			this.eventUnsubscribers.forEach(unsub => {
+				try {
+					unsub();
+				} catch (error) {
+					console.error('Error unsubscribing event:', error);
+				}
+			});
+			this.eventUnsubscribers = [];
+		}
+
+		// 再销毁组件
 		if (this.component) {
 			this.component.$destroy();
+			this.component = null;
 		}
 	}
 
@@ -116,7 +132,7 @@ export class EpubNovelReaderView extends ItemView {
 		let selectCfi = initialCfi || progress?.position?.cfi || null;
 		try {
 			// 优先使用传入的章节ID
-			this.currentSessionId = await this.plugin.dbService?.startReadingSession(
+			this.currentSessionId = await this.plugin.statsService?.startReadingSession(
 				this.novel.id, selectChapterId,
 				this.chapters?.find(c => c.id === (progress?.position?.chapterId))?.title || 'Chapter 1'
 			);
@@ -149,73 +165,82 @@ export class EpubNovelReaderView extends ItemView {
 		this.registerReadingEventListeners();
 	}
 
-	private registerReadingEventListeners() {
+	private registerReadingEventListeners(): void {
 		if (!this.component) return;
 
-		this.component.$on('startReading', async (event) => {
-			if (this.novel) {
-				console.log('Reading session started:', event.detail);
-				this.currentSessionId = await this.plugin.dbService?.startReadingSession(
-					this.novel.id,
-					event.detail.chapterId,
-					event.detail.chapterTitle
-				);
-			}
-		});
+		const startReadingHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
 
-		this.component.$on('endReading', async () => {
+			console.log('Reading session started:', event.detail);
+			this.currentSessionId = await this.plugin.statsService?.startReadingSession(
+				this.novel.id,
+				event.detail.chapterId,
+				event.detail.chapterTitle
+			);
+		};
+
+		const endReadingHandler = async () => {
 			if (this.currentSessionId) {
-				//console.log('Reading session ended:', this.currentSessionId);
-				await this.plugin.dbService?.endReadingSession(this.currentSessionId);
+				await this.plugin.statsService?.endReadingSession(this.currentSessionId);
 				this.currentSessionId = undefined;
 			}
-		});
+		};
 
-		this.component.$on('saveProgress', async (event) => {
-			if (this.novel) {
-				try {
-					await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
-				} catch (error) {
-					console.error('Failed to save progress:', error);
-				}
+		const saveProgressHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
+
+			try {
+				await this.libraryService.updateProgress(this.novel.id, event.detail.progress);
+			} catch (error) {
+				console.error('Failed to save progress:', error);
 			}
-		});
+		};
 
-		this.component.$on('chapterChanged', async (event) => {
-			if (this.novel) {
-				console.log('Chapter changed:', event.detail);
+		const chapterChangedHandler = async (event: CustomEvent) => {
+			if (!this.novel) return;
 
-				// 结束当前会话
-				if (this.currentSessionId) {
-					await this.plugin.dbService?.endReadingSession(this.currentSessionId);
-				}
-				// 开始新会话
-				this.currentSessionId = await this.plugin.dbService?.startReadingSession(
+			console.log('Chapter changed:', event.detail);
+
+			if (this.currentSessionId) {
+				await this.plugin.statsService?.endReadingSession(this.currentSessionId);
+			}
+
+			this.currentSessionId = await this.plugin.statsService?.startReadingSession(
+				this.novel.id,
+				event.detail.chapterId,
+				event.detail.chapterTitle
+			);
+
+			try {
+				await this.plugin.chapterHistoryService.addHistory(
 					this.novel.id,
 					event.detail.chapterId,
 					event.detail.chapterTitle
 				);
 
-				// 记录章节历史
-				try {
-					await this.plugin.chapterHistoryService.addHistory(
-						this.novel.id,
-						event.detail.chapterId,
-						event.detail.chapterTitle
-					);
-
-					// 刷新历史显示
-					const newHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
-					if (this.component) {
-						this.component.$set({ chapterHistory: newHistory });
-					}
-				} catch (error) {
-					console.error('Failed to record chapter history:', error);
+				const newHistory = await this.plugin.chapterHistoryService.getHistory(this.novel.id);
+				if (this.component) {
+					this.component.$set({ chapterHistory: newHistory });
 				}
-
-				this.app.workspace.trigger('novel-chapter-selected', event.detail.chapterId);
+			} catch (error) {
+				console.error('Failed to record chapter history:', error);
 			}
-		});
+
+			this.app.workspace.trigger('novel-chapter-selected', event.detail.chapterId);
+		};
+
+		// 使用 $on 的返回值来取消订阅（更安全）
+		const unsubStartReading = this.component.$on('startReading', startReadingHandler);
+		const unsubEndReading = this.component.$on('endReading', endReadingHandler);
+		const unsubSaveProgress = this.component.$on('saveProgress', saveProgressHandler);
+		const unsubChapterChanged = this.component.$on('chapterChanged', chapterChangedHandler);
+
+		this.eventUnsubscribers.push(
+			unsubStartReading,
+			unsubEndReading,
+			unsubSaveProgress,
+			unsubChapterChanged
+		);
 	}
 
 	// 转换为章节，处理嵌套结构

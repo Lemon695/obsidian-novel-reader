@@ -45,21 +45,37 @@ export class ObsidianCacheService {
 		const cachePath = this.pathsService.getCachePath(file);
 		const metadata = this.cacheIndex[file.path];
 
-		// 检查缓存是否有效
-		if (metadata && await this.isCacheValid(metadata, file)) {
-			try {
-				if (file.extension === 'txt') {
-					return await this.app.vault.adapter.read(cachePath);
-				} else {
-					return await this.app.vault.adapter.readBinary(cachePath);
-				}
-			} catch (error) {
-				console.error('Error reading cache:', error);
-				return null;
-			}
+		// 检查缓存元数据是否存在
+		if (!metadata) {
+			return null;
 		}
 
-		return null;
+		// 检查缓存是否有效
+		if (!await this.isCacheValid(metadata, file)) {
+			// 缓存失效，清理
+			await this.invalidateCache(file.path);
+			return null;
+		}
+
+		// 检查缓存文件是否存在
+		if (!await this.app.vault.adapter.exists(cachePath)) {
+			console.warn(`Cache file missing for ${file.path}, invalidating metadata`);
+			await this.invalidateCache(file.path);
+			return null;
+		}
+
+		try {
+			if (file.extension === 'txt') {
+				return await this.app.vault.adapter.read(cachePath);
+			} else {
+				return await this.app.vault.adapter.readBinary(cachePath);
+			}
+		} catch (error) {
+			console.error('Error reading cache:', error);
+			// 读取失败，清理缓存
+			await this.invalidateCache(file.path);
+			return null;
+		}
 	}
 
 	async setFileContent(file: TFile, content: string | ArrayBuffer): Promise<void> {
@@ -95,7 +111,7 @@ export class ObsidianCacheService {
 		}
 	}
 
-	async getChaptersCache(file: TFile): Promise<any[] | null> {
+	async getChaptersCache(file: TFile): Promise<unknown[] | null> {
 		const chaptersPath = this.pathsService.getChaptersCachePath(file);
 		const metadata = this.cacheIndex[file.path];
 
@@ -112,7 +128,7 @@ export class ObsidianCacheService {
 		return null;
 	}
 
-	async setChaptersCache(file: TFile, chapters: any[]): Promise<void> {
+	async setChaptersCache(file: TFile, chapters: unknown[]): Promise<void> {
 		try {
 			// 确保缓存目录存在
 			const cacheDir = this.pathsService.getCacheDirPath();
@@ -228,6 +244,14 @@ export class ObsidianCacheService {
 		} catch (error) {
 			console.error('Error saving cache index:', error);
 		}
+	}
+
+	/**
+	 * 清理无效缓存（新增方法）
+	 */
+	private async invalidateCache(filePath: string): Promise<void> {
+		delete this.cacheIndex[filePath];
+		await this.saveIndex();
 	}
 
 	private async cleanCache(): Promise<void> {

@@ -94,4 +94,50 @@ export class ChapterHistoryService {
 			}
 		}
 	}
+
+	/**
+	 * 清理旧历史记录（保留重要记录）
+	 * @param daysToKeep 保留最近多少天的记录，默认 30 天
+	 */
+	async cleanOldHistory(daysToKeep: number = 30): Promise<void> {
+		const cutoffTime = Date.now() - (daysToKeep * 24 * 60 * 60 * 1000);
+		let totalRemoved = 0;
+
+		for (const novelId in this.history) {
+			const originalLength = this.history[novelId].length;
+			
+			// 保留重要记录和最近的记录
+			this.history[novelId] = this.history[novelId].filter(record => 
+				record.isImportant || record.timestamp > cutoffTime
+			);
+			
+			totalRemoved += originalLength - this.history[novelId].length;
+		}
+
+		if (totalRemoved > 0) {
+			await this.saveHistory();
+			console.log(`Cleaned ${totalRemoved} old history records`);
+		}
+	}
+
+	/**
+	 * 获取历史记录统计信息
+	 */
+	getHistoryStats(): { totalNovels: number; totalRecords: number; oldestRecord: number | null } {
+		const totalNovels = Object.keys(this.history).length;
+		let totalRecords = 0;
+		let oldestRecord: number | null = null;
+
+		for (const novelId in this.history) {
+			totalRecords += this.history[novelId].length;
+			
+			for (const record of this.history[novelId]) {
+				if (oldestRecord === null || record.timestamp < oldestRecord) {
+					oldestRecord = record.timestamp;
+				}
+			}
+		}
+
+		return { totalNovels, totalRecords, oldestRecord };
+	}
 }

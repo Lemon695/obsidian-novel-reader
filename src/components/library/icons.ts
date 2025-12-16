@@ -180,6 +180,63 @@ export const icons = {
 		<line x1="11" y1="8" x2="11" y2="14"/>
 		<line x1="8" y1="11" x2="14" y2="11"/>
 	</svg>`,
+
+	// 关闭图标（X）
+	close: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<line x1="18" y1="6" x2="6" y2="18"/>
+		<line x1="6" y1="6" x2="18" y2="18"/>
+	</svg>`,
+
+	// 下载图标
+	download: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+		<polyline points="7 10 12 15 17 10"/>
+		<line x1="12" y1="15" x2="12" y2="3"/>
+	</svg>`,
+
+	// 趋势上升图标
+	trendingUp: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+		<polyline points="17 6 23 6 23 12"/>
+	</svg>`,
+
+	// 奖杯图标
+	award: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<circle cx="12" cy="8" r="7"/>
+		<polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>
+	</svg>`,
+
+	// 闪电图标
+	zap: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+	</svg>`,
+
+	// 火焰图标
+	flame: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>
+	</svg>`,
+
+	// 目标图标
+	target: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<circle cx="12" cy="12" r="10"/>
+		<circle cx="12" cy="12" r="6"/>
+		<circle cx="12" cy="12" r="2"/>
+	</svg>`,
+
+	// 文件夹图标
+	folder: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+	</svg>`,
+
+	// 书签图标
+	bookmark: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+	</svg>`,
+
+	// 书签图标（实心）
+	bookmarkFilled: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+		<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
+	</svg>`,
 };
 
 /**
