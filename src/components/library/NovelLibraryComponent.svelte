@@ -958,6 +958,13 @@
                     <span class="placeholder-icon">{@html icons.book}</span>
                   </div>
                 {/if}
+
+                <!-- 格式徽章 -->
+                {#if novel.format}
+                  <div class="format-badge format-{novel.format.toLowerCase()}">
+                    {novel.format.toUpperCase()}
+                  </div>
+                {/if}
               </div>
 
               <div class="novel-book-info">

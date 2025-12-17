@@ -649,9 +649,9 @@
   flex-direction: column;
   cursor: pointer;
   position: relative;
-  width: 160px;
-  max-width: 200px;
-  min-width: 160px;
+  width: 180px;
+  max-width: 220px;
+  min-width: 180px;
   padding: 0;
   z-index: 1;
   transition: transform var(--novel-transition-base);
@@ -701,6 +701,44 @@
   height: 64px;
   stroke: var(--text-muted);
   opacity: 0.3;
+}
+
+/* 格式徽章 */
+.format-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 4px 8px;
+  border-radius: var(--novel-radius-sm);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: white;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  z-index: 2;
+  transition: all var(--novel-transition-base);
+}
+
+.format-badge.format-pdf {
+  background: linear-gradient(135deg, rgba(231, 76, 60, 0.9), rgba(192, 57, 43, 0.9));
+}
+
+.format-badge.format-epub {
+  background: linear-gradient(135deg, rgba(52, 152, 219, 0.9), rgba(41, 128, 185, 0.9));
+}
+
+.format-badge.format-mobi {
+  background: linear-gradient(135deg, rgba(39, 174, 96, 0.9), rgba(34, 153, 84, 0.9));
+}
+
+.format-badge.format-txt {
+  background: linear-gradient(135deg, rgba(149, 165, 166, 0.9), rgba(127, 140, 141, 0.9));
+}
+
+.novel-book-card:hover .format-badge {
+  transform: scale(1.05);
 }
 
 .novel-book-info {
