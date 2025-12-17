@@ -597,7 +597,6 @@
 
   // 章节切换时更新会话
   $: if (currentChapter) {
-
     // 只在章节模式下记录章节历史，页码模式下由recordPageHistory单独处理
     if (viewMode === 'chapters') {
       handleChapterChange(currentChapter, novel, plugin.chapterHistoryService, (newHistory) => {
@@ -1368,63 +1367,55 @@
     overflow-y: auto;
     padding: 24px 40px 60px 40px;
     min-width: 0;
-    background: linear-gradient(
-      135deg,
-      var(--background-primary) 0%,
-      var(--background-secondary) 100%
-    );
+    background: var(--background-primary);
   }
 
   .chapter-content {
-    max-width: 820px;
+    max-width: 800px;
     margin: 0 auto;
     background: var(--background-primary);
-    padding: 32px;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    padding: var(--novel-spacing-2xl);
+    border-radius: var(--novel-radius-lg);
+    box-shadow: var(--novel-shadow-sm);
   }
 
   .chapter-content h2 {
-    margin-bottom: 32px;
-    padding-bottom: 20px;
+    margin-bottom: var(--novel-spacing-xl);
+    padding-bottom: var(--novel-spacing-lg);
     border-bottom: 2px solid var(--background-modifier-border);
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    font-size: 28px;
-    font-weight: 600;
-    background: linear-gradient(
-      135deg,
-      var(--interactive-accent) 0%,
-      var(--interactive-accent-hover) 100%
-    );
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    gap: var(--novel-spacing-xs);
+    font-size: var(--novel-font-size-2xl);
+    font-weight: var(--novel-font-weight-semibold);
+    color: var(--text-normal);
   }
 
   .content-text {
-    line-height: 2;
-    font-size: 1.1em;
+    line-height: 1.8;
+    font-size: 16px;
     user-select: text;
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
     color: var(--text-normal);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   .content-text p {
     margin: 1.2em 0;
     text-indent: 2em;
-    padding: 4px 8px;
-    margin-left: -8px;
-    margin-right: -8px;
-    border-radius: 4px;
+    padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+    margin-left: calc(var(--novel-spacing-sm) * -1);
+    margin-right: calc(var(--novel-spacing-sm) * -1);
+    border-radius: var(--novel-radius-sm);
     transition: background-color 0.2s ease;
   }
 
   .content-text p:hover {
-    background-color: rgba(var(--interactive-accent-rgb), 0.03);
+    background-color: var(--background-modifier-hover);
   }
 
   .no-chapter {
