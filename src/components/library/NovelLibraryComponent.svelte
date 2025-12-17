@@ -170,10 +170,19 @@
 
   onMount(() => {
     document.addEventListener('click', handleClickOutside);
+
+    // 监听封面提取完成事件,自动刷新图书列表
+    const refreshHandler = plugin.app.workspace.on('library-refresh' as any, async () => {
+      console.log('📚 封面加载完成,刷新图书列表');
+      novels = await plugin.libraryService.getAllNovels();
+    });
+
     return () => {
       document.removeEventListener('click', handleClickOutside);
       // 清理防抖函数
       updateDebouncedSearch.cancel();
+      // 清理事件监听
+      plugin.app.workspace.offref(refreshHandler);
     };
   });
 
@@ -987,10 +996,8 @@
     </div>
   </div>
 
-  {#if novelsList.length === 0}
-    <div class="empty-message">
-      {searchQuery ? '没有找到匹配的图书' : '暂无图书，请点击"添加图书"按钮添加'}
-    </div>
+  {#if filteredNovels.length === 0}
+    <div class="empty-message">暂无图书，请点击"添加图书"按钮添加</div>
   {/if}
 
   <!-- 添加模态框组件 -->

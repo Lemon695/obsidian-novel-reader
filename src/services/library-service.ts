@@ -87,6 +87,9 @@ export class LibraryService {
             await this.saveLibraryImmediate('extractCoverInBackground');
             this.clearCoverCache();
             console.log(`✓ 封面提取完成: ${novel.title}`);
+
+            // 触发UI刷新事件
+            (this.plugin.app.workspace as any).trigger('library-refresh', { novelId: novel.id });
           }
         }
       } catch (error) {
@@ -797,7 +800,7 @@ export class LibraryService {
    */
   private isSupportedFormat(file: TFile): boolean {
     const ext = file.extension.toLowerCase();
-	console.log("Book---"+file.name);
+    console.log("Book---" + file.name);
     return ['txt', 'epub', 'pdf', 'mobi', 'azw', 'azw3'].includes(ext);
   }
 
@@ -1051,78 +1054,78 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
     }
   }
 
-	getItems(): TFile[] {
-		// 如果正在输入拼音，返回空数组避免搜索
-		if (this.isComposing) {
-			return [];
-		}
+  getItems(): TFile[] {
+    // 如果正在输入拼音，返回空数组避免搜索
+    if (this.isComposing) {
+      return [];
+    }
 
-		const readDirectories = this.plugin.settings.readDirectories || [];
+    const readDirectories = this.plugin.settings.readDirectories || [];
 
-		// 实时获取当前已添加的图书列表（同步获取，避免异步问题）
-		// 注意：这里使用plugin.libraryService.novels直接访问，确保是最新数据
-		const currentNovels = (this.plugin.libraryService as any).novels || [];
+    // 实时获取当前已添加的图书列表（同步获取，避免异步问题）
+    // 注意：这里使用plugin.libraryService.novels直接访问，确保是最新数据
+    const currentNovels = (this.plugin.libraryService as any).novels || [];
 
-		return this.app.vault
-			.getFiles()
-			.filter((file) => {
-				// 检查文件类型
-				if (
-					file.extension.toLowerCase() !== 'txt' &&
-					file.extension.toLowerCase() !== 'pdf' &&
-					file.extension.toLowerCase() !== 'epub' &&
-					file.extension.toLowerCase() !== 'mobi' &&
-					file.extension.toLowerCase() !== 'azw' &&
-					file.extension.toLowerCase() !== 'azw3'
-				) {
-					return false;
-				}
+    return this.app.vault
+      .getFiles()
+      .filter((file) => {
+        // 检查文件类型
+        if (
+          file.extension.toLowerCase() !== 'txt' &&
+          file.extension.toLowerCase() !== 'pdf' &&
+          file.extension.toLowerCase() !== 'epub' &&
+          file.extension.toLowerCase() !== 'mobi' &&
+          file.extension.toLowerCase() !== 'azw' &&
+          file.extension.toLowerCase() !== 'azw3'
+        ) {
+          return false;
+        }
 
-				// 检查读取目录限制
-				if (readDirectories.length > 0) {
-					const isInReadDir = readDirectories.some((dir) => {
-						// 标准化路径，去除首尾斜杠
-						const normalizedDir = dir.replace(/^\/+|\/+$/g, '');
-						const normalizedPath = file.path.replace(/^\/+|\/+$/g, '');
-						// 检查文件路径是否在指定目录或其子目录中
-						return (
-							normalizedPath.startsWith(normalizedDir + '/') ||
-							normalizedPath.startsWith(normalizedDir)
-						);
-					});
-					if (!isInReadDir) {
-						return false;
-					}
-				}
+        // 检查读取目录限制
+        if (readDirectories.length > 0) {
+          const isInReadDir = readDirectories.some((dir) => {
+            // 标准化路径，去除首尾斜杠
+            const normalizedDir = dir.replace(/^\/+|\/+$/g, '');
+            const normalizedPath = file.path.replace(/^\/+|\/+$/g, '');
+            // 检查文件路径是否在指定目录或其子目录中
+            return (
+              normalizedPath.startsWith(normalizedDir + '/') ||
+              normalizedPath.startsWith(normalizedDir)
+            );
+          });
+          if (!isInReadDir) {
+            return false;
+          }
+        }
 
-				// 检查是否已经添加过（使用实时获取的列表）
-				const isExisting = currentNovels.some((novel: Novel) => novel.path === file.path);
-				if (isExisting) {
-					return false;
-				}
+        // 检查是否已经添加过（使用实时获取的列表）
+        const isExisting = currentNovels.some((novel: Novel) => novel.path === file.path);
+        if (isExisting) {
+          return false;
+        }
 
-				const {blockConfig} = this.plugin.settings;
+        const { blockConfig } = this.plugin.settings;
 
-				// 检查具体路径屏蔽
-				if (blockConfig.specificPaths.includes(file.path)) {
-					return false;
-				}
+        // 检查具体路径屏蔽
+        if (blockConfig.specificPaths.includes(file.path)) {
+          return false;
+        }
 
-				// 检查正则表达式屏蔽
-				const isBlocked = blockConfig.patterns.some((pattern) => {
-					try {
-						const regex = new RegExp(pattern);
-						return regex.test(file.path);
-					} catch (e) {
-						console.error('Invalid regex pattern:', pattern, e);
-						return false;
-					}
-				});
+        // 检查正则表达式屏蔽
+        const isBlocked = blockConfig.patterns.some((pattern) => {
+          try {
+            const regex = new RegExp(pattern);
+            return regex.test(file.path);
+          } catch (e) {
+            console.error('Invalid regex pattern:', pattern, e);
+            return false;
+          }
+        });
 
-				return !isBlocked;
-			})
-			.sort((a, b) => b.stat.ctime - a.stat.ctime);
-	}
+        return !isBlocked;
+      })
+      .sort((a, b) => b.stat.ctime - a.stat.ctime);
+  }
 
   getItemText(file: TFile): string {
     return file.basename;
