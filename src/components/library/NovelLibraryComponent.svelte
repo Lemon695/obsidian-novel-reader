@@ -337,8 +337,16 @@
 
   // 判断是否为新书的函数
   function isNewBook(novel: Novel): boolean {
-    const sevenDays = 7 * 24 * 60 * 60 * 1000;
-    return Date.now() - novel.addTime < sevenDays && (!novel.progress || novel.progress === 0);
+    // 使用可配置的时间窗口（默认7天）
+    const timeWindow = novel.customSettings?.newBadgeTimeWindow || 7;
+    const timeWindowMs = timeWindow * 24 * 60 * 60 * 1000;
+    const isRecent = Date.now() - novel.addTime < timeWindowMs;
+
+    // 改用 lastRead 判断是否开始阅读（而非 progress）
+    // 这样即使进度很小（如0.5%），只要打开过就不再显示"新增"
+    const notStarted = !novel.lastRead;
+
+    return isRecent && notStarted;
   }
 
   // 处理笔记打开
@@ -872,7 +880,7 @@
 
                 <div class="novel-book-footer">
                   <div class="novel-book-status">
-                    {#if isNewBook(novel) && (!novel.progress || novel.progress === 0)}
+                    {#if isNewBook(novel)}
                       <div class="novel-new-badge">新增</div>
                     {:else if novel.progress !== undefined && novel.progress > 0}
                       <span class="novel-progress-text">{Math.floor(novel.progress)}%</span>

@@ -35,6 +35,8 @@ export interface Novel {
     txtViewMode?: 'chapters' | 'pages';
     epubViewMode?: 'chapters' | 'pages';
     pdfViewMode?: 'chapters' | 'pages';
+    // "新增"标签时间窗口（天数，默认7天）
+    newBadgeTimeWindow?: number;
   };
   pdfMetadata?: {
     numPages?: number;

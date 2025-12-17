@@ -237,6 +237,47 @@ export const icons = {
 	bookmarkFilled: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
 		<path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
 	</svg>`,
+
+	// ===== 书架系统图标 =====
+
+	// 在读书架 - 打开的书本
+	shelfReading: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+		<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+	</svg>`,
+
+	// 待读书架 - 书本堆叠
+	shelfToRead: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+		<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+	</svg>`,
+
+	// 已读书架 - 带勾的书本
+	shelfFinished: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+		<path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+		<path d="M9 10l2 2 4-4"/>
+	</svg>`,
+
+	// 归档书架 - 存档盒
+	shelfArchived: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<polyline points="21 8 21 21 3 21 3 8"/>
+		<rect x="1" y="3" width="22" height="5"/>
+		<line x1="10" y1="12" x2="14" y2="12"/>
+	</svg>`,
+
+	// 全部图书 - 书库
+	shelfAll: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+		<path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+		<line x1="12" y1="7" x2="12" y2="21"/>
+	</svg>`,
+
+	// 自定义书架 - 文件夹加星标
+	shelfCustom: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+		<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+		<polygon points="12 10 13.5 13 17 13.5 14.5 16 15 19.5 12 17.5 9 19.5 9.5 16 7 13.5 10.5 13 12 10" fill="currentColor"/>
+	</svg>`,
 };
 
 /**
