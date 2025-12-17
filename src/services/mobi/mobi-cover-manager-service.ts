@@ -43,10 +43,10 @@ export class MobiCoverManagerService {
             }
 
             // 保存封面
-            const coverUrl = await this.saveCover(novelId, coverBlob);
+            const relativePath = await this.saveCover(novelId, coverBlob);
 
-            console.log('[MobiCover] Cover extracted successfully:', coverUrl);
-            return coverUrl;
+            console.log('[MobiCover] Cover extracted successfully, relative path:', relativePath);
+            return relativePath;
         } catch (error) {
             console.error('[MobiCover] Failed to extract cover:', error);
             return null;
@@ -62,11 +62,26 @@ export class MobiCoverManagerService {
         if (!book) return null;
 
         try {
-            // TODO: 使用 foliate-js API 获取封面
-            // const coverBlob = await book.getCover();
-            // return coverBlob;
+            console.log('[MobiCover] Attempting to get cover from book object');
 
-            return null;
+            // foliate-js 的 MOBI 对象有 getCover 方法
+            if (typeof book.getCover === 'function') {
+                const coverBlob = await book.getCover();
+
+                if (coverBlob && coverBlob instanceof Blob) {
+                    console.log('[MobiCover] Cover blob obtained:', {
+                        size: coverBlob.size,
+                        type: coverBlob.type
+                    });
+                    return coverBlob;
+                } else {
+                    console.log('[MobiCover] getCover returned null or invalid blob');
+                    return null;
+                }
+            } else {
+                console.warn('[MobiCover] Book object does not have getCover method');
+                return null;
+            }
         } catch (error) {
             console.error('[MobiCover] Failed to get cover blob:', error);
             return null;
@@ -81,15 +96,15 @@ export class MobiCoverManagerService {
      */
     async saveCover(novelId: string, blob: Blob): Promise<string> {
         try {
-            // 确定封面保存路径
+            // 确定封面保存路径 - 添加mobi子目录
             const coverDir = this.plugin.settings.coverPath;
+            const mobiCoverDir = normalizePath(`${coverDir}/mobi`);
             const coverFileName = `${novelId}.jpg`;
-            const coverPath = normalizePath(`${coverDir}/${coverFileName}`);
+            const coverPath = normalizePath(`${mobiCoverDir}/${coverFileName}`);
 
             // 确保目录存在
-            const dir = coverPath.substring(0, coverPath.lastIndexOf('/'));
-            if (!(await this.app.vault.adapter.exists(dir))) {
-                await this.app.vault.adapter.mkdir(dir);
+            if (!(await this.app.vault.adapter.exists(mobiCoverDir))) {
+                await this.app.vault.adapter.mkdir(mobiCoverDir);
             }
 
             // 转换 Blob 为 ArrayBuffer
@@ -99,7 +114,8 @@ export class MobiCoverManagerService {
             await this.app.vault.adapter.writeBinary(coverPath, arrayBuffer);
 
             console.log('[MobiCover] Cover saved to:', coverPath);
-            return coverPath;
+            // 返回相对于coverPath的路径 (mobi/filename.jpg)
+            return `mobi/${coverFileName}`;
         } catch (error) {
             console.error('[MobiCover] Failed to save cover:', error);
             throw error;

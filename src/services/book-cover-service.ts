@@ -1,11 +1,11 @@
-import {type App, TFile} from "obsidian";
+import { type App, TFile } from "obsidian";
 import type NovelReaderPlugin from "../main";
-import type {Novel} from "../types";
-import {NovelNoteService} from "./note/novel-note-service";
-import {CoverManagerService} from "./cover-manager-service";
-import {LibraryService} from "./library-service";
-import {EpubCoverManager} from "./epub/epub-cover-manager-serivce";
-import {PDFCoverManagerService} from "./pdf/pdf-cover-manager-service";
+import type { Novel } from "../types";
+import { NovelNoteService } from "./note/novel-note-service";
+import { CoverManagerService } from "./cover-manager-service";
+import { LibraryService } from "./library-service";
+import { EpubCoverManager } from "./epub/epub-cover-manager-serivce";
+import { PDFCoverManagerService } from "./pdf/pdf-cover-manager-service";
 
 //图书封面
 export class BookCoverManagerService {
@@ -34,7 +34,7 @@ export class BookCoverManagerService {
 
 	// 获取封面全路径
 	async getLocalCoverPath(novel: Novel): Promise<string | null> {
-		if (novel.format === 'epub' || novel.format === 'pdf') {
+		if (novel.format === 'epub' || novel.format === 'pdf' || novel.format === 'mobi') {
 			const saveCoverPath = await this.coverFormatDir(novel.format);
 			if (novel.coverFileName) {
 				return saveCoverPath + "/" + novel.coverFileName;
@@ -67,7 +67,7 @@ export class BookCoverManagerService {
 			}
 
 			const novelFormat = novel.format;
-			if (novelFormat != 'epub' && novelFormat != 'pdf') {
+			if (novelFormat != 'epub' && novelFormat != 'pdf' && novelFormat != 'mobi') {
 				return novel;
 			}
 
