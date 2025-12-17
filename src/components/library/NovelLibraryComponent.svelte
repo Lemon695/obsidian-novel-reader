@@ -16,6 +16,7 @@
   import AdvancedFilterModal from './AdvancedFilterModal.svelte';
   import type { FilterConfig } from '../../types/filter-config';
   import ViewDropdownMenu from './ViewDropdownMenu.svelte';
+  import PropertiesDropdown from './PropertiesDropdown.svelte';
   import { FilterStateService } from '../../services/filter-state-service';
 
   const dispatch = createEventDispatcher();
@@ -90,6 +91,26 @@
   // 筛选后的图书列表
   let filteredNovels = novels;
   export let selectedShelfId: string | null = null;
+
+  // 属性下拉菜单状态
+  let showPropertiesDropdown = false;
+  let propertiesButtonRef: HTMLElement | null = null;
+
+  // 字段可见性配置
+  let fieldVisibility = {
+    cover: true,
+    title: true,
+    author: false,
+    format: true,
+    progress: true,
+    lastRead: false,
+    addTime: false,
+  };
+
+  // 处理字段可见性变化
+  function handleFieldVisibilityChange(event: CustomEvent) {
+    fieldVisibility = event.detail.fieldVisibility;
+  }
 
   $: novelsList = novels || [];
 
@@ -911,6 +932,16 @@
             <span class="filter-badge"></span>
           {/if}
         </button>
+        <button
+          type="button"
+          bind:this={propertiesButtonRef}
+          on:click={() => (showPropertiesDropdown = !showPropertiesDropdown)}
+          class="novel-properties-button"
+          class:active={showPropertiesDropdown}
+        >
+          <span class="properties-icon">{@html icons.columns}</span>
+          属性
+        </button>
       </div>
       <div class="novel-toolbar-right">
         <select bind:value={sortField} class="novel-sort-select">
@@ -962,32 +993,39 @@
         {#if filteredNovels.length > 0}
           {#each filteredNovels as novel}
             <div class="novel-book-card" on:click={() => onOpenNovel(novel)}>
-              <div class="novel-book-cover-wrapper">
-                {#if novel.cover}
-                  <img
-                    src={novel.cover}
-                    alt={novel.title}
-                    class="novel-book-cover"
-                    on:error={() => {
-                      novel.cover = undefined;
-                    }}
-                  />
-                {:else}
-                  <div class="novel-book-cover placeholder">
-                    <span class="placeholder-icon">{@html icons.book}</span>
-                  </div>
-                {/if}
+              {#if fieldVisibility.cover}
+                <div class="novel-book-cover-wrapper">
+                  {#if novel.cover}
+                    <img
+                      src={novel.cover}
+                      alt={novel.title}
+                      class="novel-book-cover"
+                      on:error={() => {
+                        novel.cover = undefined;
+                      }}
+                    />
+                  {:else}
+                    <div class="novel-book-cover placeholder">
+                      <span class="placeholder-icon">{@html icons.book}</span>
+                    </div>
+                  {/if}
 
-                <!-- 格式徽章 -->
-                {#if novel.format}
-                  <div class="format-badge format-{novel.format.toLowerCase()}">
-                    {novel.format.toUpperCase()}
-                  </div>
-                {/if}
-              </div>
+                  <!-- 格式徽章 -->
+                  {#if fieldVisibility.format && novel.format}
+                    <div class="format-badge format-{novel.format.toLowerCase()}">
+                      {novel.format.toUpperCase()}
+                    </div>
+                  {/if}
+                </div>
+              {/if}
 
               <div class="novel-book-info">
-                <h3 class="novel-book-title">{novel.title}</h3>
+                {#if fieldVisibility.title}
+                  <h3 class="novel-book-title">{novel.title}</h3>
+                {/if}
+                {#if fieldVisibility.author && novel.author}
+                  <div class="novel-book-author">{novel.author}</div>
+                {/if}
 
                 <div class="novel-book-tags">
                   {#if novel.shelfId}
@@ -1010,11 +1048,27 @@
                   {/each}
                 </div>
 
+                <!-- 最后阅读时间 -->
+                {#if fieldVisibility.lastRead && novel.lastRead}
+                  <div class="novel-book-meta">
+                    <span class="meta-label">最后阅读:</span>
+                    <span class="meta-value">{new Date(novel.lastRead).toLocaleDateString()}</span>
+                  </div>
+                {/if}
+
+                <!-- 添加时间 -->
+                {#if fieldVisibility.addTime && novel.addTime}
+                  <div class="novel-book-meta">
+                    <span class="meta-label">添加时间:</span>
+                    <span class="meta-value">{new Date(novel.addTime).toLocaleDateString()}</span>
+                  </div>
+                {/if}
+
                 <div class="novel-book-footer">
                   <div class="novel-book-status">
                     {#if isNewBook(novel)}
                       <div class="novel-new-badge">新增</div>
-                    {:else if novel.progress !== undefined && novel.progress > 0}
+                    {:else if fieldVisibility.progress && novel.progress !== undefined && novel.progress > 0}
                       <span class="novel-progress-text">{Math.floor(novel.progress)}%</span>
                     {/if}
                   </div>
@@ -1188,6 +1242,15 @@
       on:close={closeStatsModal}
     />
   {/if}
+
+  <!-- 属性下拉菜单 -->
+  <PropertiesDropdown
+    show={showPropertiesDropdown}
+    {propertiesButtonRef}
+    on:close={() => (showPropertiesDropdown = false)}
+    on:fieldChange={handleFieldVisibilityChange}
+    on:viewModeChange={(e) => console.log('View mode changed:', e.detail)}
+  />
 
   <!-- 高级筛选模态弹窗 -->
   <AdvancedFilterModal

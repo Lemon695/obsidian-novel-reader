@@ -226,12 +226,47 @@
 .novel-advanced-filter-button.active,
 .novel-advanced-filter-button.has-filters {
   background-color: var(--interactive-accent);
-  color: var(--text-on-accent);
   border-color: var(--interactive-accent);
 }
 
 .novel-advanced-filter-button.has-filters .filter-icon svg {
-  fill: var(--text-on-accent);
+  fill: var(--interactive-accent);
+}
+
+/* 属性按钮样式 */
+.novel-properties-button {
+  display: flex;
+  align-items: center;
+  gap: var(--novel-spacing-xs);
+  padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+  background: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--novel-radius-sm);
+  color: var(--text-normal);
+  font-size: var(--novel-font-size-sm);
+  cursor: pointer;
+  transition: all var(--novel-transition-base);
+}
+
+.novel-properties-button:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+}
+
+.novel-properties-button.active {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.novel-properties-button .properties-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.novel-properties-button.active .properties-icon svg {
+  stroke: var(--text-on-accent);
 }
 
 .filter-badge {
@@ -737,6 +772,28 @@
   background: linear-gradient(135deg, rgba(149, 165, 166, 0.9), rgba(127, 140, 141, 0.9));
 }
 
+/* 图书元数据样式 */
+.novel-book-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.novel-book-meta .meta-label {
+  font-weight: 400;
+  color: var(--text-faint);
+}
+
+.novel-book-meta .meta-value {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+/* 图书卡片信息区域 */
 .novel-book-card:hover .format-badge {
   transform: scale(1.05);
 }
