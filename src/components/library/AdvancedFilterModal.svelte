@@ -63,6 +63,16 @@
     }
   }
 
+  // 切换格式选择
+  function toggleFormat(format: string) {
+    if (!localFilters.formats) localFilters.formats = [];
+    if (localFilters.formats.includes(format)) {
+      localFilters.formats = localFilters.formats.filter((f) => f !== format);
+    } else {
+      localFilters.formats = [...localFilters.formats, format];
+    }
+  }
+
   // 应用筛选
   function handleApply() {
     dispatch('apply', { filters: localFilters });
@@ -98,6 +108,7 @@
       tagMode: 'AND',
       excludeTagIds: [],
       progressStatus: 'all',
+      formats: [], // 重置格式筛选
       addTimeRange: 'all',
     };
     selectedPresetId = '';
@@ -348,6 +359,28 @@
                 <span>%</span>
               </div>
             {/if}
+          </div>
+        </div>
+
+        <!-- 格式筛选 -->
+        <div class="filter-section">
+          <div class="filter-section-title">
+            <span class="icon">{@html icons.file}</span>
+            <span>文件格式</span>
+          </div>
+          <div class="filter-formats">
+            {#each ['PDF', 'EPUB', 'MOBI', 'TXT'] as format}
+              <label class="format-checkbox">
+                <input
+                  type="checkbox"
+                  checked={localFilters.formats?.includes(format)}
+                  on:change={() => toggleFormat(format)}
+                />
+                <span class="format-label format-{format.toLowerCase()}">
+                  {format}
+                </span>
+              </label>
+            {/each}
           </div>
         </div>
 
@@ -808,5 +841,58 @@
 
   .novel-btn-primary:hover {
     background: var(--interactive-accent-hover);
+  }
+
+  /* 格式筛选样式 */
+  .filter-formats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--novel-spacing-sm);
+    padding: var(--novel-spacing-sm) 0;
+  }
+
+  .format-checkbox {
+    display: flex;
+    align-items: center;
+    gap: var(--novel-spacing-xs);
+    cursor: pointer;
+    padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+    border-radius: var(--novel-radius-sm);
+    border: 1px solid var(--background-modifier-border);
+    transition: all var(--novel-transition-base);
+  }
+
+  .format-checkbox:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+  }
+
+  .format-checkbox input[type='checkbox'] {
+    cursor: pointer;
+    accent-color: var(--interactive-accent);
+  }
+
+  .format-label {
+    font-size: var(--novel-font-size-sm);
+    font-weight: 600;
+    padding: 2px 6px;
+    border-radius: var(--novel-radius-sm);
+    color: white;
+  }
+
+  .format-label.format-pdf {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.9), rgba(192, 57, 43, 0.9));
+  }
+
+  .format-label.format-epub {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.9), rgba(41, 128, 185, 0.9));
+  }
+
+  .format-label.format-mobi {
+    background: linear-gradient(135deg, rgba(39, 174, 96, 0.9), rgba(34, 153, 84, 0.9));
+  }
+
+  .format-label.format-txt {
+    background: linear-gradient(135deg, rgba(149, 165, 166, 0.9), rgba(127, 140, 141, 0.9));
   }
 </style>

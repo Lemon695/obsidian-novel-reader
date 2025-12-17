@@ -75,16 +75,18 @@
   let hasActiveFilters = false;
 
   // 计算是否有激活的筛选条件
-  $: hasActiveFilters =
+  $: hasActiveFilters = !!(
     currentFilters.shelfId !== 'all' ||
     currentFilters.categoryId !== '' ||
     (currentFilters.categoryIds && currentFilters.categoryIds.length > 0) ||
-    currentFilters.tagIds.length > 0 ||
+    (currentFilters.tagIds && currentFilters.tagIds.length > 0) ||
     (currentFilters.excludeTagIds && currentFilters.excludeTagIds.length > 0) ||
     currentFilters.progressStatus !== 'all' ||
     currentFilters.progressRange !== undefined ||
     (currentFilters.addTimePreset && currentFilters.addTimePreset !== 'all') ||
-    currentFilters.stalledBooks?.enabled === true;
+    currentFilters.stalledBooks?.enabled === true ||
+    (currentFilters.formats && currentFilters.formats.length > 0)
+  );
   // 筛选后的图书列表
   let filteredNovels = novels;
   export let selectedShelfId: string | null = null;
@@ -182,71 +184,88 @@
       let matchesProgress = true;
       const progress = novel.progress || 0;
 
-      // 状态筛选
+      // 阅读进度筛选
+      matchesProgress = true;
       if (currentFilters.progressStatus === 'new') {
-        matchesProgress = progress === 0;
+        matchesProgress = !novel.lastRead || novel.lastRead === 0;
       } else if (currentFilters.progressStatus === 'reading') {
-        matchesProgress = progress > 0 && progress < 100;
+        matchesProgress = novel.lastRead > 0 && novel.progress < 100;
       } else if (currentFilters.progressStatus === 'finished') {
-        matchesProgress = progress === 100;
+        matchesProgress = novel.progress >= 100;
       }
 
-      // 进度范围筛选（如果设置了范围，则覆盖状态筛选）
+      // 进度范围筛选
+      let matchesProgressRange = true;
       if (currentFilters.progressRange) {
         const { min, max } = currentFilters.progressRange;
-        matchesProgress = progress >= min && progress <= max;
+        const progress = novel.progress || 0;
+        matchesProgressRange = progress >= min && progress <= max;
       }
 
       // 时间筛选（支持更多预设和自定义范围）
-      let matchesTime = true;
+      let matchesAddTime = true;
 
       // 使用新的预设（如果有）
       const timePreset = currentFilters.addTimePreset || currentFilters.addTimeRange;
       if (timePreset === 'today') {
         const todayStart = new Date().setHours(0, 0, 0, 0);
-        matchesTime = novel.addTime >= todayStart;
+        matchesAddTime = novel.addTime >= todayStart;
       } else if (timePreset === 'week') {
         const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-        matchesTime = novel.addTime >= weekAgo;
+        matchesAddTime = novel.addTime >= weekAgo;
       } else if (timePreset === 'month') {
         const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-        matchesTime = novel.addTime >= monthAgo;
+        matchesAddTime = novel.addTime >= monthAgo;
       } else if (timePreset === 'quarter') {
         const quarterAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
-        matchesTime = novel.addTime >= quarterAgo;
+        matchesAddTime = novel.addTime >= quarterAgo;
       } else if (timePreset === 'year') {
         const yearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
-        matchesTime = novel.addTime >= yearAgo;
+        matchesAddTime = novel.addTime >= yearAgo;
       }
 
       // 自定义时间范围（优先级最高）
       if (currentFilters.addTimeCustom) {
         const { startDate, endDate } = currentFilters.addTimeCustom;
         if (startDate && endDate) {
-          matchesTime = novel.addTime >= startDate && novel.addTime <= endDate;
+          matchesAddTime = novel.addTime >= startDate && novel.addTime <= endDate;
         } else if (startDate) {
-          matchesTime = novel.addTime >= startDate;
+          matchesAddTime = novel.addTime >= startDate;
         } else if (endDate) {
-          matchesTime = novel.addTime <= endDate;
+          matchesAddTime = novel.addTime <= endDate;
         }
       }
 
-      // 停滞图书筛选
-      let matchesStalled = true;
+      // 停滞图书筛选 - 简化版本，不使用async
+      let matchesStalledBooks = true;
       if (currentFilters.stalledBooks?.enabled) {
+        // 简化：只检查是否有lastRead时间且较旧
         const stalledDays = currentFilters.stalledBooks.days || 30;
-        matchesStalled = isStalledBook(novel, stalledDays);
+        const stalledThreshold = Date.now() - stalledDays * 24 * 60 * 60 * 1000;
+        if (novel.lastRead) {
+          matchesStalledBooks = novel.lastRead < stalledThreshold;
+        } else {
+          matchesStalledBooks = false;
+        }
+      }
+
+      // 格式筛选
+      let matchesFormat = true;
+      if (currentFilters.formats && currentFilters.formats.length > 0) {
+        matchesFormat = currentFilters.formats.includes(novel.format?.toUpperCase() || '');
       }
 
       return (
         matchesSearch &&
         matchesShelf &&
+        isInView &&
         matchesCategory &&
         matchesTags &&
         matchesProgress &&
-        matchesTime &&
-        matchesStalled &&
-        isInView
+        matchesProgressRange &&
+        matchesAddTime &&
+        matchesStalledBooks &&
+        matchesFormat
       );
     })
     .sort((a, b) => {
