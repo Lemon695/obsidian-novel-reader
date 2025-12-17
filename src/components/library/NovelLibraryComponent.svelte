@@ -363,11 +363,22 @@
     // 获取按钮元素和其位置信息
     const button = event.currentTarget as HTMLElement;
     const buttonRect = button.getBoundingClientRect();
-    const cardElement = button.closest('.book-card') as HTMLElement;
-    const cardRect = cardElement.getBoundingClientRect();
+    const cardElement = button.closest('.novel-book-card') as HTMLElement;
+
+    // 如果找不到卡片元素，使用按钮元素作为fallback
+    const cardRect = cardElement ? cardElement.getBoundingClientRect() : buttonRect;
 
     // 获取图书库容器的边界
     const libraryContainer = document.querySelector('.library-container') as HTMLElement;
+    if (!libraryContainer) {
+      // 如果找不到容器，使用默认位置
+      menuPosition = {
+        direction: 'bottom',
+        alignment: 'left',
+      };
+      return;
+    }
+
     const libraryRect = libraryContainer.getBoundingClientRect();
 
     // 计算关键距离 - 使用容器边界而不是视口
@@ -400,7 +411,7 @@
           alignment: 'left',
         };
       } else {
-        // 默认向下右侧展示
+        // 底部空间充足，向下展示
         menuPosition = {
           direction: 'bottom',
           alignment: 'left',
@@ -738,17 +749,19 @@
         await plugin.customShelfService.removeFromFavorites(novel.id);
         new Notice(`已从喜爱中移除《${novel.title}》`);
       } else {
-        // 添加喜爱
+        // 添加到喜爱
         await plugin.customShelfService.addToFavorites(novel.id);
         new Notice(`已添加《${novel.title}》到喜爱`);
       }
 
-      // 如果当前在喜爱视图，需要立即刷新显示
+      // 触发响应式更新 - 重新赋值activeMenuNovel以触发UI更新
+      if (activeMenuNovel) {
+        activeMenuNovel = { ...activeMenuNovel };
+      }
+
+      // 如果当前在喜爱视图，需要刷新列表
       if (currentView === 'favorites') {
-        // 获取最新的喜爱列表
-        const favoriteIds = await plugin.customShelfService.getFavoriteNovels();
-        // 更新显示的小说列表
-        filteredNovels = novels.filter((n) => favoriteIds.includes(n.id));
+        await refresh();
       }
     } catch (error) {
       console.error('Error toggling favorite:', error);
@@ -997,17 +1010,19 @@
                         data-alignment={menuPosition?.alignment}
                         on:click|stopPropagation
                       >
+                        <!-- 快速操作 -->
                         <button
                           class="novel-menu-item"
                           on:click|stopPropagation={() => toggleFavorite(activeMenuNovel)}
                         >
-                          <span class="menu-icon">
+                          <span
+                            class="menu-icon favorite-icon"
+                            class:is-favorite={isFavorite(activeMenuNovel.id)}
+                          >
                             {@html isFavorite(activeMenuNovel.id) ? icons.heartFilled : icons.heart}
                           </span>
                           <span>{isFavorite(activeMenuNovel.id) ? '取消喜爱' : '添加到喜爱'}</span>
                         </button>
-
-                        <div class="novel-menu-divider"></div>
 
                         <button
                           class="novel-menu-item"
@@ -1018,24 +1033,9 @@
                           <span>图书目录</span>
                         </button>
 
-                        <div class="submenu">
-                          <button class="novel-menu-item">
-                            <span class="menu-icon">{@html icons.shelf}</span>
-                            <span>添加到书架</span>
-                          </button>
-                          <div class="submenu-content">
-                            {#each customShelves as shelf}
-                              <button
-                                class="novel-menu-item submenu-item"
-                                on:click|stopPropagation={() =>
-                                  addToCustomShelf(activeMenuNovel, shelf)}
-                              >
-                                {shelf.name}
-                              </button>
-                            {/each}
-                          </div>
-                        </div>
+                        <div class="novel-menu-divider"></div>
 
+                        <!-- 组织管理 -->
                         <button
                           class="novel-menu-item"
                           on:click|stopPropagation={(e) => handleShelfManage(activeMenuNovel, e)}
@@ -1060,6 +1060,9 @@
                           <span>管理分类</span>
                         </button>
 
+                        <div class="novel-menu-divider"></div>
+
+                        <!-- 更多操作 -->
                         <button
                           class="novel-menu-item"
                           on:click|stopPropagation={(e) =>

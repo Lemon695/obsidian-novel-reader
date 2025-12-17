@@ -894,6 +894,12 @@
   opacity: 0.8;
 }
 
+/* 喜爱图标红色 - 只针对favorite-icon class */
+.favorite-icon.is-favorite svg {
+  color: #e74c3c;
+  fill: #e74c3c;
+}
+
 /* 子菜单 */
 .submenu {
   position: relative;

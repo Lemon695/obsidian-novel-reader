@@ -113,78 +113,60 @@
 
 <style>
   .category-manager {
-    background: linear-gradient(135deg, var(--background-primary) 0%, var(--background-secondary) 100%);
-    border-radius: var(--radius-xl);
+    background: var(--background-primary);
+    border-radius: var(--novel-radius-lg);
     width: 100%;
     max-width: 480px;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
-    border: 2px solid var(--interactive-accent);
+    box-shadow: var(--novel-shadow-lg);
+    border: 1px solid var(--background-modifier-border);
     overflow: hidden;
-    animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-  }
-
-  @keyframes modalSlideIn {
-    from {
-      opacity: 0;
-      transform: scale(0.9) translateY(20px);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1) translateY(0);
-    }
   }
 
   .modal-header {
-    padding: 20px;
-    background: linear-gradient(135deg, var(--interactive-accent-hover) 0%, var(--interactive-accent) 100%);
+    padding: var(--novel-spacing-md);
+    background: var(--background-secondary);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--background-modifier-border);
   }
 
   .modal-header h3 {
     margin: 0;
-    font-size: 18px;
+    font-size: var(--novel-font-size-lg);
     font-weight: 600;
-    color: var(--text-on-accent);
+    color: var(--text-normal);
     overflow: hidden;
     text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
-    -webkit-box-orient: vertical;
+    white-space: nowrap;
     max-width: calc(100% - 40px);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
   }
 
   .close-button {
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: transparent;
+    border: none;
     font-size: 24px;
     cursor: pointer;
-    color: var(--text-on-accent);
-    width: 36px;
-    height: 36px;
-    border-radius: 50%;
+    color: var(--text-muted);
+    width: 32px;
+    height: 32px;
+    border-radius: var(--novel-radius-sm);
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
+    transition: all var(--novel-transition-base);
     flex-shrink: 0;
-    backdrop-filter: blur(8px);
   }
 
   .close-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.4);
-    transform: rotate(90deg) scale(1.1);
+    background: var(--background-modifier-hover);
+    color: var(--text-normal);
   }
 
   .modal-content {
-    padding: 20px;
+    padding: var(--novel-spacing-md);
     flex: 1;
     min-height: 200px;
     max-height: 400px;
@@ -195,89 +177,69 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 16px;
+    margin-bottom: var(--novel-spacing-md);
   }
 
   .section-header h4 {
     margin: 0;
-    font-size: 16px;
+    font-size: var(--novel-font-size-md);
     font-weight: 600;
     color: var(--text-normal);
   }
 
   .add-category-button {
-    padding: var(--size-4-3) var(--size-4-5);
-    border-radius: var(--radius-m);
-    border: 2px solid var(--interactive-accent);
-    background: linear-gradient(135deg, var(--interactive-accent-hover) 0%, var(--interactive-accent) 100%);
+    padding: var(--novel-spacing-xs) var(--novel-spacing-md);
+    border-radius: var(--novel-radius-sm);
+    border: 1px solid var(--interactive-accent);
+    background: var(--interactive-accent);
     color: var(--text-on-accent);
     cursor: pointer;
     font-weight: 600;
-    box-shadow: 0 2px 8px rgba(var(--interactive-accent-rgb), 0.2);
-    transition: all 0.2s ease;
-    font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all var(--novel-transition-base);
   }
 
   .add-category-button:hover {
-    background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
-    color: var(--text-on-accent);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(var(--interactive-accent-rgb), 0.3);
+    background: var(--interactive-accent-hover);
   }
 
   .new-category-form {
     display: flex;
-    gap: 8px;
-    margin-bottom: 16px;
-    padding: 12px;
+    gap: var(--novel-spacing-sm);
+    margin-bottom: var(--novel-spacing-md);
+    padding: var(--novel-spacing-sm);
     background: var(--background-secondary);
-    border-radius: 8px;
-    border-left: 3px solid var(--interactive-accent);
-    animation: slideIn 0.2s ease;
-  }
-
-  @keyframes slideIn {
-    from {
-      opacity: 0;
-      transform: translateY(-10px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
+    border-radius: var(--novel-radius-sm);
+    border: 1px solid var(--background-modifier-border);
   }
 
   .new-category-form input[type='text'] {
     flex: 1;
-    padding: 8px 12px;
-    border-radius: 6px;
-    border: 2px solid var(--background-modifier-border);
+    padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+    border-radius: var(--novel-radius-sm);
+    border: 1px solid var(--background-modifier-border);
     background: var(--background-primary);
     color: var(--text-normal);
-    transition: all 0.2s ease;
+    transition: all var(--novel-transition-base);
   }
 
   .new-category-form input[type='text']:focus {
     outline: none;
     border-color: var(--interactive-accent);
-    box-shadow: 0 0 0 3px rgba(var(--interactive-accent-rgb), 0.1);
   }
 
   .create-button {
-    padding: 8px 16px;
-    border-radius: 6px;
-    background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
+    padding: var(--novel-spacing-xs) var(--novel-spacing-md);
+    border-radius: var(--novel-radius-sm);
+    background: var(--interactive-accent);
     color: var(--text-on-accent);
     border: none;
     cursor: pointer;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all var(--novel-transition-base);
   }
 
   .create-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(var(--interactive-accent-rgb), 0.4);
+    background: var(--interactive-accent-hover);
   }
 
   .create-button:disabled {
@@ -288,30 +250,29 @@
   .categories-list {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: var(--novel-spacing-sm);
   }
 
   .category-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 12px;
-    border-radius: 8px;
+    padding: var(--novel-spacing-sm);
+    border-radius: var(--novel-radius-sm);
     background: var(--background-secondary);
-    border-left: 3px solid transparent;
-    transition: all 0.2s ease;
+    border: 1px solid var(--background-modifier-border);
+    transition: all var(--novel-transition-base);
   }
 
   .category-item:hover {
-    background: var(--background-primary-alt);
-    border-left-color: var(--interactive-accent);
-    transform: translateX(4px);
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
   }
 
   .category-item label {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--novel-spacing-sm);
     flex: 1;
     cursor: pointer;
   }
@@ -326,7 +287,7 @@
   .category-name {
     color: var(--text-normal);
     font-weight: 500;
-    transition: color 0.2s ease;
+    transition: color var(--novel-transition-base);
   }
 
   .category-item:hover .category-name {
@@ -334,14 +295,14 @@
   }
 
   .delete-category {
-    background: rgba(var(--text-error-rgb), 0.1);
+    background: transparent;
     border: none;
-    color: var(--text-error);
+    color: var(--text-muted);
     cursor: pointer;
-    padding: 4px 8px;
+    padding: var(--novel-spacing-xs);
     font-size: 18px;
-    border-radius: 4px;
-    transition: all 0.2s ease;
+    border-radius: var(--novel-radius-sm);
+    transition: all var(--novel-transition-base);
     width: 28px;
     height: 28px;
     display: flex;
@@ -350,50 +311,46 @@
   }
 
   .delete-category:hover {
-    background: var(--text-error);
-    color: var(--text-on-accent);
-    transform: rotate(90deg) scale(1.1);
+    background: var(--background-modifier-error);
+    color: var(--text-error);
   }
 
   .modal-footer {
-    padding: 16px 20px;
+    padding: var(--novel-spacing-md);
     background: var(--background-secondary);
     border-top: 1px solid var(--background-modifier-border);
     display: flex;
     justify-content: flex-end;
-    gap: 12px;
+    gap: var(--novel-spacing-sm);
   }
 
   .cancel-button,
   .save-button {
-    padding: 8px 20px;
-    border-radius: 6px;
+    padding: var(--novel-spacing-xs) var(--novel-spacing-md);
+    border-radius: var(--novel-radius-sm);
     cursor: pointer;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: all var(--novel-transition-base);
   }
 
   .cancel-button {
     background: var(--background-primary);
-    border: 2px solid var(--background-modifier-border);
+    border: 1px solid var(--background-modifier-border);
     color: var(--text-normal);
   }
 
   .cancel-button:hover {
-    background: var(--background-primary-alt);
+    background: var(--background-modifier-hover);
     border-color: var(--text-muted);
-    transform: translateY(-1px);
   }
 
   .save-button {
-    background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
+    background: var(--interactive-accent);
     color: var(--text-on-accent);
     border: none;
-    box-shadow: 0 2px 8px rgba(var(--interactive-accent-rgb), 0.3);
   }
 
   .save-button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 16px rgba(var(--interactive-accent-rgb), 0.4);
+    background: var(--interactive-accent-hover);
   }
 </style>
