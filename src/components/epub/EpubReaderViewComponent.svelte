@@ -1618,15 +1618,15 @@
   /* 设置 */
   .toolbar {
     position: fixed;
-    top: 30px;
-    right: 10px;
+    top: var(--novel-spacing-lg);
+    right: var(--novel-spacing-md);
     z-index: 1000;
   }
 
   .epub-reader {
     height: 100%;
     display: flex;
-    flex-direction: row; /* 确保水平布局 */
+    flex-direction: row;
     position: relative;
     overflow: hidden;
   }
@@ -1635,14 +1635,7 @@
     flex: 1;
     overflow: hidden;
     position: relative;
-    padding-bottom: 56px; /* 为底部导航栏留出空间 */
-  }
-
-  .toolbar {
-    position: fixed;
-    top: 16px;
-    right: 16px;
-    z-index: 1000;
+    padding-bottom: 56px;
   }
 
   :global(.epub-viewer-container) {
@@ -1657,11 +1650,14 @@
     height: 100% !important;
   }
 
-  /* EPUB 文档样式 */
+  /* EPUB 文档样式 - 应用统一设计系统 */
   :global(.epub-doc) {
-    padding: 20px 40px !important;
-    line-height: 1.6 !important;
+    padding: var(--novel-spacing-lg) var(--novel-spacing-2xl) !important;
+    line-height: 1.8 !important;
     font-size: 16px !important;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   :global(.epub-doc p) {
@@ -1757,5 +1753,4 @@
   .menu-item + .menu-item {
     margin-top: 2px;
   }
-
 </style>

@@ -341,64 +341,33 @@
   }
 
   .settings-button {
-    background: linear-gradient(
-      135deg,
-      var(--background-secondary) 0%,
-      var(--background-primary) 100%
-    );
-    border: 2px solid transparent;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
     border-radius: 50%;
-    padding: 8px;
+    padding: var(--novel-spacing-sm);
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
     font-size: 16px;
     width: 40px;
     height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .settings-button::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: 50%;
-    padding: 2px;
-    background: linear-gradient(
-      135deg,
-      var(--interactive-accent) 0%,
-      var(--interactive-accent-hover) 100%
-    );
-    -webkit-mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    mask:
-      linear-gradient(#fff 0 0) content-box,
-      linear-gradient(#fff 0 0);
-    -webkit-mask-composite: xor;
-    mask-composite: exclude;
-    opacity: 0;
-    transition: opacity 0.3s ease;
+    box-shadow: var(--novel-shadow-sm);
   }
 
   .settings-button:hover {
     transform: translateY(-2px) rotate(90deg);
-    box-shadow: 0 4px 16px rgba(var(--interactive-accent-rgb), 0.3);
-  }
-
-  .settings-button:hover::before {
-    opacity: 1;
+    box-shadow: var(--novel-shadow-md);
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
   }
 
   .settings-icon :global(svg) {
     width: 20px;
     height: 20px;
     stroke: currentColor;
-    transition: all 0.3s ease;
+    transition: all 0.2s ease;
   }
 
   .settings-button:hover .settings-icon :global(svg) {
@@ -407,16 +376,12 @@
 
   .settings-dropdown {
     position: absolute;
-    top: calc(100% + 12px);
+    top: calc(100% + var(--novel-spacing-sm));
     right: 0;
-    background: linear-gradient(
-      135deg,
-      var(--background-primary) 0%,
-      var(--background-secondary) 100%
-    );
-    border: 2px solid var(--background-modifier-border);
-    border-radius: 12px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    background: var(--background-primary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--novel-radius-lg);
+    box-shadow: var(--novel-shadow-lg);
     min-width: 180px;
     z-index: 1000;
     overflow: hidden;
@@ -437,16 +402,16 @@
   .dropdown-item {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: var(--novel-spacing-sm);
     width: 100%;
-    padding: 12px 16px;
+    padding: var(--novel-spacing-sm) var(--novel-spacing-md);
     border: none;
     background: none;
     color: var(--text-normal);
     cursor: pointer;
     text-align: left;
     transition: all 0.2s ease;
-    font-weight: 500;
+    font-weight: var(--novel-font-weight-medium);
     border-left: 3px solid transparent;
   }
 
@@ -500,17 +465,13 @@
     max-width: 90vw;
     height: 600px;
     max-height: 90vh;
-    background: linear-gradient(
-      135deg,
-      var(--background-primary) 0%,
-      var(--background-secondary) 100%
-    );
-    border-radius: var(--radius-xl);
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+    background: var(--background-primary);
+    border-radius: var(--novel-radius-lg);
+    box-shadow: var(--novel-shadow-lg);
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    border: 2px solid var(--interactive-accent);
+    border: 1px solid var(--background-modifier-border);
     overflow: hidden;
     animation: modalFadeIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
@@ -527,12 +488,12 @@
   }
 
   .close-button {
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    color: var(--text-on-accent);
+    background: var(--background-modifier-hover);
+    border: 1px solid var(--background-modifier-border);
+    color: var(--text-normal);
     font-size: 24px;
     cursor: pointer;
-    padding: 4px;
+    padding: var(--novel-spacing-xs);
     width: 36px;
     height: 36px;
     border-radius: 50%;
@@ -540,23 +501,18 @@
     align-items: center;
     justify-content: center;
     transition: all 0.2s ease;
-    backdrop-filter: blur(8px);
   }
 
   .close-button:hover {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.4);
+    background: var(--background-modifier-active);
+    border-color: var(--interactive-accent);
     transform: rotate(90deg) scale(1.1);
   }
 
   .settings-header {
-    padding: 24px 28px;
-    background: linear-gradient(
-      135deg,
-      var(--interactive-accent-hover) 0%,
-      var(--interactive-accent) 100%
-    );
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: var(--novel-spacing-lg) var(--novel-spacing-xl);
+    background: var(--background-secondary);
+    border-bottom: 1px solid var(--background-modifier-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -564,9 +520,8 @@
 
   .settings-header h3 {
     margin: 0;
-    font-size: 20px;
-    font-weight: 600;
-    color: var(--text-on-accent);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    font-size: var(--novel-font-size-xl);
+    font-weight: var(--novel-font-weight-semibold);
+    color: var(--text-normal);
   }
 </style>

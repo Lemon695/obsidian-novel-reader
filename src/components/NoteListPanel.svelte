@@ -96,7 +96,11 @@
           <div class="note-info">
             <span class="note-time">{formatDate(note.timestamp)}</span>
             <div class="note-actions">
-              <button class="edit-button" on:click={() => handleJumpToNote(note)} title="跳转到原文">
+              <button
+                class="edit-button"
+                on:click={() => handleJumpToNote(note)}
+                title="跳转到原文"
+              >
                 跳转
               </button>
               <button class="edit-button" on:click={() => handleEditNote(note)} title="编辑笔记">
@@ -124,9 +128,9 @@
     right: 0;
     width: 360px;
     height: 100vh;
-    background: linear-gradient(135deg, var(--background-primary) 0%, var(--background-secondary) 100%);
-    border-left: 3px solid var(--interactive-accent);
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.2);
+    background: var(--background-primary);
+    border-left: 1px solid var(--background-modifier-border);
+    box-shadow: var(--novel-shadow-lg);
     display: flex;
     flex-direction: column;
     z-index: 1000;
@@ -143,9 +147,9 @@
   }
 
   .panel-header {
-    padding: 20px;
-    background: linear-gradient(135deg, var(--interactive-accent-hover) 0%, var(--interactive-accent) 100%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: var(--novel-spacing-lg);
+    background: var(--background-secondary);
+    border-bottom: 1px solid var(--background-modifier-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -153,17 +157,16 @@
 
   .panel-header h3 {
     margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-on-accent);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    font-size: var(--novel-font-size-lg);
+    font-weight: var(--novel-font-weight-semibold);
+    color: var(--text-normal);
   }
 
   .close-button {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
+    background: var(--background-modifier-hover);
+    border: 1px solid var(--background-modifier-border);
     font-size: 24px;
-    color: var(--text-on-accent);
+    color: var(--text-normal);
     cursor: pointer;
     padding: 4px;
     width: 32px;
@@ -176,7 +179,8 @@
   }
 
   .close-button:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--background-modifier-active);
+    border-color: var(--interactive-accent);
     transform: rotate(90deg);
   }
 
@@ -226,8 +230,8 @@
   .selected-text {
     font-style: italic;
     color: var(--text-muted);
-    background: linear-gradient(135deg, rgba(var(--interactive-accent-rgb), 0.1) 0%, rgba(var(--interactive-accent-rgb), 0.05) 100%);
-    padding: 10px 12px;
+    background: rgba(var(--interactive-accent-rgb), 0.08);
+    padding: var(--novel-spacing-sm) var(--novel-spacing-md);
     border-radius: 6px;
     margin-bottom: 10px;
     font-size: 13px;
@@ -274,7 +278,7 @@
   }
 
   .edit-button {
-    background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
+    background: var(--interactive-accent);
     color: var(--text-on-accent);
     box-shadow: 0 2px 4px rgba(var(--interactive-accent-rgb), 0.3);
   }
@@ -285,7 +289,7 @@
   }
 
   .delete-button {
-    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    background: var(--text-error);
     color: white;
     box-shadow: 0 2px 4px rgba(231, 76, 60, 0.3);
   }

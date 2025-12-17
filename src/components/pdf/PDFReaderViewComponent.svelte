@@ -1445,18 +1445,50 @@
   }
 
   .pdf-container {
-    width: 100%;
-    height: 100%;
+    flex: 1;
     overflow: auto;
+    position: relative;
+    background: var(--background-primary);
     display: flex;
     justify-content: center;
     align-items: flex-start;
-    padding: 20px;
+    padding: var(--novel-spacing-lg);
   }
 
   .pdf-page-wrapper {
     position: relative;
-    display: inline-block;
+    margin: 0 auto;
+    box-shadow: var(--novel-shadow-md);
+    background: white;
+  }
+
+  .pdf-canvas {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  .text-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 0.2;
+    line-height: 1;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .loading-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    gap: var(--novel-spacing-md);
   }
 
   .pdf-canvas-layer {

@@ -23,7 +23,7 @@
     { value: 'week', label: '最近7天', days: 7 },
     { value: 'month', label: '最近30天', days: 30 },
     { value: 'quarter', label: '最近3个月', days: 90 },
-    { value: 'year', label: '最近一年', days: 365 }
+    { value: 'year', label: '最近一年', days: 365 },
   ];
 
   // 标签页选项
@@ -31,7 +31,7 @@
     { id: 'overview', label: '概览', icon: 'barChart' },
     { id: 'trends', label: '趋势分析', icon: 'trendingUp' },
     { id: 'patterns', label: '阅读模式', icon: 'clock' },
-    { id: 'achievements', label: '成就统计', icon: 'award' }
+    { id: 'achievements', label: '成就统计', icon: 'award' },
   ];
 
   onMount(async () => {
@@ -54,38 +54,38 @@
 
   async function generateChartData() {
     if (!stats) return;
-    
-    const period = periodOptions.find(p => p.value === selectedPeriod);
+
+    const period = periodOptions.find((p) => p.value === selectedPeriod);
     const days = period?.days || 7;
-    
+
     const endDate = new Date();
-    const startDate = new Date(endDate.getTime() - (days * 24 * 60 * 60 * 1000));
-    
+    const startDate = new Date(endDate.getTime() - days * 24 * 60 * 60 * 1000);
+
     chartData = {
       daily: generateDailyData(startDate, endDate),
       hourly: generateHourlyData(),
-      weekly: generateWeeklyData()
+      weekly: generateWeeklyData(),
     };
   }
 
   function generateDailyData(startDate: Date, endDate: Date) {
     const data = [];
     const currentDate = new Date(startDate);
-    
+
     while (currentDate <= endDate) {
       const dateKey = currentDate.toISOString().split('T')[0];
       const dayStats = stats.dailyStats?.find((d: any) => d.date === dateKey);
-      
+
       data.push({
         date: dateKey,
         duration: dayStats?.duration || 0,
         sessions: dayStats?.sessions || 0,
-        label: currentDate.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' })
+        label: currentDate.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' }),
       });
-      
+
       currentDate.setDate(currentDate.getDate() + 1);
     }
-    
+
     return data;
   }
 
@@ -94,9 +94,9 @@
     const hours = Array.from({ length: 24 }, (_, i) => ({
       hour: `${i.toString().padStart(2, '0')}:00`,
       duration: 0,
-      sessions: 0
+      sessions: 0,
     }));
-    
+
     // 这里应该从实际数据中统计，暂时返回空数据
     return hours;
   }
@@ -107,7 +107,7 @@
     return weekdays.map((day) => ({
       day,
       duration: 0,
-      sessions: 0
+      sessions: 0,
     }));
   }
 
@@ -156,9 +156,10 @@
       }
 
       // 获取所有文件夹
-      const folders = [''];  // 根目录
-      plugin.app.vault.getAllLoadedFiles().forEach(file => {
-        if (file.children) {  // 是文件夹
+      const folders = ['']; // 根目录
+      plugin.app.vault.getAllLoadedFiles().forEach((file) => {
+        if (file.children) {
+          // 是文件夹
           folders.push(file.path);
         }
       });
@@ -168,7 +169,7 @@
         const content = generateMarkdownReport();
         const fileName = `${novel.title}_阅读统计_${new Date().toISOString().split('T')[0]}.md`;
         const filePath = selectedFolder ? `${selectedFolder}/${fileName}` : fileName;
-        
+
         try {
           await plugin.app.vault.create(filePath, content);
           new Notice(`统计报告已导出到: ${filePath}`);
@@ -185,8 +186,8 @@
 
   function generateMarkdownReport(): string {
     const now = new Date().toLocaleString('zh-CN');
-    const period = periodOptions.find(p => p.value === selectedPeriod);
-    
+    const period = periodOptions.find((p) => p.value === selectedPeriod);
+
     let report = `# ${novel.title} - 阅读统计报告
 
 **生成时间**: ${now}  
@@ -234,13 +235,29 @@
 
     // 成就列表
     const achievements = [
-      { name: '连续阅读达人', condition: stats?.readingStreak >= 7, progress: `${stats?.readingStreak}/7 天` },
-      { name: '时间管理大师', condition: (stats?.totalTime || 0) >= 3600000, progress: `${Math.round((stats?.totalTime || 0) / 60000)}/60 分钟` },
-      { name: '速读高手', condition: (stats?.averageSpeed || 0) >= 300, progress: `${Math.round(stats?.averageSpeed || 0)}/300 字/分` },
-      { name: '阅读进度王', condition: (stats?.completionRate || 0) >= 50, progress: `${(stats?.completionRate || 0).toFixed(1)}/50.0 %` }
+      {
+        name: '连续阅读达人',
+        condition: stats?.readingStreak >= 7,
+        progress: `${stats?.readingStreak}/7 天`,
+      },
+      {
+        name: '时间管理大师',
+        condition: (stats?.totalTime || 0) >= 3600000,
+        progress: `${Math.round((stats?.totalTime || 0) / 60000)}/60 分钟`,
+      },
+      {
+        name: '速读高手',
+        condition: (stats?.averageSpeed || 0) >= 300,
+        progress: `${Math.round(stats?.averageSpeed || 0)}/300 字/分`,
+      },
+      {
+        name: '阅读进度王',
+        condition: (stats?.completionRate || 0) >= 50,
+        progress: `${(stats?.completionRate || 0).toFixed(1)}/50.0 %`,
+      },
     ];
 
-    achievements.forEach(achievement => {
+    achievements.forEach((achievement) => {
       const status = achievement.condition ? '✅' : '⏳';
       report += `- ${status} **${achievement.name}**: ${achievement.progress}\n`;
     });
@@ -302,8 +319,8 @@
           <!-- 标签页导航 -->
           <div class="tabs-nav">
             {#each tabs as tab}
-              <button 
-                class="tab-btn" 
+              <button
+                class="tab-btn"
                 class:active={activeTab === tab.id}
                 on:click={() => switchTab(tab.id)}
               >
@@ -386,37 +403,54 @@
                 <div class="insights-grid">
                   <div class="insight-card">
                     <h4>阅读习惯</h4>
-                    <p>{stats.readingStreak > 7 ? '您是一位规律的阅读者！' : '建议保持更规律的阅读习惯'}</p>
+                    <p>
+                      {stats.readingStreak > 7
+                        ? '您是一位规律的阅读者！'
+                        : '建议保持更规律的阅读习惯'}
+                    </p>
                   </div>
                   <div class="insight-card">
                     <h4>阅读效率</h4>
-                    <p>您的阅读速度为 {Math.round(stats.averageSpeed)} 字/分钟，{stats.averageSpeed > 300 ? '效率很高！' : '可以适当提升'}</p>
+                    <p>
+                      您的阅读速度为 {Math.round(stats.averageSpeed)} 字/分钟，{stats.averageSpeed >
+                      300
+                        ? '效率很高！'
+                        : '可以适当提升'}
+                    </p>
                   </div>
                   <div class="insight-card">
                     <h4>进度预测</h4>
-                    <p>按当前进度，预计还需 {Math.ceil((100 - stats.completionRate) / Math.max(1, stats.completionRate / stats.readingDays))} 天完成</p>
+                    <p>
+                      按当前进度，预计还需 {Math.ceil(
+                        (100 - stats.completionRate) /
+                          Math.max(1, stats.completionRate / stats.readingDays)
+                      )} 天完成
+                    </p>
                   </div>
                 </div>
               </div>
-
             {:else if activeTab === 'trends'}
               <!-- 趋势分析页面 -->
               <div class="trends-section">
                 <h3>📈 阅读趋势分析</h3>
-                
+
                 <!-- 每日趋势图表 -->
                 <div class="chart-container">
-                  <h4>每日阅读时长 ({periodOptions.find(p => p.value === selectedPeriod)?.label})</h4>
+                  <h4>
+                    每日阅读时长 ({periodOptions.find((p) => p.value === selectedPeriod)?.label})
+                  </h4>
                   <div class="daily-chart">
                     {#if chartData?.daily && chartData.daily.length > 0}
                       {#each chartData.daily as day}
                         <div class="chart-bar">
-                          <div 
-                            class="bar-fill" 
+                          <div
+                            class="bar-fill"
                             style="height: {Math.min(100, (day.duration / 120) * 100)}%"
                             title="{day.label}: {day.duration}分钟, {day.sessions}次会话"
                           ></div>
-                          <div class="bar-label">{day.label.split('/')[1] || day.label.split('-')[2]}</div>
+                          <div class="bar-label">
+                            {day.label.split('/')[1] || day.label.split('-')[2]}
+                          </div>
                         </div>
                       {/each}
                     {:else}
@@ -429,32 +463,41 @@
                 <div class="trend-summary">
                   <div class="summary-card">
                     <h4>平均每日</h4>
-                    <p>{Math.round((stats.totalTime || 0) / Math.max(1, stats.readingDays || 1) / 60000)} 分钟</p>
+                    <p>
+                      {Math.round(
+                        (stats.totalTime || 0) / Math.max(1, stats.readingDays || 1) / 60000
+                      )} 分钟
+                    </p>
                   </div>
                   <div class="summary-card">
                     <h4>最长单日</h4>
-                    <p>{Math.max(...(chartData?.daily?.map(d => d.duration) || [0]))} 分钟</p>
+                    <p>{Math.max(...(chartData?.daily?.map((d) => d.duration) || [0]))} 分钟</p>
                   </div>
                   <div class="summary-card">
                     <h4>活跃天数</h4>
-                    <p>{chartData?.daily?.filter(d => d.duration > 0).length || 0} 天</p>
+                    <p>{chartData?.daily?.filter((d) => d.duration > 0).length || 0} 天</p>
                   </div>
                 </div>
               </div>
-
             {:else if activeTab === 'patterns'}
               <!-- 阅读模式页面 -->
               <div class="patterns-section">
                 <h3>🕐 阅读模式分析</h3>
-                
+
                 <div class="pattern-info">
                   <div class="info-card">
                     <h4>平均会话时长</h4>
-                    <p class="info-value">{Math.round((stats.totalTime || 0) / Math.max(1, stats.readingDays || 1) / 60000)} 分钟</p>
+                    <p class="info-value">
+                      {Math.round(
+                        (stats.totalTime || 0) / Math.max(1, stats.readingDays || 1) / 60000
+                      )} 分钟
+                    </p>
                   </div>
                   <div class="info-card">
                     <h4>阅读习惯</h4>
-                    <p class="info-value">{stats.readingStreak > 7 ? '规律阅读者 ⭐' : '偶尔阅读者'}</p>
+                    <p class="info-value">
+                      {stats.readingStreak > 7 ? '规律阅读者 ⭐' : '偶尔阅读者'}
+                    </p>
                   </div>
                 </div>
 
@@ -468,12 +511,11 @@
                   </div>
                 {/if}
               </div>
-
             {:else if activeTab === 'achievements'}
               <!-- 成就统计页面 -->
               <div class="achievements-section">
                 <h3>🎯 阅读成就</h3>
-                
+
                 <div class="achievements-grid">
                   <div class="achievement-card {stats.readingStreak >= 7 ? 'unlocked' : 'locked'}">
                     <div class="achievement-icon">🔥</div>
@@ -481,21 +523,31 @@
                       <h4>连续阅读达人</h4>
                       <p>连续阅读7天</p>
                       <div class="progress-bar">
-                        <div class="progress-fill" style="width: {Math.min(100, (stats.readingStreak / 7) * 100)}%"></div>
+                        <div
+                          class="progress-fill"
+                          style="width: {Math.min(100, (stats.readingStreak / 7) * 100)}%"
+                        ></div>
                       </div>
                       <span class="progress-text">{stats.readingStreak}/7 天</span>
                     </div>
                   </div>
 
-                  <div class="achievement-card {stats.totalTime >= 3600000 ? 'unlocked' : 'locked'}">
+                  <div
+                    class="achievement-card {stats.totalTime >= 3600000 ? 'unlocked' : 'locked'}"
+                  >
                     <div class="achievement-icon">⏰</div>
                     <div class="achievement-content">
                       <h4>时间管理大师</h4>
                       <p>累计阅读1小时</p>
                       <div class="progress-bar">
-                        <div class="progress-fill" style="width: {Math.min(100, (stats.totalTime / 3600000) * 100)}%"></div>
+                        <div
+                          class="progress-fill"
+                          style="width: {Math.min(100, (stats.totalTime / 3600000) * 100)}%"
+                        ></div>
                       </div>
-                      <span class="progress-text">{Math.round(stats.totalTime / 60000)}/60 分钟</span>
+                      <span class="progress-text"
+                        >{Math.round(stats.totalTime / 60000)}/60 分钟</span
+                      >
                     </div>
                   </div>
 
@@ -505,19 +557,27 @@
                       <h4>速读高手</h4>
                       <p>阅读速度达到300字/分钟</p>
                       <div class="progress-bar">
-                        <div class="progress-fill" style="width: {Math.min(100, (stats.averageSpeed / 300) * 100)}%"></div>
+                        <div
+                          class="progress-fill"
+                          style="width: {Math.min(100, (stats.averageSpeed / 300) * 100)}%"
+                        ></div>
                       </div>
                       <span class="progress-text">{Math.round(stats.averageSpeed)}/300 字/分</span>
                     </div>
                   </div>
 
-                  <div class="achievement-card {stats.completionRate >= 50 ? 'unlocked' : 'locked'}">
+                  <div
+                    class="achievement-card {stats.completionRate >= 50 ? 'unlocked' : 'locked'}"
+                  >
                     <div class="achievement-icon">📖</div>
                     <div class="achievement-content">
                       <h4>阅读进度王</h4>
                       <p>完成50%阅读进度</p>
                       <div class="progress-bar">
-                        <div class="progress-fill" style="width: {Math.min(100, (stats.completionRate / 50) * 100)}%"></div>
+                        <div
+                          class="progress-fill"
+                          style="width: {Math.min(100, (stats.completionRate / 50) * 100)}%"
+                        ></div>
                       </div>
                       <span class="progress-text">{stats.completionRate.toFixed(1)}/50.0 %</span>
                     </div>
@@ -551,7 +611,6 @@
     justify-content: center;
     z-index: 1000;
     padding: var(--size-4-4);
-    backdrop-filter: blur(8px);
     animation: fadeIn 0.2s ease-out;
   }
 
@@ -565,15 +624,15 @@
   }
 
   .stats-modal {
-    background: linear-gradient(135deg, var(--background-primary) 0%, var(--background-secondary) 100%);
-    border-radius: var(--radius-xl);
+    background: var(--background-primary);
+    border-radius: var(--novel-radius-lg);
     max-width: 1200px;
     width: 100%;
     max-height: 90vh;
     display: flex;
     flex-direction: column;
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
-    border: 2px solid var(--interactive-accent);
+    box-shadow: var(--novel-shadow-lg);
+    border: 1px solid var(--background-modifier-border);
     overflow: hidden;
     animation: modalSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
   }
@@ -593,26 +652,25 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: var(--size-4-6) var(--size-4-8);
-    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-    background: linear-gradient(135deg, var(--interactive-accent-hover) 0%, var(--interactive-accent) 100%);
+    padding: var(--novel-spacing-lg) var(--novel-spacing-xl);
+    border-bottom: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   }
 
   .header-left h2 {
     margin: 0;
-    font-size: var(--font-ui-larger);
+    font-size: var(--novel-font-size-xl);
     display: flex;
     align-items: center;
     gap: var(--size-4-3);
-    color: var(--text-on-accent);
-    font-weight: 600;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    color: var(--text-normal);
+    font-weight: var(--novel-font-weight-semibold);
   }
 
   .novel-title {
     margin: var(--size-4-1) 0 0 0;
-    color: rgba(255, 255, 255, 0.8);
+    color: var(--text-muted);
     font-size: var(--font-ui-small);
     font-weight: 500;
   }
@@ -631,11 +689,11 @@
 
   .export-btn,
   .close-btn {
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: var(--background-modifier-hover);
+    border: 1px solid var(--background-modifier-border);
     cursor: pointer;
     padding: var(--size-4-2) var(--size-4-4);
-    color: var(--text-on-accent);
+    color: var(--text-normal);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -644,7 +702,6 @@
     transition: all 0.2s ease;
     font-size: var(--font-ui-small);
     font-weight: 500;
-    backdrop-filter: blur(8px);
   }
 
   .export-btn:hover {
@@ -692,8 +749,12 @@
   }
 
   @keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
   }
 
   .tabs-nav {
@@ -727,7 +788,7 @@
   }
 
   .tab-btn.active {
-    background: linear-gradient(135deg, var(--interactive-accent-hover) 0%, var(--interactive-accent) 100%);
+    background: var(--interactive-accent);
     color: var(--text-on-accent);
     box-shadow: 0 -2px 8px rgba(var(--interactive-accent-rgb), 0.3);
   }
@@ -739,7 +800,7 @@
     left: 0;
     right: 0;
     height: 3px;
-    background: linear-gradient(90deg, transparent, var(--text-on-accent), transparent);
+    background: var(--interactive-accent);
   }
 
   .tab-icon :global(svg) {
@@ -753,7 +814,7 @@
     gap: var(--size-4-3);
     margin-bottom: var(--size-4-4);
     padding: var(--size-4-4);
-    background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-primary) 100%);
+    background: var(--background-secondary);
     border-radius: var(--radius-l);
     border: 2px solid var(--background-modifier-border);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
@@ -794,7 +855,7 @@
   }
 
   .stat-card {
-    background: linear-gradient(135deg, var(--background-secondary) 0%, var(--background-primary) 100%);
+    background: var(--background-secondary);
     padding: var(--size-4-6);
     border-radius: var(--radius-l);
     display: flex;
@@ -814,7 +875,7 @@
     left: 0;
     right: 0;
     height: 4px;
-    background: linear-gradient(90deg, var(--interactive-accent-hover), var(--interactive-accent));
+    background: var(--interactive-accent);
     opacity: 0;
     transition: opacity 0.3s ease;
   }
@@ -830,7 +891,7 @@
   }
 
   .stat-card.primary {
-    background: linear-gradient(135deg, var(--interactive-accent-hover) 0%, var(--interactive-accent) 100%);
+    background: var(--interactive-accent);
     color: var(--text-on-accent);
     border-color: transparent;
     box-shadow: 0 4px 16px rgba(var(--interactive-accent-rgb), 0.3);
@@ -969,7 +1030,7 @@
 
   .bar-fill {
     width: 100%;
-    background: linear-gradient(to top, var(--interactive-accent), var(--interactive-accent-hover));
+    background: var(--interactive-accent);
     border-radius: var(--radius-s) var(--radius-s) 0 0;
     transition: all 0.3s;
     cursor: pointer;
@@ -1083,7 +1144,11 @@
 
   .achievement-card.unlocked {
     border-color: var(--text-success);
-    background: linear-gradient(135deg, var(--background-secondary), rgba(var(--text-success-rgb), 0.1));
+    background: linear-gradient(
+      135deg,
+      var(--background-secondary),
+      rgba(var(--text-success-rgb), 0.1)
+    );
   }
 
   .achievement-card.locked {

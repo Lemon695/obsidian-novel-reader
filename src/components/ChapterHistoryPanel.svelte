@@ -86,8 +86,8 @@
     right: -360px;
     width: 360px;
     height: 100vh;
-    background: linear-gradient(135deg, var(--background-primary) 0%, var(--background-secondary) 100%);
-    border-left: 3px solid var(--interactive-accent);
+    background: var(--background-primary);
+    border-left: 1px solid var(--background-modifier-border);
     display: flex;
     flex-direction: column;
     transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -100,9 +100,9 @@
   }
 
   .panel-header {
-    padding: 20px;
-    background: linear-gradient(135deg, var(--interactive-accent-hover) 0%, var(--interactive-accent) 100%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding: var(--novel-spacing-lg);
+    background: var(--background-secondary);
+    border-bottom: 1px solid var(--background-modifier-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -110,18 +110,17 @@
 
   .panel-header h3 {
     margin: 0;
-    font-size: 18px;
-    font-weight: 600;
-    color: var(--text-on-accent);
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+    font-size: var(--novel-font-size-lg);
+    font-weight: var(--novel-font-weight-semibold);
+    color: var(--text-normal);
   }
 
   .close-button {
-    background: rgba(255, 255, 255, 0.1);
-    border: none;
+    background: var(--background-modifier-hover);
+    border: 1px solid var(--background-modifier-border);
     font-size: 24px;
     cursor: pointer;
-    color: var(--text-on-accent);
+    color: var(--text-normal);
     width: 32px;
     height: 32px;
     border-radius: 50%;
@@ -132,7 +131,8 @@
   }
 
   .close-button:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--background-modifier-active);
+    border-color: var(--interactive-accent);
     transform: rotate(90deg);
   }
 
@@ -211,9 +211,9 @@
   }
 
   .jump-button {
-    padding: 6px 12px;
-    border-radius: 6px;
-    background: linear-gradient(135deg, var(--interactive-accent) 0%, var(--interactive-accent-hover) 100%);
+    padding: var(--novel-spacing-xs) var(--novel-spacing-sm);
+    border-radius: var(--novel-radius-sm);
+    background: var(--interactive-accent);
     color: var(--text-on-accent);
     border: none;
     cursor: pointer;
@@ -259,9 +259,9 @@
   }
 
   .clear-button {
-    padding: 10px 20px;
-    border-radius: 8px;
-    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    padding: var(--novel-spacing-sm) var(--novel-spacing-lg);
+    border-radius: var(--novel-radius-md);
+    background: var(--text-error);
     color: white;
     border: none;
     cursor: pointer;

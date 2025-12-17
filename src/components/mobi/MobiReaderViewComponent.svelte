@@ -1034,13 +1034,16 @@
     padding: 20px;
   }
 
-  /* 直接 HTML 渲染样式 */
+  /* 直接 HTML 渲染样式 - 应用统一设计系统 */
   :global(.mobi-html-content) {
     max-width: 800px;
     margin: 0 auto;
     font-size: 16px;
     line-height: 1.8;
     color: var(--text-normal);
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 
   :global(.mobi-html-content p) {
@@ -1052,6 +1055,7 @@
   :global(.mobi-html-content h3) {
     margin: 1.5em 0 0.5em;
     color: var(--text-normal);
+    font-weight: var(--novel-font-weight-semibold);
   }
 
   .placeholder {
@@ -1072,8 +1076,8 @@
   /* 工具栏样式 */
   .toolbar {
     position: fixed;
-    top: 13px;
-    right: 15px;
+    top: var(--novel-spacing-md);
+    right: var(--novel-spacing-md);
     z-index: 1000;
   }
 
