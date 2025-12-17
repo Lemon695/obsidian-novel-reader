@@ -1,6 +1,8 @@
 export interface Shelf {
 	id: string;
 	name: string;
+	icon?: string;      // SVG图标（可选）
+	color?: string;     // 书架颜色（可选）
 	sort: number;
 	isDefault?: boolean;
 	count?: number; // 书籍数量

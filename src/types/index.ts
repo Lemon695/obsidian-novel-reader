@@ -25,7 +25,8 @@ export interface Novel {
   currentChapter?: number;
   isHidden?: boolean;
   shelfId?: string; // 添加书架ID
-  categoryId?: string; // 添加分类ID
+  categoryIds?: string[]; // 支持多分类（改为数组）
+  categoryId?: string; // 保留用于向后兼容，但优先使用categoryIds
   tags?: string[];
   customMetadata?: Record<string, any>;
   customSettings?: {

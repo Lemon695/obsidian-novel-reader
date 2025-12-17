@@ -10,7 +10,7 @@
   import type NovelReaderPlugin from '../../main';
   import { slide } from 'svelte/transition';
   import TagManagerModal from '../TagManagerModal.svelte';
-  import { icons } from './icons';
+  import { icons, getShelfIcon } from './icons';
   import { debounce } from '../../utils/debounce';
   import { TIMING } from '../../constants/app-config';
   import AdvancedFilterModal from './AdvancedFilterModal.svelte';
@@ -61,7 +61,11 @@
   let currentFilters: FilterConfig = {
     shelfId: 'all',
     categoryId: '',
+    categoryIds: [],
+    categoryMode: 'OR',
     tagIds: [],
+    tagMode: 'AND',
+    excludeTagIds: [],
     progressStatus: 'all',
     addTimeRange: 'all',
   };
@@ -96,31 +100,105 @@
       // 书架过滤
       const matchesShelf = currentShelf === 'all' || novel.shelfId === currentShelf;
 
-      // 分类过滤
-      const matchesCategory = !currentCategoryId || novel.categoryId === currentCategoryId;
-
-      // 标签过滤
-      const matchesTags =
-        selectedTags.length === 0 || selectedTags.every((tagId) => novel.tags?.includes(tagId));
-
-      // 进度筛选
-      let matchesProgress = true;
-      if (currentFilters.progressStatus === 'new') {
-        matchesProgress = !novel.progress || novel.progress === 0;
-      } else if (currentFilters.progressStatus === 'reading') {
-        matchesProgress = (novel.progress || 0) > 0 && (novel.progress || 0) < 100;
-      } else if (currentFilters.progressStatus === 'finished') {
-        matchesProgress = (novel.progress || 0) === 100;
+      // 分类过滤（支持多分类）
+      let matchesCategory = true;
+      const novelCategories = novel.categoryIds || (novel.categoryId ? [novel.categoryId] : []);
+      if (currentFilters.categoryIds && currentFilters.categoryIds.length > 0) {
+        if (currentFilters.categoryMode === 'AND') {
+          // AND模式：必须包含所有选中的分类
+          matchesCategory = currentFilters.categoryIds.every((catId) =>
+            novelCategories.includes(catId)
+          );
+        } else {
+          // OR模式：包含任一选中的分类即可
+          matchesCategory = currentFilters.categoryIds.some((catId) =>
+            novelCategories.includes(catId)
+          );
+        }
+      } else if (currentCategoryId) {
+        // 向后兼容旧的单分类筛选
+        matchesCategory = novelCategories.includes(currentCategoryId);
       }
 
-      // 时间筛选
+      // 标签过滤（支持AND/OR和排除）
+      let matchesTags = true;
+      const novelTags = novel.tags || [];
+
+      // 排除筛选：如果图书包含任何排除的标签，则不匹配
+      if (currentFilters.excludeTagIds && currentFilters.excludeTagIds.length > 0) {
+        const hasExcludedTag = currentFilters.excludeTagIds.some((tagId) =>
+          novelTags.includes(tagId)
+        );
+        if (hasExcludedTag) {
+          matchesTags = false;
+        }
+      }
+
+      // 包含筛选
+      if (matchesTags && currentFilters.tagIds && currentFilters.tagIds.length > 0) {
+        if (currentFilters.tagMode === 'AND') {
+          // AND模式：必须包含所有选中的标签
+          matchesTags = currentFilters.tagIds.every((tagId) => novelTags.includes(tagId));
+        } else {
+          // OR模式：包含任一选中的标签即可
+          matchesTags = currentFilters.tagIds.some((tagId) => novelTags.includes(tagId));
+        }
+      } else if (matchesTags && selectedTags.length > 0) {
+        // 向后兼容旧的标签筛选
+        matchesTags = selectedTags.every((tagId) => novelTags.includes(tagId));
+      }
+
+      // 进度筛选（支持状态和范围）
+      let matchesProgress = true;
+      const progress = novel.progress || 0;
+
+      // 状态筛选
+      if (currentFilters.progressStatus === 'new') {
+        matchesProgress = progress === 0;
+      } else if (currentFilters.progressStatus === 'reading') {
+        matchesProgress = progress > 0 && progress < 100;
+      } else if (currentFilters.progressStatus === 'finished') {
+        matchesProgress = progress === 100;
+      }
+
+      // 进度范围筛选（如果设置了范围，则覆盖状态筛选）
+      if (currentFilters.progressRange) {
+        const { min, max } = currentFilters.progressRange;
+        matchesProgress = progress >= min && progress <= max;
+      }
+
+      // 时间筛选（支持更多预设和自定义范围）
       let matchesTime = true;
-      if (currentFilters.addTimeRange === 'week') {
+
+      // 使用新的预设（如果有）
+      const timePreset = currentFilters.addTimePreset || currentFilters.addTimeRange;
+      if (timePreset === 'today') {
+        const todayStart = new Date().setHours(0, 0, 0, 0);
+        matchesTime = novel.addTime >= todayStart;
+      } else if (timePreset === 'week') {
         const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
         matchesTime = novel.addTime >= weekAgo;
-      } else if (currentFilters.addTimeRange === 'month') {
+      } else if (timePreset === 'month') {
         const monthAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
         matchesTime = novel.addTime >= monthAgo;
+      } else if (timePreset === 'quarter') {
+        const quarterAgo = Date.now() - 90 * 24 * 60 * 60 * 1000;
+        matchesTime = novel.addTime >= quarterAgo;
+      } else if (timePreset === 'year') {
+        const yearAgo = Date.now() - 365 * 24 * 60 * 60 * 1000;
+        matchesTime = novel.addTime >= yearAgo;
+      }
+
+      // 自定义时间范围（优先级最高）
+      if (currentFilters.addTimeCustom) {
+        const { startDate, endDate } = currentFilters.addTimeCustom;
+        if (startDate && endDate) {
+          matchesTime = novel.addTime >= startDate && novel.addTime <= endDate;
+        } else if (startDate) {
+          matchesTime = novel.addTime >= startDate;
+        } else if (endDate) {
+          matchesTime = novel.addTime <= endDate;
+        }
       }
 
       return (
@@ -526,7 +604,11 @@
     currentFilters = {
       shelfId: 'all',
       categoryId: '',
+      categoryIds: [],
+      categoryMode: 'OR',
       tagIds: [],
+      tagMode: 'AND',
+      excludeTagIds: [],
       progressStatus: 'all',
       addTimeRange: 'all',
     };
@@ -864,8 +946,10 @@
                     <span
                       class="novel-status-tag"
                       style="background-color: {getShelfColor(novel.shelfId)}"
+                      title={getShelfName(novel.shelfId)}
                     >
-                      {getShelfName(novel.shelfId)}
+                      <span class="shelf-icon">{@html getShelfIcon(novel.shelfId)}</span>
+                      <span class="shelf-name">{getShelfName(novel.shelfId)}</span>
                     </span>
                   {/if}
 

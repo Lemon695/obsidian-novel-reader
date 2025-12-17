@@ -288,3 +288,20 @@ export const icons = {
 export function getIcon(name: keyof typeof icons): string {
 	return icons[name] || '';
 }
+
+/**
+ * 获取书架图标
+ * @param shelfId 书架ID
+ * @returns SVG HTML字符串
+ */
+export function getShelfIcon(shelfId: string): string {
+	const iconMap: Record<string, string> = {
+		'all': icons.shelfAll,
+		'reading': icons.shelfReading,
+		'toread': icons.shelfToRead,
+		'finished': icons.shelfFinished,
+		'archived': icons.shelfArchived,
+	};
+
+	return iconMap[shelfId] || icons.shelfCustom;
+}
