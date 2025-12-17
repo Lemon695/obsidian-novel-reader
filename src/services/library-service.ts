@@ -1,16 +1,16 @@
-import {App, TFile, Notice, FuzzySuggestModal, type FuzzyMatch} from 'obsidian';
-import type {Novel, ReadingProgress} from '../types';
+import { App, TFile, Notice, FuzzySuggestModal, type FuzzyMatch } from 'obsidian';
+import type { Novel, ReadingProgress } from '../types';
 import NovelReaderPlugin from '../main';
-import {v4 as uuidv4} from 'uuid';
-import {NovelNoteService} from './note/novel-note-service';
-import {PDFCoverManagerService} from './pdf/pdf-cover-manager-service';
-import {BookCoverManagerService} from './book-cover-service';
-import {EpubCoverManager} from './epub/epub-cover-manager-serivce';
-import {PathsService} from './utils/paths-service';
+import { v4 as uuidv4 } from 'uuid';
+import { NovelNoteService } from './note/novel-note-service';
+import { PDFCoverManagerService } from './pdf/pdf-cover-manager-service';
+import { BookCoverManagerService } from './book-cover-service';
+import { EpubCoverManager } from './epub/epub-cover-manager-serivce';
+import { PathsService } from './utils/paths-service';
 import * as pdfjs from 'pdfjs-dist';
-import {TIMING, FILE_CONFIG} from '../constants/app-config';
-import {getPDFWorkerPath} from '../constants/app-config';
-import {handleError, ErrorType, ErrorSeverity} from '../utils/error-handler';
+import { TIMING, FILE_CONFIG } from '../constants/app-config';
+import { getPDFWorkerPath } from '../constants/app-config';
+import { handleError, ErrorType, ErrorSeverity } from '../utils/error-handler';
 
 export class LibraryService {
 	private novels: Novel[] = [];
@@ -89,7 +89,7 @@ export class LibraryService {
 						console.log(`✓ 封面提取完成: ${novel.title}`);
 
 						// 触发UI刷新事件
-						(this.plugin.app.workspace as any).trigger('library-refresh', {novelId: novel.id});
+						(this.plugin.app.workspace as any).trigger('library-refresh', { novelId: novel.id });
 					}
 				}
 			} catch (error) {
@@ -107,7 +107,7 @@ export class LibraryService {
 			handleError(error, {
 				type: ErrorType.DATA_LOAD_ERROR,
 				severity: ErrorSeverity.CRITICAL,
-				context: {service: 'LibraryService', method: 'initialize'},
+				context: { service: 'LibraryService', method: 'initialize' },
 				userMessage: '图书库初始化失败',
 				recoverySuggestion: '请检查插件配置和文件权限',
 			});
@@ -165,7 +165,7 @@ export class LibraryService {
 			const novelsWithCachedCovers = this.novels.map((novel) => {
 				const cachedCover = this.coverCache.get(novel.id);
 				if (cachedCover) {
-					return {...novel, cover: cachedCover};
+					return { ...novel, cover: cachedCover };
 				}
 				return novel;
 			});
@@ -346,13 +346,13 @@ export class LibraryService {
 			// 添加调试日志
 
 			/**
-      console.log(logType, 'Before saving library, novels data:',
-        JSON.stringify(this.novels.map(n => ({
-          id: n.id,
-          title: n.title,
-          customSettings: n.customSettings
-        })), null, 2)
-      );*/
+	  console.log(logType, 'Before saving library, novels data:',
+		JSON.stringify(this.novels.map(n => ({
+		  id: n.id,
+		  title: n.title,
+		  customSettings: n.customSettings
+		})), null, 2)
+	  );*/
 
 			// 确保数据存在
 			if (!Array.isArray(this.novels)) {
@@ -472,7 +472,7 @@ export class LibraryService {
 				} catch (error) {
 					console.error('PDF metadata extraction failed:', error);
 					// PDF 元数据失败不阻止添加，使用默认值
-					pdfMetadata = {numPages: 0, outlines: null};
+					pdfMetadata = { numPages: 0, outlines: null };
 				}
 			}
 
@@ -831,7 +831,7 @@ export class LibraryService {
 	async getAvailableNovelFiles(): Promise<TFile[]> {
 		const existingNovels = await this.getAllNovels();
 		const readDirectories = this.plugin.settings.readDirectories || [];
-		const {blockConfig} = this.plugin.settings;
+		const { blockConfig } = this.plugin.settings;
 
 		return this.app.vault.getFiles().filter((file) => {
 			// 检查文件类型
@@ -969,6 +969,14 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	private setupInputHandlers() {
 		const originalInputEl = this.inputEl;
 
+		// 拦截 input 事件，如果正在输入拼音，阻止事件传播
+		// 使用 capture 阶段确保在 Obsidian 处理之前拦截
+		originalInputEl.addEventListener('input', (e) => {
+			if (this.isComposing) {
+				e.stopImmediatePropagation();
+			}
+		}, true);
+
 		originalInputEl.addEventListener('compositionstart', () => {
 			this.isComposing = true;
 		});
@@ -990,7 +998,7 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 			const modalEl = this.modalEl;
 			if (!modalEl) return;
 
-			const buttonContainer = modalEl.createDiv({cls: 'novel-select-footer'});
+			const buttonContainer = modalEl.createDiv({ cls: 'novel-select-footer' });
 			this.confirmButton = buttonContainer.createEl('button', {
 				text: '确定添加',
 				cls: 'novel-confirm-button',
@@ -1055,11 +1063,6 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	}
 
 	getItems(): TFile[] {
-		// 如果正在输入拼音，返回空数组避免搜索
-		if (this.isComposing) {
-			return [];
-		}
-
 		const readDirectories = this.plugin.settings.readDirectories || [];
 
 		// 实时获取当前已添加的图书列表（同步获取，避免异步问题）
@@ -1104,7 +1107,7 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 					return false;
 				}
 
-				const {blockConfig} = this.plugin.settings;
+				const { blockConfig } = this.plugin.settings;
 
 				// 检查具体路径屏蔽
 				if (blockConfig.specificPaths.includes(file.path)) {
@@ -1138,7 +1141,7 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 		},
 		el: HTMLElement
 	) {
-		const rowContainer = el.createDiv({cls: 'novel-file-row'});
+		const rowContainer = el.createDiv({ cls: 'novel-file-row' });
 
 		// 创建复选框
 		const checkbox = rowContainer.createEl('input', {
@@ -1155,8 +1158,8 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 		});
 
 		// 创建内容容器
-		const contentContainer = rowContainer.createDiv({cls: 'novel-file-content'});
-		const suggestionContent = contentContainer.createDiv({cls: 'suggestion-content'});
+		const contentContainer = rowContainer.createDiv({ cls: 'novel-file-content' });
+		const suggestionContent = contentContainer.createDiv({ cls: 'suggestion-content' });
 
 		// 创建标题容器
 		const titleEl = document.createElement('div');
@@ -1195,13 +1198,6 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 			// 强制刷新UI以更新复选框状态
 			// @ts-ignore
 			this.updateSuggestions();
-		}
-	}
-
-	onNoSuggestion(): void {
-		// 只在非输入法编辑状态且有输入内容时显示提示
-		if (!this.isComposing && this.inputEl.value) {
-			//new Notice('没有找到可添加的新图书');
 		}
 	}
 }
