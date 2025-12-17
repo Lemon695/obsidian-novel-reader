@@ -1159,7 +1159,7 @@
           <button class="tool-button" on:click={() => handleZoom('in')} title="放大">
             <span class="zoom-icon">{@html icons.zoomIn}</span>
           </button>
-          <span class="zoom-level">{Math.round(zoomLevel * 100)}%</span>
+          <span class="zoom-level">{Math.round(zoomLevel * 200)}%</span>
         </div>
 
         <!-- 设置菜单组件 -->

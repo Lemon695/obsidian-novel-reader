@@ -819,6 +819,10 @@ export class LibraryService {
 				(file: TFile | TFile[]) => {
 					console.log('File(s) selected in modal:', file);
 					resolve(file);
+				},
+				() => {
+					console.log('Modal closed without selection');
+					resolve(null);
 				}
 			);
 			modal.open();
@@ -943,12 +947,14 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	private isComposing = false;
 	private selectedFiles: Set<TFile> = new Set();
 	private confirmButton: HTMLElement | null = null;
+	private fileSelected = false; // 添加标志位
 
 	constructor(
 		app: App,
 		private existingNovels: Novel[],
 		private plugin: NovelReaderPlugin,
-		private onChoose: (file: TFile | TFile[]) => void
+		private onChoose: (file: TFile | TFile[]) => void,
+		private onCloseCallback?: () => void // 恢复回调参数
 	) {
 		super(app);
 		this.setPlaceholder('选择图书文件（点击选择框多选，点击行名直接添加）');
@@ -957,8 +963,10 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	}
 
 	// 重写open方法，每次打开时清空选择状态
+	// 重写open方法，每次打开时清空选择状态
 	open(): void {
 		this.selectedFiles.clear();
+		this.fileSelected = false; // 重置选中标志
 		super.open();
 		// 确保确定按钮状态正确
 		setTimeout(() => {
@@ -1007,6 +1015,7 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 
 			this.confirmButton.addEventListener('click', () => {
 				if (this.selectedFiles.size > 0) {
+					this.fileSelected = true; // 设置标志
 					this.onChoose(Array.from(this.selectedFiles));
 					this.close();
 				}
@@ -1190,6 +1199,7 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	onChooseItem(file: TFile): void {
 		// 如果当前没有任何选择，直接添加这一本书（保持原有行为）
 		if (this.selectedFiles.size === 0) {
+			this.fileSelected = true; // 设置标志
 			this.onChoose(file);
 			this.close();
 		} else {
@@ -1199,5 +1209,17 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 			// @ts-ignore
 			this.updateSuggestions();
 		}
+	}
+
+	// 重写onClose方法，在关闭时调用回调
+	onClose(): void {
+		super.onClose();
+		// 使用setTimeout确保onChooseItem有机会先设置fileSelected标志
+		setTimeout(() => {
+			// 只有在没有选择文件时才调用onCloseCallback
+			if (!this.fileSelected && this.onCloseCallback) {
+				this.onCloseCallback();
+			}
+		}, 0);
 	}
 }
