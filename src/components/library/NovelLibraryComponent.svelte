@@ -201,6 +201,13 @@
         }
       }
 
+      // 停滞图书筛选
+      let matchesStalled = true;
+      if (currentFilters.stalledBooks?.enabled) {
+        const stalledDays = currentFilters.stalledBooks.days || 30;
+        matchesStalled = isStalledBook(novel, stalledDays);
+      }
+
       return (
         matchesSearch &&
         matchesShelf &&
@@ -208,6 +215,7 @@
         matchesTags &&
         matchesProgress &&
         matchesTime &&
+        matchesStalled &&
         isInView
       );
     })
@@ -425,6 +433,23 @@
     const notStarted = !novel.lastRead;
 
     return isRecent && notStarted;
+  }
+
+  // 判断是否为停滞图书的函数
+  function isStalledBook(novel: Novel, days: number = 30): boolean {
+    // 必须已开始阅读
+    if (!novel.lastRead || !novel.progress || novel.progress === 0) {
+      return false;
+    }
+
+    // 必须未完成
+    if (novel.progress >= 100) {
+      return false;
+    }
+
+    // 检查停滞时间
+    const stalledMs = days * 24 * 60 * 60 * 1000;
+    return Date.now() - novel.lastRead > stalledMs;
   }
 
   // 处理笔记打开

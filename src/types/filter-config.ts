@@ -12,4 +12,5 @@ export interface FilterConfig {
     addTimeRange: 'all' | 'week' | 'month';
     addTimePreset?: 'all' | 'today' | 'week' | 'month' | 'quarter' | 'year'; // 新增：更多预设
     addTimeCustom?: { startDate?: number; endDate?: number }; // 新增：自定义时间范围
+    stalledBooks?: { enabled: boolean; days: number }; // 新增：停滞图书筛选
 }

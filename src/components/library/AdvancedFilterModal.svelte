@@ -3,6 +3,7 @@
   import { fade, scale } from 'svelte/transition';
   import type { Shelf, Category, Tag } from '../../types/shelf';
   import type { FilterConfig } from '../../types/filter-config';
+  import type { FilterPreset } from '../../types/filter-preset';
   import { icons } from './icons';
 
   const dispatch = createEventDispatcher();
@@ -13,9 +14,14 @@
   export let categories: Category[] = [];
   export let tags: Tag[] = [];
   export let currentFilters: FilterConfig;
+  export let presets: FilterPreset[] = []; // 筛选预设列表
+  export let onSavePreset: ((name: string, config: FilterConfig) => void) | null = null; // 保存预设回调
 
   // 本地筛选状态
   let localFilters: FilterConfig = { ...currentFilters };
+  let selectedPresetId: string = '';
+  let showSavePresetDialog = false;
+  let newPresetName = '';
 
   // 监听外部筛选变化
   $: if (show) {
@@ -63,6 +69,24 @@
     show = false;
   }
 
+  // 加载预设
+  function loadPreset(presetId: string) {
+    const preset = presets.find((p) => p.id === presetId);
+    if (preset) {
+      localFilters = { ...preset.config };
+      selectedPresetId = presetId;
+    }
+  }
+
+  // 保存预设
+  function handleSavePreset() {
+    if (newPresetName.trim() && onSavePreset) {
+      onSavePreset(newPresetName.trim(), localFilters);
+      newPresetName = '';
+      showSavePresetDialog = false;
+    }
+  }
+
   // 重置筛选
   function handleReset() {
     localFilters = {
@@ -76,6 +100,7 @@
       progressStatus: 'all',
       addTimeRange: 'all',
     };
+    selectedPresetId = '';
     dispatch('reset');
   }
 
@@ -385,6 +410,43 @@
             </button>
           </div>
         </div>
+
+        <!-- 停滞图书筛选 -->
+        <div class="filter-section">
+          <div class="filter-section-title">
+            <span class="icon">⏸️</span>
+            <span>停滞图书</span>
+          </div>
+          <div class="stalled-books-filter">
+            <label class="stalled-label">
+              <input
+                type="checkbox"
+                checked={localFilters.stalledBooks?.enabled || false}
+                on:change={(e) => {
+                  if (e.currentTarget.checked) {
+                    localFilters.stalledBooks = { enabled: true, days: 30 };
+                  } else {
+                    localFilters.stalledBooks = { enabled: false, days: 30 };
+                  }
+                }}
+              />
+              <span>仅显示停滞图书</span>
+            </label>
+            {#if localFilters.stalledBooks?.enabled}
+              <div class="stalled-days-input">
+                <span>停滞天数：</span>
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  bind:value={localFilters.stalledBooks.days}
+                  placeholder="30"
+                />
+                <span>天</span>
+              </div>
+            {/if}
+          </div>
+        </div>
       </div>
 
       <!-- 底部操作栏 -->
@@ -661,6 +723,46 @@
   }
 
   .range-inputs input:focus {
+    outline: none;
+    border-color: var(--interactive-accent);
+  }
+
+  /* 停滞图书筛选 */
+  .stalled-books-filter {
+    padding: 12px;
+    background: var(--background-secondary);
+    border-radius: 4px;
+  }
+
+  .stalled-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-normal);
+  }
+
+  .stalled-days-input {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    font-size: 13px;
+    color: var(--text-normal);
+  }
+
+  .stalled-days-input input {
+    width: 80px;
+    padding: 6px 8px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-primary);
+    border-radius: 4px;
+    font-size: 13px;
+    color: var(--text-normal);
+  }
+
+  .stalled-days-input input:focus {
     outline: none;
     border-color: var(--interactive-accent);
   }
