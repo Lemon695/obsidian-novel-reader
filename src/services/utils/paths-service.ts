@@ -2,7 +2,7 @@ import type NovelReaderPlugin from "../../main";
 import {type App, TFile} from "obsidian";
 import {
 	CATEGORY_FILE,
-	CUSTOM_SHELVES_FILE, FAVORITES_FILE,
+	CUSTOM_SHELVES_FILE, FAVORITES_FILE, FILTER_STATE,
 	HISTORY_FILE,
 	LIBRARY_FILE,
 	PROGRESS_FILE,
@@ -80,6 +80,11 @@ export class PathsService {
 	// 收藏数据
 	getFavoritesFilePath(): string {
 		return `${this.plugin.settings.libraryPath}/${FAVORITES_FILE}`;
+	}
+
+	// 获取筛选状态文件路径
+	getFilterStateFilePath(): string{
+		return `${this.plugin.settings.libraryPath}/${FILTER_STATE}`;
 	}
 
 	getChaptersCachePathByPath(path: string): string {

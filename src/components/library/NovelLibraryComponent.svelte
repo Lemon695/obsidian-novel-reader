@@ -16,6 +16,7 @@
   import AdvancedFilterModal from './AdvancedFilterModal.svelte';
   import type { FilterConfig } from '../../types/filter-config';
   import ViewDropdownMenu from './ViewDropdownMenu.svelte';
+  import { FilterStateService } from '../../services/filter-state-service';
 
   const dispatch = createEventDispatcher();
 
@@ -57,23 +58,52 @@
 
   // 添加状态变量
   let showShelfManager = false;
-  let showFilterModal = false; // 控制筛选模态弹窗的显示/隐藏
+  let showFilterModal = false; // 控制筛选模态弹窗的显示
+  // 筛选配置
   let currentFilters: FilterConfig = {
     shelfId: 'all',
     categoryId: '',
     categoryIds: [],
-    categoryMode: 'OR',
     tagIds: [],
-    tagMode: 'AND',
     excludeTagIds: [],
     progressStatus: 'all',
     addTimeRange: 'all',
   };
+
+  // 筛选状态服务
+  let filterStateService: FilterStateService;
+  let hasActiveFilters = false;
+
+  // 计算是否有激活的筛选条件
+  $: hasActiveFilters =
+    currentFilters.shelfId !== 'all' ||
+    currentFilters.categoryId !== '' ||
+    (currentFilters.categoryIds && currentFilters.categoryIds.length > 0) ||
+    currentFilters.tagIds.length > 0 ||
+    (currentFilters.excludeTagIds && currentFilters.excludeTagIds.length > 0) ||
+    currentFilters.progressStatus !== 'all' ||
+    currentFilters.progressRange !== undefined ||
+    (currentFilters.addTimePreset && currentFilters.addTimePreset !== 'all') ||
+    currentFilters.stalledBooks?.enabled === true;
   // 筛选后的图书列表
   let filteredNovels = novels;
   export let selectedShelfId: string | null = null;
 
   $: novelsList = novels || [];
+
+  // 初始化筛选状态服务并加载保存的筛选
+  onMount(async () => {
+    filterStateService = new FilterStateService(plugin.app, plugin);
+    const savedFilters = await filterStateService.loadFilterState();
+
+    if (savedFilters) {
+      currentFilters = savedFilters;
+      // 同步旧的筛选状态
+      currentShelf = savedFilters.shelfId || 'all';
+      currentCategoryId = savedFilters.categoryId || '';
+      selectedTags = savedFilters.tagIds || [];
+    }
+  });
 
   // 防抖搜索查询 - 使用配置的延迟时间
   $: {
@@ -613,15 +643,19 @@
 
   // 应用筛选
   function handleApplyFilters(event: CustomEvent) {
-    const { filters } = event.detail;
+    const filters = event.detail.filters; // Assuming event.detail contains 'filters' object
     currentFilters = filters;
+    showFilterModal = false;
+
+    // 保存筛选状态
+    if (filterStateService) {
+      filterStateService.saveFilterState(currentFilters);
+    }
 
     // 更新旧的筛选状态以保持兼容
     currentShelf = filters.shelfId;
     currentCategoryId = filters.categoryId;
     selectedTags = filters.tagIds;
-
-    showFilterModal = false;
   }
 
   // 重置筛选
@@ -630,13 +664,17 @@
       shelfId: 'all',
       categoryId: '',
       categoryIds: [],
-      categoryMode: 'OR',
       tagIds: [],
-      tagMode: 'AND',
       excludeTagIds: [],
       progressStatus: 'all',
       addTimeRange: 'all',
     };
+
+    // 清除保存的筛选状态
+    if (filterStateService) {
+      filterStateService.clearFilterState();
+    }
+
     currentShelf = 'all';
     currentCategoryId = '';
     selectedTags = [];
@@ -831,6 +869,14 @@
         <button type="button" on:click={() => onAddNovel()} class="novel-add-button">
           添加图书
         </button>
+        <button
+          class="toolbar-btn"
+          class:active={hasActiveFilters}
+          on:click={() => (showFilterModal = true)}
+          title="高级筛选"
+        >
+          {@html icons.filter}
+        </button>
         <!-- 添加刷新按钮 -->
         <button type="button" on:click={handleRefresh} class="novel-refresh-button">
           <span class="refresh-icon">{@html icons.refresh}</span>
@@ -877,53 +923,6 @@
   </div>
 
   <!-- 筛选标签显示 -->
-  {#if hasActiveFilters}
-    <div class="active-filters-container">
-      <div class="active-filters">
-        {#if currentFilters.shelfId !== 'all'}
-          <span class="filter-tag">
-            📚 {getShelfName(currentFilters.shelfId)}
-            <button class="remove-filter" on:click={() => clearFilter('shelf')}>×</button>
-          </span>
-        {/if}
-        {#if currentFilters.categoryId}
-          <span class="filter-tag">
-            📂 {categories.find((c) => c.id === currentFilters.categoryId)?.name}
-            <button class="remove-filter" on:click={() => clearFilter('category')}>×</button>
-          </span>
-        {/if}
-        {#each currentFilters.tagIds as tagId}
-          <span class="filter-tag" style="background-color: {getTagColor(tagId)}">
-            {getTagName(tagId)}
-            <button
-              class="remove-filter"
-              on:click={() => {
-                currentFilters.tagIds = currentFilters.tagIds.filter((id) => id !== tagId);
-                selectedTags = selectedTags.filter((id) => id !== tagId);
-              }}>×</button
-            >
-          </span>
-        {/each}
-        {#if currentFilters.progressStatus !== 'all'}
-          <span class="filter-tag">
-            📊 {currentFilters.progressStatus === 'new'
-              ? '未开始'
-              : currentFilters.progressStatus === 'reading'
-                ? '阅读中'
-                : '已完成'}
-            <button class="remove-filter" on:click={() => clearFilter('progress')}>×</button>
-          </span>
-        {/if}
-        {#if currentFilters.addTimeRange !== 'all'}
-          <span class="filter-tag">
-            📅 {currentFilters.addTimeRange === 'week' ? '最近7天' : '最近30天'}
-            <button class="remove-filter" on:click={() => clearFilter('time')}>×</button>
-          </span>
-        {/if}
-        <button class="clear-all-filters" on:click={handleResetFilters}> 清除全部筛选 </button>
-      </div>
-    </div>
-  {/if}
 
   <!-- 根据当前视图显示相应的标题 -->
   <div class="view-header">

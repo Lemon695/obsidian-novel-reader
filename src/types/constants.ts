@@ -7,6 +7,7 @@ export const HISTORY_FILE = 'chapter-history.json';
 export const SHELF_FILE = 'shelves.json';
 export const CATEGORY_FILE = 'categories.json';
 export const TAG_FILE = 'tags.json';
+export const FILTER_STATE = 'filter-state.json';
 
 
 // TXT章节目录视图

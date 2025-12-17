@@ -141,7 +141,7 @@
         <!-- 书架筛选 -->
         <div class="filter-section">
           <div class="filter-section-title">
-            <span class="icon">📚</span>
+            <span class="icon">{@html icons.filterShelf}</span>
             <span>书架筛选</span>
           </div>
           <div class="filter-options">
@@ -170,7 +170,7 @@
         <!-- 分类筛选（多选） -->
         <div class="filter-section">
           <div class="filter-section-title">
-            <span class="icon">📂</span>
+            <span class="icon">{@html icons.filterCategory}</span>
             <span>分类筛选</span>
             {#if localFilters.categoryIds && localFilters.categoryIds.length > 0}
               <span class="selected-count">已选 {localFilters.categoryIds.length}</span>
@@ -217,7 +217,7 @@
         <!-- 标签筛选（多选+排除） -->
         <div class="filter-section">
           <div class="filter-section-title">
-            <span class="icon">🏷️</span>
+            <span class="icon">{@html icons.filterTag}</span>
             <span>标签筛选</span>
             {#if localFilters.tagIds.length > 0}
               <span class="selected-count">包含 {localFilters.tagIds.length}</span>
@@ -255,7 +255,6 @@
                     class="filter-tag"
                     class:active={localFilters.tagIds.includes(tag.id)}
                     class:excluded={localFilters.excludeTagIds?.includes(tag.id)}
-                    style="background-color: {tag.color}"
                     on:click={() => toggleTag(tag.id)}
                   >
                     {tag.name}
@@ -279,7 +278,7 @@
         <!-- 阅读进度 -->
         <div class="filter-section">
           <div class="filter-section-title">
-            <span class="icon">📊</span>
+            <span class="icon">{@html icons.filterProgress}</span>
             <span>阅读进度</span>
           </div>
           <div class="filter-options">
@@ -355,7 +354,7 @@
         <!-- 添加时间 -->
         <div class="filter-section">
           <div class="filter-section-title">
-            <span class="icon">📅</span>
+            <span class="icon">{@html icons.filterTime}</span>
             <span>添加时间</span>
           </div>
           <div class="filter-options">
@@ -414,7 +413,7 @@
         <!-- 停滞图书筛选 -->
         <div class="filter-section">
           <div class="filter-section-title">
-            <span class="icon">⏸️</span>
+            <span class="icon">{@html icons.filterStalled}</span>
             <span>停滞图书</span>
           </div>
           <div class="stalled-books-filter">
@@ -637,26 +636,28 @@
 
   .filter-tag {
     padding: 6px 12px;
-    border: 2px solid transparent;
-    opacity: 0.6;
-    border-radius: 12px;
+    border: 1px solid var(--background-modifier-border);
+    background: var(--background-secondary);
+    border-radius: 4px;
     cursor: pointer;
     font-size: 12px;
-    color: white;
+    color: var(--text-normal);
     transition: all 0.2s;
   }
 
   .filter-tag:hover {
-    opacity: 0.8;
+    background: var(--background-modifier-hover);
+    border-color: var(--text-accent);
   }
 
   .filter-tag.active {
-    opacity: 1;
-    border-color: rgba(255, 255, 255, 0.5);
+    background: var(--interactive-accent);
+    color: var(--text-on-accent);
+    border-color: var(--interactive-accent);
   }
 
   .filter-tag.excluded {
-    opacity: 0.3;
+    opacity: 0.5;
     text-decoration: line-through;
   }
 
