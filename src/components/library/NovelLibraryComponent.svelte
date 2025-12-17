@@ -706,14 +706,6 @@
     currentFilters = currentFilters; // 触发响应式更新
   }
 
-  // 检查是否有激活的筛选
-  $: hasActiveFilters =
-    currentFilters.shelfId !== 'all' ||
-    currentFilters.categoryId !== '' ||
-    currentFilters.tagIds.length > 0 ||
-    currentFilters.progressStatus !== 'all' ||
-    currentFilters.addTimeRange !== 'all';
-
   // 处理视图切换
   async function handleViewChange(view: string) {
     currentView = view;
@@ -869,14 +861,6 @@
         <button type="button" on:click={() => onAddNovel()} class="novel-add-button">
           添加图书
         </button>
-        <button
-          class="toolbar-btn"
-          class:active={hasActiveFilters}
-          on:click={() => (showFilterModal = true)}
-          title="高级筛选"
-        >
-          {@html icons.filter}
-        </button>
         <!-- 添加刷新按钮 -->
         <button type="button" on:click={handleRefresh} class="novel-refresh-button">
           <span class="refresh-icon">{@html icons.refresh}</span>
@@ -887,6 +871,7 @@
           on:click={openFilterModal}
           class="novel-advanced-filter-button"
           class:active={hasActiveFilters}
+          class:has-filters={hasActiveFilters}
         >
           <span class="filter-icon">{@html icons.filter}</span>
           高级筛选

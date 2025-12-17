@@ -223,10 +223,25 @@
   border-color: var(--interactive-accent);
 }
 
-.novel-advanced-filter-button.active {
+.novel-advanced-filter-button.active,
+.novel-advanced-filter-button.has-filters {
   background-color: var(--interactive-accent);
   color: var(--text-on-accent);
   border-color: var(--interactive-accent);
+}
+
+.novel-advanced-filter-button.has-filters .filter-icon svg {
+  fill: var(--text-on-accent);
+}
+
+.filter-badge {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: var(--text-on-accent);
+  border-radius: 50%;
+  margin-left: 4px;
+  vertical-align: middle;
 }
 
 /* 图标样式 */
