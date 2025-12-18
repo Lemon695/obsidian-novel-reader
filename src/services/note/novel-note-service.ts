@@ -1,6 +1,6 @@
-import {App, TFile, parseYaml, stringifyYaml} from 'obsidian';
+import { App, TFile, parseYaml, stringifyYaml } from 'obsidian';
 import type NovelReaderPlugin from '../../main';
-import type {Novel} from '../../types';
+import type { Novel } from '../../types';
 
 export class NovelNoteService {
 
@@ -32,17 +32,22 @@ export class NovelNoteService {
 			await this.app.vault.createFolder(dirPath);
 		}
 
-		return `${dirPath}/${novel.title}.md`;
+		// 使用 "书名 (格式)" 命名以区分多格式版本
+		const formatStr = novel.format.toUpperCase();
+		return `${dirPath}/${novel.title} (${formatStr}).md`;
 	}
 
 	private async createNoteFile(novel: Novel, path: string): Promise<TFile> {
-		// 创建默认的YAML前置元数据
+		// 创建增强型 YAML 元数据
 		const frontmatter = {
 			novel_id: novel.id,
 			novel_title: novel.title,
-			novel_author: novel.author,
+			novel_author: novel.author || 'Unknown',
 			novel_path: novel.path,
-			novel_cover: '', // 默认空的封面路径
+			novel_cover: '',
+			status: '📖 正在阅读',
+			rating: '⭐⭐⭐⭐⭐',
+			tags: ['#novel-reader/reading'],
 			created: new Date().toISOString()
 		};
 
@@ -50,8 +55,20 @@ export class NovelNoteService {
 			stringifyYaml(frontmatter) +
 			'---\n\n' +
 			`# ${novel.title}\n\n` +
-			'## 读书笔记\n\n' +
-			'## 章节摘录\n\n';
+			`> [!abstract] 图书概览\n` +
+			`> - **作者**: ${novel.author || 'Unknown'}\n` +
+			`> - **格式**: ${novel.format.toUpperCase()}\n` +
+			`> - **来源**: ${novel.path}\n` +
+			`> - **状态**: #reading\n\n` +
+			'---\n\n' +
+			'## 📅 阅读记录\n' +
+			`- [x] ${new Date().toLocaleDateString()} 开始阅读\n\n` +
+			'## ✍️ 读书笔记\n' +
+			'> 记录你的思考和感悟...\n\n' +
+			'## 🔖 章节摘录\n' +
+			'> 复制书中的精彩段落到这里...\n\n' +
+			'---\n' +
+			'%% 此笔记由 Obsidian Novel Reader 自动生成。 %%\n';
 
 		return await this.app.vault.create(path, content);
 	}

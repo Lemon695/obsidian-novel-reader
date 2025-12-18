@@ -1192,8 +1192,8 @@
                           on:click|stopPropagation={(e) =>
                             handleOpenNoteWithCheck(activeMenuNovel, e)}
                         >
-                          <span class="menu-icon">{@html icons.info}</span>
-                          <span>图书信息</span>
+                          <span class="menu-icon">{@html icons.note}</span>
+                          <span>关联图书信息MD文档</span>
                         </button>
 
                         <button

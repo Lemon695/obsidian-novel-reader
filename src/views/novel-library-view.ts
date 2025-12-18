@@ -346,9 +346,9 @@ export class NovelLibraryView extends ItemView {
                 // 创建并显示确认对话框
                 const confirmDialog = new ConfirmationDialog(
                   this.app,
-                  '创建笔记',
-                  `是否为《${novel.title}》创建笔记？`,
-                  '创建',
+                  '关联图书笔记',
+                  `还没为《${novel.title}》关联笔记，是否立即创建并关联？`,
+                  '关联',
                   '取消'
                 );
 

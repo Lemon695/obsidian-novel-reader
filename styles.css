@@ -958,6 +958,7 @@
 .novel-menu-item {
   display: flex;
   align-items: center;
+  justify-content: flex-start;
   gap: var(--novel-spacing-sm);
   padding: 6px 12px;
   width: 100%;
