@@ -812,17 +812,36 @@ export class LibraryService {
 		const existingNovels = await this.getAllNovels();
 
 		return new Promise<TFile | TFile[] | null>((resolve) => {
+			let isResolved = false;
+			const safeResolve = (val: TFile | TFile[] | null, source: string) => {
+				if (isResolved) {
+					console.log(`Promise already resolved. Ignoring ${source}`);
+					return;
+				}
+				console.log(`Resolving promise with ${source}:`, val);
+				isResolved = true;
+				resolve(val);
+			};
+
 			const modal = new NovelFileSuggestModal(
 				this.app,
 				existingNovels,
 				this.plugin,
 				(file: TFile | TFile[]) => {
 					console.log('File(s) selected in modal:', file);
-					resolve(file);
+					safeResolve(file, 'SELECTION');
 				},
 				() => {
-					console.log('Modal closed without selection');
-					resolve(null);
+					console.log('Modal closed, checking if selected...');
+					// 在服务层处理竞态条件：延迟 300ms 判断是否取消
+					setTimeout(() => {
+						if (!isResolved) {
+							console.log('No selection made, resolving null (Cancel)');
+							safeResolve(null, 'CANCEL');
+						} else {
+							console.log('Selection arrived during wait, ignoring cancel');
+						}
+					}, 300);
 				}
 			);
 			modal.open();
@@ -963,8 +982,8 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	}
 
 	// 重写open方法，每次打开时清空选择状态
-	// 重写open方法，每次打开时清空选择状态
 	open(): void {
+		console.log('NovelFileSuggestModal.open called');
 		this.selectedFiles.clear();
 		this.fileSelected = false; // 重置选中标志
 		super.open();
@@ -1197,10 +1216,14 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	}
 
 	onChooseItem(file: TFile): void {
-		// 如果当前没有任何选择，直接添加这一本书（保持原有行为）
+		// 如果当前没有任何选择，直接添加这一本书（复用批量添加逻辑）
 		if (this.selectedFiles.size === 0) {
 			this.fileSelected = true; // 设置标志
-			this.onChoose(file);
+
+			// 关键修改：将单选文件也封装为数组，触发批量添加流程
+			this.selectedFiles.add(file);
+			this.onChoose(Array.from(this.selectedFiles));
+
 			this.close();
 		} else {
 			// 如果已有选择，切换该文件的选择状态
@@ -1214,12 +1237,9 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 	// 重写onClose方法，在关闭时调用回调
 	onClose(): void {
 		super.onClose();
-		// 使用setTimeout确保onChooseItem有机会先设置fileSelected标志
-		setTimeout(() => {
-			// 只有在没有选择文件时才调用onCloseCallback
-			if (!this.fileSelected && this.onCloseCallback) {
-				this.onCloseCallback();
-			}
-		}, 0);
+		// 直接调用回调，让外层（pickNovelFile）去处理延时
+		if (this.onCloseCallback) {
+			this.onCloseCallback();
+		}
 	}
 }

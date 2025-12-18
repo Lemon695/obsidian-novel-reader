@@ -152,18 +152,22 @@ export class NovelLibraryView extends ItemView {
           onAddNovel: async () => {
             console.log('onAddNovel called');
             try {
-              // 防止重复触发
+              // 防止重复点击（简单的防抖，不锁定整个模态框周期）
               if (this.isAddingNovel) {
                 console.log('Already adding novels, skipping...');
-                new Notice('正在添加图书，请稍候...');
+                new Notice('正在处理添加任务，请稍候...');
                 return;
               }
-              this.isAddingNovel = true;
 
+              // 1. 先选文件（此时不锁定 isAddingNovel，避免因取消或竞态条件导致死锁）
               const result = await this.libraryService.pickNovelFile();
               if (!result) {
+                // 用户取消或未选择
                 return;
               }
+
+              // 2. 选定文件后，锁定状态，开始处理添加逻辑
+              this.isAddingNovel = true;
 
               // 判断是单个文件还是多个文件
               if (Array.isArray(result)) {
@@ -215,7 +219,7 @@ export class NovelLibraryView extends ItemView {
               const errorMsg = error instanceof Error ? error.message : '未知错误';
               new Notice(`添加失败: ${errorMsg}`);
             } finally {
-              // 确保标志位被重置，即使发生错误
+              // 确保标志位被重置
               this.isAddingNovel = false;
             }
           },
