@@ -1289,7 +1289,7 @@
     });
   }
 
-  async function jumpToChapter(chapterId: number) {
+  export async function jumpToChapter(chapterId: number) {
     const chapter = chapters.find((ch) => ch.id === chapterId);
     if (chapter) {
       // 更新当前章节

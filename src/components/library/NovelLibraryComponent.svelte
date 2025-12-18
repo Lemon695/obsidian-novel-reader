@@ -6,7 +6,7 @@
   import ShelfManagerModal from '../ShelfManagerModal.svelte';
   import NovelStatsModal from '../NovelStatsModal.svelte';
   import { cubicInOut, cubicOut } from 'svelte/easing';
-  import { Notice } from 'obsidian';
+  import { Notice, TFile } from 'obsidian';
   import type NovelReaderPlugin from '../../main';
   import { slide } from 'svelte/transition';
   import TagManagerModal from '../TagManagerModal.svelte';
@@ -60,6 +60,7 @@
   // 添加状态变量
   let showShelfManager = false;
   let showFilterModal = false; // 控制筛选模态弹窗的显示
+
   // 筛选配置
   let currentFilters: FilterConfig = {
     shelfId: 'all',
@@ -894,7 +895,28 @@
     event.stopPropagation();
     closeMenu();
 
-    await onOpenNovelChapter(novel);
+    // TXT格式继续使用ChapterGridView
+    if (novel.format === 'txt') {
+      await onOpenNovelChapter(novel);
+      return;
+    }
+
+    // EPUB/PDF/MOBI使用BookTOCView
+    try {
+      const leaf = plugin.app.workspace.getLeaf('tab');
+      await leaf.setViewState({
+        type: 'novel-reader.book-toc-view',
+        active: true,
+      });
+
+      const view = leaf.view as any;
+      if (view && typeof view.setNovel === 'function') {
+        await view.setNovel(novel);
+      }
+    } catch (error) {
+      console.error('Failed to open TOC view:', error);
+      new Notice(`打开目录失败: ${(error as Error).message}`);
+    }
   }
 </script>
 

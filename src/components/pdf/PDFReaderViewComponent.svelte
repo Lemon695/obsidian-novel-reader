@@ -469,7 +469,7 @@
     }
   }
 
-  async function jumpToPageAndLocate(
+  export async function jumpToPageAndLocate(
     pageNum: number,
     location: Note['pdfLocation'] | null | undefined
   ) {

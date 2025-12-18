@@ -12,6 +12,8 @@ export const FILTER_STATE = 'filter-state.json';
 
 // TXT章节目录视图
 export const VIEW_TYPE_TXT_CHAPTER_GRID = `${PLUGIN_ID}.txt-chapter-grid-view`;
+// EPUB/PDF/MOBI图书目录视图
+export const VIEW_TYPE_BOOK_TOC = `${PLUGIN_ID}.book-toc-view`;
 // TXT阅读视图
 export const VIEW_TYPE_TXT_READER = `${PLUGIN_ID}.txt-novel-reader`;
 export const VIEW_TYPE_EPUB_READER = `${PLUGIN_ID}.epub-novel-reader`;

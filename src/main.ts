@@ -29,6 +29,7 @@ import {
   VIEW_TYPE_GLOBAL_NOTES,
   VIEW_TYPE_GLOBAL_STATS,
   VIEW_TYPE_TXT_CHAPTER_GRID,
+  VIEW_TYPE_BOOK_TOC,
   VIEW_TYPE_COLLECTION,
   VIEW_TYPE_COMPLETED,
   VIEW_TYPE_STATS,
@@ -42,9 +43,8 @@ import { EpubCoverManager } from './services/epub/epub-cover-manager-serivce';
 import { PDFCoverManagerService } from './services/pdf/pdf-cover-manager-service';
 import { BookmarkService } from './services/bookmark-service';
 import { MobiCoverManagerService } from './services/mobi/mobi-cover-manager-service';
-
-
 import { MobiNovelReaderView } from './views/mobi/mobi-novel-reader-view';
+import { BookTOCView } from './views/book-toc-view';
 
 type NovelReaderView = TxtNovelReaderView | EpubNovelReaderView | PDFNovelReaderView | MobiNovelReaderView;
 
@@ -168,6 +168,7 @@ export default class NovelReaderPlugin extends Plugin {
       [VIEW_TYPE_PDF_READER]: (leaf) => new PDFNovelReaderView(leaf, this),
       [VIEW_TYPE_EPUB_READER]: (leaf) => new EpubNovelReaderView(leaf, this),
       [VIEW_TYPE_MOBI_READER]: (leaf) => new MobiNovelReaderView(leaf, this),
+      [VIEW_TYPE_BOOK_TOC]: (leaf) => new BookTOCView(leaf, this),
     };
 
     Object.entries(viewFactories).forEach(([type, factory]) => {

@@ -723,7 +723,7 @@
     saveProgress();
   }
 
-  async function goToSection(index: number) {
+  export async function goToSection(index: number) {
     if (index < 0 || index >= totalSections) return;
 
     try {
