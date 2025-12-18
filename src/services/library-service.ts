@@ -1026,11 +1026,38 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 			if (!modalEl) return;
 
 			const buttonContainer = modalEl.createDiv({ cls: 'novel-select-footer' });
+
+			// 全选按钮
+			const selectAllBtn = buttonContainer.createEl('button', {
+				text: '全选',
+				cls: 'novel-select-all-button',
+			});
+
+			// 确定按钮
 			this.confirmButton = buttonContainer.createEl('button', {
 				text: '确定添加',
 				cls: 'novel-confirm-button',
 			});
 			this.confirmButton.style.display = 'none';
+
+			// 全选按钮点击事件
+			selectAllBtn.addEventListener('click', () => {
+				const allItems = this.getItems();
+				const isAllSelected = allItems.every(f => this.selectedFiles.has(f));
+
+				if (isAllSelected) {
+					// 取消全选
+					this.selectedFiles.clear();
+					selectAllBtn.textContent = '全选';
+				} else {
+					// 全选
+					allItems.forEach(f => this.selectedFiles.add(f));
+					selectAllBtn.textContent = '取消全选';
+				}
+				this.updateConfirmButton();
+				// @ts-ignore
+				this.updateSuggestions();
+			});
 
 			this.confirmButton.addEventListener('click', () => {
 				if (this.selectedFiles.size > 0) {
@@ -1048,6 +1075,7 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 					border-top: 1px solid var(--background-modifier-border);
 					display: flex;
 					justify-content: flex-end;
+					gap: 12px;
 				}
 				.novel-confirm-button {
 					padding: 8px 16px;
@@ -1060,6 +1088,18 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 				}
 				.novel-confirm-button:hover {
 					background: var(--interactive-accent-hover);
+				}
+				.novel-select-all-button {
+					padding: 8px 16px;
+					background: var(--interactive-normal);
+					color: var(--text-normal);
+					border: 1px solid var(--background-modifier-border);
+					border-radius: 4px;
+					cursor: pointer;
+					font-weight: 500;
+				}
+				.novel-select-all-button:hover {
+					background: var(--interactive-hover);
 				}
 				.novel-file-checkbox {
 					margin-right: 8px;
@@ -1086,6 +1126,14 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 				this.confirmButton.textContent = `确定添加 (${this.selectedFiles.size})`;
 			} else {
 				this.confirmButton.style.display = 'none';
+			}
+
+			// 更新全选按钮状态（如果有必要，可选）
+			const selectAllBtn = this.modalEl?.querySelector('.novel-select-all-button');
+			if (selectAllBtn) {
+				const allItems = this.getItems();
+				const isAllSelected = allItems.length > 0 && allItems.every(f => this.selectedFiles.has(f));
+				selectAllBtn.textContent = isAllSelected ? '取消全选' : '全选';
 			}
 		}
 	}
@@ -1181,7 +1229,7 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 		// 复选框点击处理（阻止事件冒泡）
 		checkbox.addEventListener('click', (e) => {
 			e.stopPropagation();
-			this.toggleFileSelection(fileItem.item);
+			this.toggleFileSelection(fileItem.item, e.shiftKey);
 			checkbox.checked = this.selectedFiles.has(fileItem.item);
 		});
 
@@ -1206,13 +1254,53 @@ class NovelFileSuggestModal extends FuzzySuggestModal<TFile> {
 		el.setAttribute('title', fileItem.item.path);
 	}
 
-	private toggleFileSelection(file: TFile) {
-		if (this.selectedFiles.has(file)) {
-			this.selectedFiles.delete(file);
+	private lastCheckedFile: TFile | null = null;
+
+	private toggleFileSelection(file: TFile, shiftKey: boolean = false) {
+		if (shiftKey && this.lastCheckedFile) {
+			const allItems = this.getItems();
+			const lastIndex = allItems.indexOf(this.lastCheckedFile);
+			const currentIndex = allItems.indexOf(file);
+
+			if (lastIndex !== -1 && currentIndex !== -1) {
+				const start = Math.min(lastIndex, currentIndex);
+				const end = Math.max(lastIndex, currentIndex);
+
+				// 确定是选中还是取消选中？通常Shift连选是"选中"
+				// 或者跟随"当前点击项"的状态？
+				// 为了简单直观，Shift+Click 总是执行"选中"区域的操作
+				for (let i = start; i <= end; i++) {
+					this.selectedFiles.add(allItems[i]);
+				}
+			}
 		} else {
-			this.selectedFiles.add(file);
+			if (this.selectedFiles.has(file)) {
+				this.selectedFiles.delete(file);
+			} else {
+				this.selectedFiles.add(file);
+			}
 		}
+
+		this.lastCheckedFile = file;
 		this.updateConfirmButton();
+
+		// 如果是连选，需要强制刷新整个列表以更新勾选状态
+		if (shiftKey) {
+			// 保存当前滚动位置
+			// @ts-ignore
+			const container = this.resultContainerEl;
+			const scrollTop = container ? container.scrollTop : 0;
+
+			// @ts-ignore
+			this.updateSuggestions();
+
+			// 恢复滚动位置（使用 setTimeout 确保在渲染后执行）
+			if (container) {
+				setTimeout(() => {
+					container.scrollTop = scrollTop;
+				}, 0);
+			}
+		}
 	}
 
 	onChooseItem(file: TFile): void {
