@@ -21,6 +21,7 @@
   let letterSpacing = 0;
   let wordSpacing = 0;
   let textAlign: 'left' | 'center' | 'right' | 'justify' = 'left';
+  let theme = 'light';
 
   // 渲染器能力
   let capabilities: RendererCapabilities | null = null;
@@ -36,6 +37,7 @@
     letterSpacing: 0,
     wordSpacing: 0,
     textAlign: 'left' as const,
+    theme: 'light',
   };
 
   fontSize = DEFAULT_STYLES.fontSize;
@@ -54,7 +56,6 @@
 
   onMount(() => {
     loadStyles();
-    loadCapabilities();
   });
 
   // 加载当前样式
@@ -70,14 +71,13 @@
       letterSpacing = savedStyles.letterSpacing ?? DEFAULT_STYLES.letterSpacing;
       wordSpacing = savedStyles.wordSpacing ?? DEFAULT_STYLES.wordSpacing;
       textAlign = savedStyles.textAlign ?? DEFAULT_STYLES.textAlign;
+      theme = savedStyles.theme ?? DEFAULT_STYLES.theme;
     }
   }
 
-  // 加载渲染器能力
-  function loadCapabilities() {
-    if (styleManager) {
-      capabilities = styleManager.getCapabilities();
-    }
+  // 响应式加载渲染器能力
+  $: if (styleManager) {
+    capabilities = styleManager.getCapabilities();
   }
 
   // 保存样式
@@ -96,17 +96,77 @@
       letterSpacing,
       wordSpacing,
       textAlign,
+      theme,
     };
 
     await plugin.saveSettings();
   }
 
   // 应用样式
-  async function applyStyles() {
-    await saveStyles();
-    if (styleManager) {
-      styleManager.applyAllSettings();
+  async function applyStyles(feature: string, value: any) {
+    if (!styleManager) return;
+
+    // 根据功能调用 styleManager 的对应方法
+    switch (feature) {
+      case 'fontSize':
+        await styleManager.setFontSize(value);
+        break;
+      case 'fontFamily':
+        await styleManager.setFontFamily(value);
+        break;
+      case 'textColor':
+        await styleManager.setTextColor(value);
+        break;
+      case 'backgroundColor':
+        await styleManager.setBackgroundColor(value);
+        break;
+      case 'lineHeight':
+        await styleManager.setLineHeight(value);
+        break;
+      case 'fontWeight':
+        await styleManager.setFontWeight(value);
+        break;
+      case 'letterSpacing':
+        await styleManager.setLetterSpacing(value);
+        break;
+      case 'wordSpacing':
+        await styleManager.setWordSpacing(value);
+        break;
+      case 'textAlign':
+        await styleManager.setTextAlign(value);
+        break;
+      case 'theme':
+        await styleManager.setTheme(value);
+        break;
     }
+
+    dispatch('styleChange');
+  }
+
+  // 批量应用所有样式 (用于重置或初始化)
+  async function applyAllStyles() {
+    if (!styleManager) return;
+
+    // 手动同步 local state 到 plugin settings (因为 resetToDefaults 会修改 local state)
+    if (!plugin.settings.readerStyles) plugin.settings.readerStyles = {};
+    plugin.settings.readerStyles[novel.id] = {
+      fontSize,
+      fontFamily,
+      textColor,
+      backgroundColor,
+      lineHeight,
+      fontWeight,
+      letterSpacing,
+      wordSpacing,
+      textAlign,
+      theme,
+    };
+    await plugin.saveSettings();
+
+    // 让 styleManager 重新加载并应用
+    // @ts-ignore - styleManager 内部 settings 是私有的，但我们可以通过重新 load 加载
+    styleManager.settings = (styleManager as any).loadSettings();
+    styleManager.applyAllSettings();
     dispatch('styleChange');
   }
 
@@ -121,8 +181,9 @@
     letterSpacing = DEFAULT_STYLES.letterSpacing;
     wordSpacing = DEFAULT_STYLES.wordSpacing;
     textAlign = DEFAULT_STYLES.textAlign;
+    theme = DEFAULT_STYLES.theme;
 
-    await applyStyles();
+    await applyAllStyles();
   }
 
   // 检查功能是否支持
@@ -155,21 +216,35 @@
           <span class="label-value">{fontSize}px</span>
         </label>
         <div class="control-group">
+          <button
+            class="step-button"
+            on:click={() => {
+              fontSize = Math.max(12, fontSize - 1);
+              applyStyles('fontSize', fontSize);
+            }}>-</button
+          >
           <input
             type="range"
             min="12"
-            max="32"
+            max="64"
             step="1"
             bind:value={fontSize}
-            on:change={applyStyles}
+            on:change={() => applyStyles('fontSize', fontSize)}
             class="slider"
           />
+          <button
+            class="step-button"
+            on:click={() => {
+              fontSize = Math.min(64, fontSize + 1);
+              applyStyles('fontSize', fontSize);
+            }}>+</button
+          >
           <input
             type="number"
             min="12"
-            max="32"
+            max="64"
             bind:value={fontSize}
-            on:change={applyStyles}
+            on:change={() => applyStyles('fontSize', fontSize)}
             class="number-input"
           />
         </div>
@@ -182,7 +257,11 @@
         <label class="setting-label">
           <span class="label-text">字体</span>
         </label>
-        <select bind:value={fontFamily} on:change={applyStyles} class="select-input">
+        <select
+          bind:value={fontFamily}
+          on:change={() => applyStyles('fontFamily', fontFamily)}
+          class="select-input"
+        >
           {#each FONT_FAMILIES as font}
             <option value={font.value}>{font.label}</option>
           {/each}
@@ -208,11 +287,16 @@
           <span class="label-value">{textColor}</span>
         </label>
         <div class="color-control">
-          <input type="color" bind:value={textColor} on:change={applyStyles} class="color-input" />
+          <input
+            type="color"
+            bind:value={textColor}
+            on:change={() => applyStyles('textColor', textColor)}
+            class="color-input"
+          />
           <input
             type="text"
             bind:value={textColor}
-            on:change={applyStyles}
+            on:change={() => applyStyles('textColor', textColor)}
             class="text-input"
             placeholder="#333333"
           />
@@ -242,19 +326,72 @@
           <input
             type="color"
             bind:value={backgroundColor}
-            on:change={applyStyles}
+            on:change={() => applyStyles('backgroundColor', backgroundColor)}
             class="color-input"
           />
           <input
             type="text"
             bind:value={backgroundColor}
-            on:change={applyStyles}
+            on:change={() => applyStyles('backgroundColor', backgroundColor)}
             class="text-input"
             placeholder="#FFFFFF"
           />
         </div>
       </div>
     {/if}
+
+    <div class="setting-item theme-selection">
+      <div class="setting-header-with-desc">
+        <label class="setting-label-text">阅读主题</label>
+        <span class="setting-desc">选择适合当前环境的视觉主题</span>
+      </div>
+      <div class="theme-options">
+        <button
+          class="theme-card {theme === 'light' ? 'active' : ''}"
+          on:click={() => {
+            theme = 'light';
+            applyStyles('theme', theme);
+          }}
+          title="浅色"
+        >
+          <div class="theme-preview theme-light"></div>
+          <span>浅色</span>
+        </button>
+        <button
+          class="theme-card {theme === 'sepia' ? 'active' : ''}"
+          on:click={() => {
+            theme = 'sepia';
+            applyStyles('theme', theme);
+          }}
+          title="护眼"
+        >
+          <div class="theme-preview theme-sepia"></div>
+          <span>护眼</span>
+        </button>
+        <button
+          class="theme-card {theme === 'dark' ? 'active' : ''}"
+          on:click={() => {
+            theme = 'dark';
+            applyStyles('theme', theme);
+          }}
+          title="深夜"
+        >
+          <div class="theme-preview theme-dark"></div>
+          <span>深夜</span>
+        </button>
+        <button
+          class="theme-card {theme === 'green' ? 'active' : ''}"
+          on:click={() => {
+            theme = 'green';
+            applyStyles('theme', theme);
+          }}
+          title="清新"
+        >
+          <div class="theme-preview theme-green"></div>
+          <span>清新</span>
+        </button>
+      </div>
+    </div>
 
     <!-- 行高 -->
     {#if isSupported('supportsLineHeight')}
@@ -269,7 +406,7 @@
           max="3.0"
           step="0.1"
           bind:value={lineHeight}
-          on:change={applyStyles}
+          on:change={() => applyStyles('lineHeight', lineHeight)}
           class="slider"
         />
       </div>
@@ -288,7 +425,7 @@
           max="900"
           step="100"
           bind:value={fontWeight}
-          on:change={applyStyles}
+          on:change={() => applyStyles('fontWeight', fontWeight)}
           class="slider"
         />
       </div>
@@ -307,7 +444,7 @@
           max="10"
           step="0.5"
           bind:value={letterSpacing}
-          on:change={applyStyles}
+          on:change={() => applyStyles('letterSpacing', letterSpacing)}
           class="slider"
         />
       </div>
@@ -326,7 +463,7 @@
           max="20"
           step="1"
           bind:value={wordSpacing}
-          on:change={applyStyles}
+          on:change={() => applyStyles('wordSpacing', wordSpacing)}
           class="slider"
         />
       </div>
@@ -344,7 +481,7 @@
             class:active={textAlign === 'left'}
             on:click={() => {
               textAlign = 'left';
-              applyStyles();
+              applyStyles('textAlign', textAlign);
             }}
           >
             左对齐
@@ -354,7 +491,7 @@
             class:active={textAlign === 'center'}
             on:click={() => {
               textAlign = 'center';
-              applyStyles();
+              applyStyles('textAlign', textAlign);
             }}
           >
             居中
@@ -364,7 +501,7 @@
             class:active={textAlign === 'right'}
             on:click={() => {
               textAlign = 'right';
-              applyStyles();
+              applyStyles('textAlign', textAlign);
             }}
           >
             右对齐
@@ -374,7 +511,7 @@
             class:active={textAlign === 'justify'}
             on:click={() => {
               textAlign = 'justify';
-              applyStyles();
+              applyStyles('textAlign', textAlign);
             }}
           >
             两端对齐
@@ -433,6 +570,25 @@
     margin-bottom: 12px;
     font-weight: 500;
     color: var(--text-normal);
+  }
+
+  .setting-header-with-desc {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 16px;
+  }
+
+  .setting-label-text {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-normal);
+  }
+
+  .setting-desc {
+    font-size: 12px;
+    color: var(--text-muted);
+    font-weight: normal;
   }
 
   .label-text {
@@ -512,7 +668,9 @@
 
   .select-input {
     width: 100%;
-    padding: 10px 12px;
+    height: 40px;
+    padding: 0 12px;
+    line-height: 38px;
     border: 1px solid var(--background-modifier-border);
     border-radius: 8px;
     background: var(--background-primary);
@@ -520,10 +678,41 @@
     font-size: 14px;
     cursor: pointer;
     transition: all 0.2s ease;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 12px center;
   }
 
   .select-input:hover:not(:disabled) {
     border-color: var(--interactive-accent);
+  }
+
+  /* 步进按钮样式 */
+  .step-button {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 6px;
+    color: var(--text-normal);
+    cursor: pointer;
+    font-size: 18px;
+    transition: all 0.2s ease;
+  }
+
+  .step-button:hover {
+    background: var(--background-modifier-hover);
+    border-color: var(--interactive-accent);
+    color: var(--interactive-accent);
+  }
+
+  .step-button:active {
+    background: var(--background-modifier-active);
   }
 
   .select-input:disabled {

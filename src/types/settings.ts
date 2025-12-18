@@ -82,6 +82,7 @@ export interface NovelSettings {
 		letterSpacing?: number;
 		wordSpacing?: number;
 		textAlign?: 'left' | 'center' | 'right' | 'justify';
+		theme?: string;
 	}>;
 }
 

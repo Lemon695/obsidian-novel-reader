@@ -1403,28 +1403,11 @@
   tabindex="0"
 >
   <ReadingSessionManager
-    {plugin}
-    {novel}
-    chapters={chapters.map((ch) => ({
-      id: ch.id,
-      title: ch.title,
-      level: ch.level || 0,
-    }))}
     currentChapterId={currentChapter?.id || null}
     currentChapterTitle={currentChapter?.title || ''}
-    totalChapters={chapters.length}
     bind:isActive
     on:startReading={(e) => console.log('Start Reading', e.detail)}
     on:endReading={(e) => console.log('End Reading', e.detail)}
-    on:chapterSelect={async (e) => {
-      await jumpToChapter(e.detail.chapterId);
-      isActive = true;
-    }}
-    on:toggleTOC={toggleOutlinePanel}
-    on:prevChapter={handleNavigationPrev}
-    on:nextChapter={handleNavigationNext}
-    canGoPrev={currentChapterIndex > 0}
-    canGoNext={currentChapterIndex < chapters.length - 1}
   >
     <!-- 目录面板 -->
     <ReaderSidebar

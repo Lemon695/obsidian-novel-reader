@@ -38,6 +38,7 @@ export class ReaderStyleManager {
             letterSpacing: savedSettings?.letterSpacing ?? 0,
             wordSpacing: savedSettings?.wordSpacing ?? 0,
             textAlign: savedSettings?.textAlign ?? 'left',
+            theme: savedSettings?.theme ?? 'light',
         };
     }
 
@@ -189,6 +190,19 @@ export class ReaderStyleManager {
     }
 
     /**
+     * 设置阅读主题
+     */
+    async setTheme(theme: string): Promise<void> {
+        this.settings.theme = theme;
+        // 注意：主题逻辑可能需要在渲染器或组件层特殊处理
+        // 如果渲染器支持 setTheme，则调用
+        if ((this.renderer as any).setTheme) {
+            (this.renderer as any).setTheme(theme);
+        }
+        await this.saveSettings();
+    }
+
+    /**
      * 批量应用所有设置
      */
     applyAllSettings(): void {
@@ -251,6 +265,7 @@ export class ReaderStyleManager {
             letterSpacing: 0,
             wordSpacing: 0,
             textAlign: 'left',
+            theme: 'light',
         };
 
         this.applyAllSettings();

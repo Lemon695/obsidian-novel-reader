@@ -66,6 +66,7 @@
   let isActive = false;
   export let chapterHistory: ChapterHistory[] = []; //章节历史记录（export让view层可以更新）
   let currentChapter: PDFOutline | null = null;
+  let pdfTheme = 'light';
   let pendingRender = false;
   let containerInitialized = false;
   let currentRenderTask: any = null;
@@ -93,6 +94,23 @@
     chapterTitle: '',
     pageNum: 1,
   };
+
+  $: if (styleManager && !pdfTheme) {
+    const settings = styleManager.getSettings();
+    if (settings.theme) {
+      pdfTheme = settings.theme;
+    }
+  }
+
+  function handleStyleChange() {
+    if (styleManager) {
+      const settings = styleManager.getSettings();
+      if (settings.theme) {
+        pdfTheme = settings.theme;
+      }
+    }
+    renderPage('styleChange');
+  }
 
   // 更新进度位置的响应式语句
   $: if (currentPage && numPages) {
@@ -448,7 +466,7 @@
 
     if (context) {
       // 渲染 PDF 页面到 canvas，使用 transform 支持高分屏
-      const renderContext = {
+      const renderContext: any = {
         canvasContext: context,
         viewport: viewport,
         transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined,
@@ -972,7 +990,7 @@
     }, 100);
 
     const handleDocMouseUp = (e: MouseEvent) => {
-      handlePdfTextMouseUp(e);
+      // handlePdfTextMouseUp(e); // This is now handled by pdf-page-wrapper
     };
 
     const handleDocClick = (e: MouseEvent) => {
@@ -1148,28 +1166,11 @@
   />
 
   <ReadingSessionManager
-    {plugin}
-    {novel}
-    chapters={(chapters || []).map((ch) => ({
-      id: ch.startPage,
-      title: ch.title,
-      subChapters: ch.subChapters?.map((sub) => ({
-        id: sub.startPage,
-        title: sub.title,
-      })),
-    }))}
     currentChapterId={currentPage}
     currentChapterTitle={`第 ${currentPage} 页`}
-    totalChapters={numPages}
     bind:isActive
     on:startReading={(e) => console.log('Start Reading', e.detail)}
     on:endReading={(e) => console.log('End Reading', e.detail)}
-    on:chapterSelect={(e) => handleOutlineClick(e.detail.chapterId)}
-    on:toggleTOC={toggleOutlinePanel}
-    on:prevChapter={() => handlePageChange(currentPage - 1)}
-    on:nextChapter={() => handlePageChange(currentPage + 1)}
-    canGoPrev={currentPage > 1}
-    canGoNext={currentPage < (numPages || 0)}
   >
     <!-- Sidebar handled by manager -->
 
@@ -1198,15 +1199,16 @@
         <ReaderSettingsMenu
           {plugin}
           {novel}
-          readerType="pdf"
-          currentChapterId={currentPage || 0}
           {notes}
-          {readingStats}
+          {styleManager}
+          readerType="pdf"
+          currentChapterId={currentPage}
           {chapterHistory}
+          {readingStats}
           hasBookmarkAtCurrentPosition={bookmarkManager
             ? ($hasBookmarkAtCurrentPosition ?? false)
             : false}
-          {styleManager}
+          on:styleChange={handleStyleChange}
           on:showBookmarks={() => (showBookmarkPanel = true)}
           on:addBookmark={() => {
             if (bookmarkManager && currentPage) {
@@ -1221,10 +1223,9 @@
           }}
           on:deleteNote={handleNoteDelete}
           on:editNote={handleNoteEdit}
-          on:jumpToNote={handleJumpToNote}
+          on:jumpToNote={(e) => jumpToPageAndLocate(e.detail.chapterId, e.detail.pdfLocation)}
           on:jumpToChapter={(event) => {
             const { chapterId, chapterTitle } = event.detail;
-            // PDF的历史记录都是页码形式（如"第 X 页"）
             if (chapterTitle && chapterTitle.includes('页')) {
               const pageMatch = chapterTitle.match(/第\s*(\d+)\s*页/);
               if (pageMatch) {
@@ -1232,7 +1233,6 @@
                 handleOutlineClick(pageNum);
               }
             } else if (typeof chapterId === 'number') {
-              // 如果chapterId是数字，直接作为页码使用
               handleOutlineClick(chapterId);
             }
           }}
@@ -1244,7 +1244,11 @@
           <LoadingSpinner message="正在加载PDF文档..." />
         {/if}
 
-        <div class="pdf-page-wrapper" bind:this={pageWrapperEl}>
+        <div
+          class="pdf-page-wrapper pdf-theme-{pdfTheme}"
+          bind:this={pageWrapperEl}
+          on:mouseup={handlePdfTextMouseUp}
+        >
           <div class="pdf-canvas-layer" bind:this={canvasLayerEl}></div>
           <div class="pdf-text-layer textLayer" bind:this={textLayerEl} role="document"></div>
 
@@ -1489,9 +1493,24 @@
 
   .pdf-page-wrapper {
     position: relative;
-    margin: 0 auto;
-    box-shadow: var(--novel-shadow-md);
-    background: white;
+    margin: 0 auto 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    background-color: white;
+    max-width: 100%;
+    transition: filter 0.3s ease;
+  }
+
+  /* PDF 主题样式（通过滤镜实现，不影响渲染性能） */
+  .pdf-theme-sepia {
+    filter: sepia(0.6) brightness(0.9) contrast(1.1);
+  }
+
+  .pdf-theme-dark {
+    filter: invert(0.9) hue-rotate(180deg) brightness(1.1) contrast(1.1);
+  }
+
+  .pdf-theme-green {
+    filter: sepia(0.2) hue-rotate(60deg) brightness(0.95) contrast(1.05);
   }
 
   .pdf-canvas {

@@ -30,7 +30,7 @@
   let showHistoryPanel = false;
   let showStatsModal = false;
   let showNoteList = false;
-  let showSettingsPanel = false;
+  let showReadingSettingsPanel = false;
 
   export let readerType: 'txt' | 'pdf' | 'epub' | 'mobi';
   export let hasBookmarkAtCurrentPosition: boolean = false; // 当前位置是否有书签
@@ -86,14 +86,14 @@
     showHistoryPanel = false;
     showStatsModal = false;
     showNoteList = false;
-    showSettingsPanel = false;
+    showReadingSettingsPanel = false;
 
     console.log('设置页面,handleMenuSelect---' + option);
 
     // 根据选项显示对应面板
     switch (option) {
       case 'settings':
-        showSettingsPanel = true;
+        showReadingSettingsPanel = true;
         break;
       case 'history':
         showHistoryPanel = true;
@@ -241,7 +241,7 @@
     <div class="settings-dropdown" transition:fade={{ duration: 150 }}>
       <button class="dropdown-item" on:click={() => handleMenuSelect('settings')}>
         <span class="icon">{@html icons.settings}</span>
-        设置
+        阅读设置
       </button>
       {#if showReadingProgress}
         <button class="dropdown-item" on:click={() => handleMenuSelect('history')}>
@@ -273,12 +273,12 @@
   {/if}
 </div>
 
-<!-- 设置面板 -->
-{#if showSettingsPanel}
-  <div class="settings-panel" transition:fade>
+<!-- 阅读设置面板 -->
+{#if showReadingSettingsPanel}
+  <div class="reading-settings-panel" transition:fade>
     <div class="settings-header">
       <h3>阅读设置</h3>
-      <button class="close-button" on:click={() => (showSettingsPanel = false)}>×</button>
+      <button class="close-button" on:click={() => (showReadingSettingsPanel = false)}>×</button>
     </div>
 
     <!-- 统一样式设置 -->
@@ -287,7 +287,7 @@
       {novel}
       {styleManager}
       on:styleChange
-      on:close={() => (showSettingsPanel = false)}
+      on:close={() => (showReadingSettingsPanel = false)}
     />
   </div>
 {/if}
@@ -456,7 +456,7 @@
     stroke: currentColor;
   }
 
-  .settings-panel {
+  .reading-settings-panel {
     position: fixed;
     top: 50%;
     left: 50%;

@@ -1057,28 +1057,13 @@
   />
 
   <ReadingSessionManager
-    {plugin}
-    {novel}
-    chapters={(chapters || []).map((ch, index) => ({
-      id: ch.id,
-      title: ch.title,
-      level: 0,
-    }))}
-    currentChapterId={currentChapterId || null}
-    currentChapterTitle={currentChapter?.title || ''}
-    totalChapters={chapters.length}
+    currentChapterId={viewMode === 'chapters' ? currentChapterId || null : currentPageNum}
+    currentChapterTitle={viewMode === 'chapters'
+      ? currentChapter?.title || ''
+      : `第 ${currentPageNum} 页`}
     bind:isActive
     on:startReading={(e) => console.log('Start Reading', e.detail)}
     on:endReading={(e) => console.log('End Reading', e.detail)}
-    on:chapterSelect={(e) => {
-      const chapter = chapters.find((ch) => ch.id === e.detail.chapterId);
-      if (chapter) selectChapter(chapter);
-    }}
-    on:toggleTOC={toggleOutlinePanel}
-    on:prevChapter={() => handleSwitchChapter('prev')}
-    on:nextChapter={() => handleSwitchChapter('next')}
-    canGoPrev={currentChapterId !== null && currentChapterId > 0}
-    canGoNext={currentChapterId !== null && currentChapterId < chapters.length - 1}
   >
     <!-- 悬浮章节模式 - 使用 HoverTOC 组件 -->
     <HoverTOC
@@ -1392,13 +1377,13 @@
   }
 
   .content-text {
-    line-height: 1.8;
-    font-size: 16px;
+    line-height: inherit;
+    font-size: inherit;
     user-select: text;
     -webkit-user-select: text;
     -moz-user-select: text;
     -ms-user-select: text;
-    color: var(--text-normal);
+    color: inherit;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;

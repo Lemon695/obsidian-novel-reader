@@ -820,27 +820,11 @@
     </div>
   {:else}
     <ReadingSessionManager
-      {plugin}
-      {novel}
-      chapters={(toc || []).map((item, index) => ({
-        id: index,
-        title: item.title,
-        level: item.level || 0,
-      }))}
       currentChapterId={currentSection}
-      currentChapterTitle={toc[currentSection]?.title || `Section ${currentSection + 1}`}
-      totalChapters={totalSections}
+      currentChapterTitle={toc[currentSection]?.title || `第 ${currentSection + 1} 节`}
       bind:isActive
       on:startReading={(e) => console.log('Start Reading', e.detail)}
       on:endReading={(e) => console.log('End Reading', e.detail)}
-      on:chapterSelect={(e) => {
-        handleTOCClick(e.detail.chapterId);
-      }}
-      on:toggleTOC={toggleTOC}
-      on:prevChapter={prevPage}
-      on:nextChapter={nextPage}
-      canGoPrev={currentSection > 0}
-      canGoNext={currentSection < totalSections - 1}
     >
       <!-- 目录面板 -->
       <ReaderSidebar

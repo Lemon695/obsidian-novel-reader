@@ -28,6 +28,7 @@ export interface RendererStyleSettings {
     letterSpacing?: number;     // 字间距 (px)
     wordSpacing?: number;       // 词间距 (px)
     textAlign?: 'left' | 'center' | 'right' | 'justify';  // 对齐方式
+    theme?: string;             // 阅读主题 (light, sepia, dark, green, etc.)
 }
 
 /**
