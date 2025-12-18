@@ -1,7 +1,7 @@
 {
 	"id": "novel-reader",
 	"name": "Novel Reader",
-	"version": "1.12.6",
+	"version": "1.12.7",
 	"minAppVersion": "1.7.7",
 	"description": "A powerful novel reader supporting TXT, EPUB, PDF with reading statistics, notes management, and chapter navigation.",
 	"author": "Lemon695",

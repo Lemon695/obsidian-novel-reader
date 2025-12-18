@@ -302,6 +302,14 @@ export class NovelLibraryView extends ItemView {
           onOpenNovelChapter: async (novel: Novel) => {
             try {
               console.log('Opening novelChapter:', novel);
+
+              // 检查是否已经打开了该目录
+              const existingView = ChapterGridView.findExistingView(this.app, novel.id);
+              if (existingView) {
+                await this.app.workspace.revealLeaf(existingView.leaf);
+                return;
+              }
+
               const file = this.app.vault.getAbstractFileByPath(novel.path);
               if (!(file instanceof TFile)) {
                 throw new Error('File not found: ' + novel.path);

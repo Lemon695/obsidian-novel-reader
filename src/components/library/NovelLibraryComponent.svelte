@@ -18,6 +18,8 @@
   import ViewDropdownMenu from './ViewDropdownMenu.svelte';
   import PropertiesDropdown from './PropertiesDropdown.svelte';
   import { FilterStateService } from '../../services/filter-state-service';
+  import { BookTOCView } from '../../views/book-toc-view';
+  import { VIEW_TYPE_BOOK_TOC } from '../../types/constants';
 
   const dispatch = createEventDispatcher();
 
@@ -903,13 +905,21 @@
 
     // EPUB/PDF/MOBI使用BookTOCView
     try {
+      // 首先查找是否已经打开了该目录
+      const existingView = BookTOCView.findExistingView(plugin.app, novel.id);
+      if (existingView) {
+        console.log('[Library] Focusing existing TOC view');
+        plugin.app.workspace.revealLeaf(existingView.leaf);
+        return;
+      }
+
       const leaf = plugin.app.workspace.getLeaf('tab');
       await leaf.setViewState({
-        type: 'novel-reader.book-toc-view',
+        type: VIEW_TYPE_BOOK_TOC,
         active: true,
       });
 
-      const view = leaf.view as any;
+      const view = leaf.view as BookTOCView;
       if (view && typeof view.setNovel === 'function') {
         await view.setNovel(novel);
       }

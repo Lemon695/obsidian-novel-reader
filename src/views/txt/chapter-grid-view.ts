@@ -1,12 +1,12 @@
-import {ItemView, Notice, TFile, WorkspaceLeaf} from 'obsidian';
+import { ItemView, Notice, TFile, WorkspaceLeaf } from 'obsidian';
 import type NovelReaderPlugin from '../../main';
 import ChapterGridComponent from '../../components/ChapterGridViewComponent.svelte';
-import {VIEW_TYPE_TXT_READER, VIEW_TYPE_TXT_CHAPTER_GRID} from '../../types/constants';
-import type {Novel} from '../../types';
-import {TxtNovelReaderView} from './txt-novel-reader-view';
-import {parseChapters} from "../../lib/txt.reader/chapter-logic";
-import type {ComponentType} from "svelte";
-import type {ChapterProgress} from "../../types/txt/txt-reader";
+import { VIEW_TYPE_TXT_READER, VIEW_TYPE_TXT_CHAPTER_GRID } from '../../types/constants';
+import type { Novel } from '../../types';
+import { TxtNovelReaderView } from './txt-novel-reader-view';
+import { parseChapters } from "../../lib/txt.reader/chapter-logic";
+import type { ComponentType } from "svelte";
+import type { ChapterProgress } from "../../types/txt/txt-reader";
 
 //TXT章节目录
 export class ChapterGridView extends ItemView {
@@ -34,7 +34,7 @@ export class ChapterGridView extends ItemView {
 
 		await this.leaf.setViewState({
 			type: VIEW_TYPE_TXT_CHAPTER_GRID,
-			state: {title: novel.title}
+			state: { title: novel.title }
 		});
 
 		const file = this.app.vault.getAbstractFileByPath(novel.path);
@@ -141,5 +141,25 @@ export class ChapterGridView extends ItemView {
 			console.log("[GridView] Updating with existing novel");
 			await this.setNovel(this.novel);
 		}
+	}
+	async onClose() {
+		if (this.component) {
+			this.component.$destroy();
+			this.component = null;
+		}
+	}
+
+	/**
+	 * 查找已打开的 TXT 章节目录视图
+	 */
+	static findExistingView(app: any, novelId: string): ChapterGridView | null {
+		const leaves = app.workspace.getLeavesOfType(VIEW_TYPE_TXT_CHAPTER_GRID);
+		for (const leaf of leaves) {
+			const view = leaf.view as ChapterGridView;
+			if (view?.novel?.id === novelId) {
+				return view;
+			}
+		}
+		return null;
 	}
 }

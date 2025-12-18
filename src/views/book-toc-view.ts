@@ -10,13 +10,14 @@ import {
     VIEW_TYPE_TXT_READER,
     VIEW_TYPE_EPUB_READER,
     VIEW_TYPE_PDF_READER,
-    VIEW_TYPE_MOBI_READER
+    VIEW_TYPE_MOBI_READER,
+    VIEW_TYPE_BOOK_TOC
 } from '../types/constants';
 import { PDFNovelReaderView } from './pdf/pdf-novel-reader-view';
 import { EpubNovelReaderView } from './epub-novel-reader-view';
 import { MobiNovelReaderView } from './mobi/mobi-novel-reader-view';
 
-export const VIEW_TYPE_BOOK_TOC = 'book-toc-view';
+// 移除本地重复定义，使用从 constants 导入的常量
 
 /**
  * 图书目录视图 (EPUB/PDF/MOBI)
@@ -294,5 +295,19 @@ export class BookTOCView extends ItemView {
             this.component.$destroy();
             this.component = null;
         }
+    }
+
+    /**
+     * 查找已打开的图书目录视图
+     */
+    static findExistingView(app: any, novelId: string): BookTOCView | null {
+        const leaves = app.workspace.getLeavesOfType(VIEW_TYPE_BOOK_TOC);
+        for (const leaf of leaves) {
+            const view = leaf.view as BookTOCView;
+            if (view?.novel?.id === novelId) {
+                return view;
+            }
+        }
+        return null;
     }
 }
