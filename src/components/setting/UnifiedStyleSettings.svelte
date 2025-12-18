@@ -137,6 +137,10 @@
         break;
       case 'theme':
         await styleManager.setTheme(value);
+        // 主题切换后同步背景色和文字颜色数据
+        const updatedSettings = styleManager.getSettings();
+        backgroundColor = updatedSettings.backgroundColor;
+        textColor = updatedSettings.textColor;
         break;
     }
 
@@ -203,6 +207,14 @@
       return `⚠️ 注意: 当前格式仅支持部分样式设置。${unsupported.join('、')}等功能不可用。`;
     }
     return '';
+  }
+
+  // 格式化颜色显示（将 CSS 变量转换为友好名称）
+  function formatColorValue(value: string) {
+    if (!value) return '';
+    if (value.includes('--background-primary')) return '默认背景';
+    if (value.includes('--text-normal')) return '默认文字';
+    return value;
   }
 </script>
 
@@ -284,7 +296,7 @@
       <div class="setting-item">
         <label class="setting-label">
           <span class="label-text">文本颜色</span>
-          <span class="label-value">{textColor}</span>
+          <span class="label-value">{formatColorValue(textColor)}</span>
         </label>
         <div class="color-control">
           <input
@@ -295,10 +307,16 @@
           />
           <input
             type="text"
-            bind:value={textColor}
-            on:change={() => applyStyles('textColor', textColor)}
+            value={textColor.includes('--') ? '' : textColor}
+            placeholder={formatColorValue(textColor)}
+            on:change={(e) => {
+              const val = e.currentTarget.value;
+              if (val) {
+                textColor = val;
+                applyStyles('textColor', textColor);
+              }
+            }}
             class="text-input"
-            placeholder="#333333"
           />
         </div>
       </div>
@@ -320,7 +338,7 @@
       <div class="setting-item">
         <label class="setting-label">
           <span class="label-text">背景颜色</span>
-          <span class="label-value">{backgroundColor}</span>
+          <span class="label-value">{formatColorValue(backgroundColor)}</span>
         </label>
         <div class="color-control">
           <input
@@ -331,10 +349,16 @@
           />
           <input
             type="text"
-            bind:value={backgroundColor}
-            on:change={() => applyStyles('backgroundColor', backgroundColor)}
+            value={backgroundColor.includes('--') ? '' : backgroundColor}
+            placeholder={formatColorValue(backgroundColor)}
+            on:change={(e) => {
+              const val = e.currentTarget.value;
+              if (val) {
+                backgroundColor = val;
+                applyStyles('backgroundColor', backgroundColor);
+              }
+            }}
             class="text-input"
-            placeholder="#FFFFFF"
           />
         </div>
       </div>

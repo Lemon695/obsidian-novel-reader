@@ -52,26 +52,35 @@ export class TxtRenderer implements UnifiedRenderer {
 
         const css = `
       .txt-reader-content {
-        font-size: ${this.settings.fontSize}px;
-        font-family: ${this.settings.fontFamily};
-        color: ${this.settings.textColor};
-        background-color: ${this.settings.backgroundColor};
-        line-height: ${this.settings.lineHeight};
-        font-weight: ${this.settings.fontWeight};
-        letter-spacing: ${this.settings.letterSpacing}px;
-        word-spacing: ${this.settings.wordSpacing}px;
-        text-align: ${this.settings.textAlign};
+        font-size: ${this.settings.fontSize}px !important;
+        font-family: ${this.settings.fontFamily} !important;
+        color: ${this.settings.textColor} !important;
+        background-color: ${this.settings.backgroundColor} !important;
+        line-height: ${this.settings.lineHeight} !important;
+        font-weight: ${this.settings.fontWeight} !important;
+        letter-spacing: ${this.settings.letterSpacing}px !important;
+        word-spacing: ${this.settings.wordSpacing}px !important;
+        text-align: ${this.settings.textAlign} !important;
       }
 
-      .txt-reader-content .chapter-line {
-        font-size: inherit;
-        font-family: inherit;
-        color: inherit;
-        line-height: inherit;
-        font-weight: inherit;
-        letter-spacing: inherit;
-        word-spacing: inherit;
-        text-align: inherit;
+      .txt-reader-content .content-area,
+      .txt-reader-content .chapter-content,
+      .txt-reader-content .content-text {
+        background-color: transparent !important;
+      }
+
+      .txt-reader-content h2,
+      .txt-reader-content p,
+      .txt-reader-content .chapter-content,
+      .txt-reader-content .content-text {
+        font-family: inherit !important;
+        font-size: inherit !important;
+        color: inherit !important;
+        line-height: inherit !important;
+        font-weight: inherit !important;
+        letter-spacing: inherit !important;
+        word-spacing: inherit !important;
+        text-align: inherit !important;
       }
 
       .txt-note-marker {

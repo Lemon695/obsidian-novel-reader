@@ -194,8 +194,38 @@ export class ReaderStyleManager {
      */
     async setTheme(theme: string): Promise<void> {
         this.settings.theme = theme;
-        // 注意：主题逻辑可能需要在渲染器或组件层特殊处理
-        // 如果渲染器支持 setTheme，则调用
+
+        // 设置主题对应的颜色
+        switch (theme) {
+            case 'sepia':
+                this.settings.backgroundColor = '#f4ecd8';
+                this.settings.textColor = '#5b4636';
+                break;
+            case 'dark':
+                this.settings.backgroundColor = '#1a1a1a';
+                this.settings.textColor = '#d1d1d1';
+                break;
+            case 'green':
+                this.settings.backgroundColor = '#e7f3e7';
+                this.settings.textColor = '#2d3e2d';
+                break;
+            case 'light':
+            default:
+                this.settings.backgroundColor = 'var(--background-primary)';
+                this.settings.textColor = 'var(--text-normal)';
+                break;
+        }
+
+        // 应用颜色到渲染器
+        const capabilities = this.renderer.getCapabilities();
+        if (capabilities.supportsBackgroundColor) {
+            this.renderer.setBackgroundColor(this.settings.backgroundColor);
+        }
+        if (capabilities.supportsTextColor) {
+            this.renderer.setTextColor(this.settings.textColor);
+        }
+
+        // 如果渲染器本身支持 setTheme（如 PDF 的特殊处理），则调用
         if ((this.renderer as any).setTheme) {
             (this.renderer as any).setTheme(theme);
         }

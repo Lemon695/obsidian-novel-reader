@@ -441,6 +441,7 @@
         if (readerElement) {
           renderer = new TxtRenderer(readerElement);
           styleManager = new ReaderStyleManager(renderer, plugin, novel.id);
+          await renderer.render(''); // 必须调用以激活 CSS 类
           styleManager.applyAllSettings();
           console.log(`[${instanceId}] 渲染器初始化成功`);
         }
@@ -1028,13 +1029,7 @@
 </script>
 
 <!-- Main Reader Container -->
-<div
-  class="txt-reader"
-  bind:this={readerElement}
-  tabindex="0"
-  role="region"
-  aria-label="Novel Reader"
->
+<div class="txt-reader" bind:this={readerElement} tabindex="0" role="region">
   <!-- 目录面板 -->
   <ReaderSidebar
     show={showOutlinePanel}
@@ -1340,7 +1335,7 @@
 </div>
 
 <style>
-  .novel-reader {
+  .txt-reader {
     height: 100%;
     display: flex;
     position: relative;
@@ -1352,16 +1347,16 @@
     overflow-y: auto;
     padding: 24px 40px 60px 40px;
     min-width: 0;
-    background: var(--background-primary);
+    background: transparent;
   }
 
   .chapter-content {
     max-width: 800px;
     margin: 0 auto;
-    background: var(--background-primary);
+    background: transparent;
     padding: var(--novel-spacing-2xl);
-    border-radius: var(--novel-radius-lg);
-    box-shadow: var(--novel-shadow-sm);
+    border-radius: 0;
+    box-shadow: none;
   }
 
   .chapter-content h2 {
@@ -1373,7 +1368,7 @@
     gap: var(--novel-spacing-xs);
     font-size: var(--novel-font-size-2xl);
     font-weight: var(--novel-font-weight-semibold);
-    color: var(--text-normal);
+    color: inherit;
   }
 
   .content-text {
@@ -1415,6 +1410,13 @@
     top: 13px; /* 原来10px，往下3px变成13px */
     right: 15px; /* 原来10px，往左5px变成15px */
     z-index: 1000;
+  }
+
+  /* 业务 UI 容器背景强制恢复 */
+  :global(.reading-settings-panel),
+  :global(.reader-sidebar),
+  :global(.selection-menu) {
+    background: var(--background-primary) !important;
   }
 
   /* ==================== 书签样式 ==================== */
