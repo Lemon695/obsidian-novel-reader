@@ -932,16 +932,28 @@
             <span class="filter-badge"></span>
           {/if}
         </button>
-        <button
-          type="button"
-          bind:this={propertiesButtonRef}
-          on:click={() => (showPropertiesDropdown = !showPropertiesDropdown)}
-          class="novel-properties-button"
-          class:active={showPropertiesDropdown}
-        >
-          <span class="properties-icon">{@html icons.columns}</span>
-          属性
-        </button>
+        <!-- 属性按钮和下拉菜单容器 -->
+        <div style="position: relative; display: inline-block;">
+          <button
+            type="button"
+            bind:this={propertiesButtonRef}
+            on:click={() => (showPropertiesDropdown = !showPropertiesDropdown)}
+            class="novel-properties-button"
+            class:active={showPropertiesDropdown}
+          >
+            <span class="properties-icon">{@html icons.columns}</span>
+            属性
+          </button>
+
+          <!-- 属性下拉菜单 -->
+          <PropertiesDropdown
+            show={showPropertiesDropdown}
+            {propertiesButtonRef}
+            on:close={() => (showPropertiesDropdown = false)}
+            on:fieldChange={handleFieldVisibilityChange}
+            on:viewModeChange={(e) => console.log('View mode changed:', e.detail)}
+          />
+        </div>
       </div>
       <div class="novel-toolbar-right">
         <select bind:value={sortField} class="novel-sort-select">
@@ -1242,15 +1254,6 @@
       on:close={closeStatsModal}
     />
   {/if}
-
-  <!-- 属性下拉菜单 -->
-  <PropertiesDropdown
-    show={showPropertiesDropdown}
-    {propertiesButtonRef}
-    on:close={() => (showPropertiesDropdown = false)}
-    on:fieldChange={handleFieldVisibilityChange}
-    on:viewModeChange={(e) => console.log('View mode changed:', e.detail)}
-  />
 
   <!-- 高级筛选模态弹窗 -->
   <AdvancedFilterModal

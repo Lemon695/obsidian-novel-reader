@@ -11,18 +11,17 @@
   let fieldVisibility = {
     cover: true,
     title: true,
-    author: true,
+    author: false,
     format: true,
     progress: true,
-    lastRead: true,
-    addTime: true,
+    lastRead: false,
+    addTime: false,
   };
 
   // 视图模式
   let viewMode: 'grid' | 'list' = 'grid';
 
   let dropdownRef: HTMLDivElement;
-  let dropdownPosition = { top: 0, left: 0 };
 
   // 从本地存储加载配置
   onMount(() => {
@@ -54,31 +53,7 @@
 
     // 初始触发一次事件，让父组件知道当前配置
     dispatch('fieldChange', { fieldVisibility });
-
-    // 初始位置计算
-    if (show && buttonRef) {
-      updatePosition();
-    }
   });
-
-  // 计算下拉菜单位置
-  function updatePosition() {
-    if (buttonRef && typeof window !== 'undefined') {
-      const rect = buttonRef.getBoundingClientRect();
-      dropdownPosition = {
-        top: rect.bottom + 4,
-        left: rect.left,
-      };
-    }
-  }
-
-  // 当显示状态改变时更新位置
-  $: if (show && buttonRef) {
-    // 使用 setTimeout 确保 DOM 已更新
-    setTimeout(() => {
-      updatePosition();
-    }, 10);
-  }
 
   // 切换字段可见性
   function toggleField(field: keyof typeof fieldVisibility) {
@@ -138,11 +113,7 @@
 </script>
 
 {#if show}
-  <div
-    bind:this={dropdownRef}
-    class="properties-dropdown"
-    style="top: {dropdownPosition.top}px; left: {dropdownPosition.left}px;"
-  >
+  <div bind:this={dropdownRef} class="properties-dropdown">
     <!-- 显示字段 -->
     <div class="properties-section">
       <div class="properties-section-title">显示字段</div>
@@ -245,7 +216,9 @@
 
 <style>
   .properties-dropdown {
-    position: fixed;
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
     z-index: 1000;
     background: var(--background-primary);
     border: 1px solid var(--background-modifier-border);

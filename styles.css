@@ -235,6 +235,8 @@
 
 /* 属性按钮样式 */
 .novel-properties-button {
+  position: relative;
+  /* 添加相对定位作为下拉菜单的定位参考 */
   display: flex;
   align-items: center;
   gap: var(--novel-spacing-xs);
@@ -250,13 +252,13 @@
 
 .novel-properties-button:hover {
   background: var(--background-modifier-hover);
-  border-color: var(--interactive-accent);
+  border-color: var(--background-modifier-border-hover);
 }
 
 .novel-properties-button.active {
-  background: var(--interactive-accent);
-  color: var(--text-on-accent);
+  background: var(--background-modifier-hover);
   border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
 }
 
 .novel-properties-button .properties-icon {
