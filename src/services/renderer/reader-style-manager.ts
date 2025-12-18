@@ -11,11 +11,13 @@ export class ReaderStyleManager {
     private plugin: NovelReaderPlugin;
     private settings: RendererStyleSettings;
     private novelId: string;
+    private defaultFontSize: number;
 
-    constructor(renderer: UnifiedRenderer, plugin: NovelReaderPlugin, novelId: string) {
+    constructor(renderer: UnifiedRenderer, plugin: NovelReaderPlugin, novelId: string, defaultFontSize: number = 16) {
         this.renderer = renderer;
         this.plugin = plugin;
         this.novelId = novelId;
+        this.defaultFontSize = defaultFontSize;
         this.settings = this.loadSettings();
     }
 
@@ -27,7 +29,7 @@ export class ReaderStyleManager {
         const savedSettings = this.plugin.settings.readerStyles?.[this.novelId];
 
         return {
-            fontSize: savedSettings?.fontSize ?? 16,
+            fontSize: savedSettings?.fontSize ?? this.defaultFontSize,
             fontFamily: savedSettings?.fontFamily ?? 'inherit',
             textColor: savedSettings?.textColor ?? 'var(--text-normal)',
             backgroundColor: savedSettings?.backgroundColor ?? 'var(--background-primary)',
@@ -240,7 +242,7 @@ export class ReaderStyleManager {
      */
     async resetToDefaults(): Promise<void> {
         this.settings = {
-            fontSize: 16,
+            fontSize: this.defaultFontSize,
             fontFamily: 'inherit',
             textColor: 'var(--text-normal)',
             backgroundColor: 'var(--background-primary)',

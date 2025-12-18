@@ -26,8 +26,8 @@
   let capabilities: RendererCapabilities | null = null;
 
   // 默认样式
-  const DEFAULT_STYLES = {
-    fontSize: 16,
+  let DEFAULT_STYLES = {
+    fontSize: novel.format === 'pdf' ? 32 : 16,
     fontFamily: 'system-ui, -apple-system, sans-serif',
     textColor: '#333333',
     backgroundColor: '#FFFFFF',
@@ -37,6 +37,8 @@
     wordSpacing: 0,
     textAlign: 'left' as const,
   };
+
+  fontSize = DEFAULT_STYLES.fontSize;
 
   // 常用字体列表
   const FONT_FAMILIES = [

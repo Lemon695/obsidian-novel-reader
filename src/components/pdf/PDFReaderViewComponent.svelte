@@ -52,7 +52,7 @@
   let pdfContainerElement: HTMLElement;
 
   let pdfDoc: PDFDocumentProxy | null = null;
-  let zoomLevel = 1.5;
+  let zoomLevel = 2.0;
   let isLoading = true;
   let numPages = 1; //总页数
   let currentPage: number; //当前页
@@ -268,7 +268,7 @@
           };
 
           renderer = new PdfRenderer(readerContainer, handleZoomChange);
-          styleManager = new ReaderStyleManager(renderer, plugin, novel.id);
+          styleManager = new ReaderStyleManager(renderer, plugin, novel.id, 32);
           styleManager.applyAllSettings();
           console.log(`[${pdfInstanceId}] 渲染器初始化成功`);
         }
@@ -810,9 +810,9 @@
 
   function handleZoom(action: 'in' | 'out') {
     if (action === 'in') {
-      zoomLevel = Math.min(zoomLevel * 1.2, 3.0);
+      zoomLevel = Math.min(zoomLevel * 1.2, 5.0);
     } else {
-      zoomLevel = Math.max(zoomLevel / 1.2, 0.5);
+      zoomLevel = Math.max(zoomLevel / 1.2, 0.1);
     }
     renderPage('handleZoom');
   }
@@ -1159,7 +1159,7 @@
           <button class="tool-button" on:click={() => handleZoom('in')} title="放大">
             <span class="zoom-icon">{@html icons.zoomIn}</span>
           </button>
-          <span class="zoom-level">{Math.round(zoomLevel * 200)}%</span>
+          <span class="zoom-level">{Math.round(zoomLevel * 100)}%</span>
         </div>
 
         <!-- 设置菜单组件 -->
