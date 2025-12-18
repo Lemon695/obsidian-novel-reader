@@ -68,6 +68,7 @@
   let currentChapter: PDFOutline | null = null;
   let pendingRender = false;
   let containerInitialized = false;
+  let currentRenderTask: any = null;
 
   // 统一渲染器实例
   let renderer: PdfRenderer | null = null;
@@ -412,6 +413,15 @@
       textLayerEl.style.setProperty('--scale-factor', String(viewport.scale));
     }
 
+    // 清空内容前取消上一个渲染任务
+    if (currentRenderTask) {
+      try {
+        currentRenderTask.cancel();
+      } catch (e) {
+        // 忽略取消错误
+      }
+    }
+
     // 清空canvas层（保留Svelte渲染的overlay层）
     canvasLayerEl.innerHTML = '';
 
@@ -419,21 +429,43 @@
       textLayerEl.innerHTML = '';
     }
 
+    // 计算高分屏缩放比例
+    const outputScale = window.devicePixelRatio || 1;
+
     // 创建新的 canvas
     const canvas = document.createElement('canvas');
     const context = canvas.getContext('2d');
-    canvas.height = viewport.height;
-    canvas.width = viewport.width;
+
+    // 设置实际物理像素大小
+    canvas.width = Math.floor(viewport.width * outputScale);
+    canvas.height = Math.floor(viewport.height * outputScale);
+
+    // 设置 CSS 显示大小
+    canvas.style.width = `${Math.floor(viewport.width)}px`;
+    canvas.style.height = `${Math.floor(viewport.height)}px`;
 
     canvasLayerEl.appendChild(canvas);
 
     if (context) {
-      // 渲染 PDF 页面到 canvas
-      // PDF.js 5.x 使用 canvas 参数替代 canvasContext
-      await page.render({
-        canvas: canvas,
+      // 渲染 PDF 页面到 canvas，使用 transform 支持高分屏
+      const renderContext = {
+        canvasContext: context,
         viewport: viewport,
-      }).promise;
+        transform: outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : undefined,
+      };
+
+      currentRenderTask = page.render(renderContext);
+      try {
+        await currentRenderTask.promise;
+      } catch (error: any) {
+        if (error.name === 'RenderingCancelledException' || error.message?.includes('cancelled')) {
+          console.log('[PDF] Rendering cancelled');
+          return;
+        }
+        throw error;
+      } finally {
+        currentRenderTask = null;
+      }
     }
 
     if (textLayerEl) {
